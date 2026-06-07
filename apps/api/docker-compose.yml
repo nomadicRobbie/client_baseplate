@@ -1,0 +1,22 @@
+# Per-client Postgres. Port offset again (+2 from blnk_api) so all stacks coexist.
+# Each client clone gets its own isolated database container.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: client_postgres
+    environment:
+      POSTGRES_USER: client
+      POSTGRES_PASSWORD: client
+      POSTGRES_DB: client
+    ports:
+      - "5435:5432"
+    volumes:
+      - client_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U client -d client"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  client_postgres_data:
