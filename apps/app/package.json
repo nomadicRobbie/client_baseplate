@@ -14,6 +14,7 @@
   "dependencies": {
     "@blnk/shared": "workspace:*",
     "@expo/ui": "~56.0.16",
+    "@expo/vector-icons": "^15.0.2",
     "@simplewebauthn/browser": "^13.1.0",
     "expo": "~56.0.9",
     "expo-constants": "~56.0.17",

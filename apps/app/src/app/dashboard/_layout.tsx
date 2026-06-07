@@ -1,18 +1,21 @@
 import { Slot, Redirect, usePathname, useRouter } from 'expo-router';
 import { View, Pressable, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { ProfileProvider, useProfile } from '@/lib/profile-context';
 import { ThemeProvider, useTheme } from '@/theme';
 import { Text } from '@/ui/components';
 import { Onboarding } from '@/components/onboarding';
 
-type NavItem = { label: string; href: '/dashboard' | '/dashboard/account' | '/dashboard/settings'; glyph: string; adminOnly?: boolean };
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+type NavItem = { label: string; href: '/dashboard' | '/dashboard/account' | '/dashboard/team' | '/dashboard/settings'; icon: IconName; adminOnly?: boolean };
 
 const NAV: NavItem[] = [
-  { label: 'Overview', href: '/dashboard', glyph: '◆' },
-  { label: 'Account', href: '/dashboard/account', glyph: '●' },
-  { label: 'Settings', href: '/dashboard/settings', glyph: '▣', adminOnly: true },
+  { label: 'Overview', href: '/dashboard', icon: 'grid-outline' },
+  { label: 'Account', href: '/dashboard/account', icon: 'person-outline' },
+  { label: 'Team', href: '/dashboard/team', icon: 'people-outline', adminOnly: true },
+  { label: 'Settings', href: '/dashboard/settings', icon: 'settings-outline', adminOnly: true },
 ];
 
 function greeting(): string {
@@ -58,7 +61,7 @@ function NavList({ vertical, isAdmin }: { vertical: boolean; isAdmin: boolean })
               };
             }}
           >
-            <Text color={active ? t.color.primary : t.color.textMuted}>{item.glyph}</Text>
+            <Ionicons name={item.icon} size={20} color={active ? t.color.primary : t.color.textMuted} />
             <Text variant={vertical ? 'label' : 'small'} color={active ? t.color.text : t.color.textMuted}>{item.label}</Text>
           </Pressable>
         );

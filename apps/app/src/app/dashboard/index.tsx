@@ -7,17 +7,21 @@ import { Screen, Text, Card, Badge } from '@/ui/components';
 // Cards here are placeholders the client fills with their real data/metrics.
 export default function Overview() {
   const t = useTheme();
-  const { user, features } = useAuth();
+  const { features } = useAuth();
 
   const enabled = features
     ? Object.entries(features).filter(([, on]) => on).map(([k]) => k)
     : [];
 
+  const today = new Date().toLocaleDateString(undefined, {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+
   return (
     <Screen>
       <View style={{ gap: 4 }}>
         <Text variant="title">Overview</Text>
-        <Text muted>Signed in as {user?.role} · authenticated via {user?.passkey ? 'passkey' : 'email code'}</Text>
+        <Text muted>{today}</Text>
       </View>
 
       {/* Stat cards — replace with real metrics per client */}

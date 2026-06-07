@@ -1,4 +1,4 @@
-import type { TokenPair, ProfileResponse } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser } from '@blnk/shared';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
 // and verifies tokens — the app never sees blnk_auth directly.
@@ -66,3 +66,13 @@ export const updateOrg = (token: string, data: {
   org_name?: string; logo_url?: string; brand_color?: string; accent_color?: string;
   support_email?: string; timezone?: string; locale?: string; currency?: string;
 }) => req('/profile/org', { method: 'PUT', body: data, token });
+
+// ── Team management ──────────────────────────────────────────────────────────
+export const listTeam = (token: string) =>
+  req<{ users: TeamUser[] }>('/team', { method: 'GET', token });
+
+export const addTeamUser = (token: string, data: { email: string; role: 'admin' | 'member' }) =>
+  req<{ user: TeamUser }>('/team', { method: 'POST', body: data, token });
+
+export const setTeamUserActive = (token: string, id: string, active: boolean) =>
+  req<{ user: TeamUser }>(`/team/${id}/active`, { method: 'PATCH', body: { active }, token });

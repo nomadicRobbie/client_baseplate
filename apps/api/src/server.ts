@@ -8,6 +8,7 @@ import authDecorators, { verifyBlnkAuth } from './blnk/auth'
 import authProxyPlugin from './routes/auth-proxy'
 import wellKnownPlugin from './routes/well-known'
 import profilePlugin from './routes/profile'
+import teamPlugin from './routes/team'
 
 const server = Fastify({
   logger: {
@@ -41,6 +42,10 @@ async function build(): Promise<typeof server> {
         cb(new Error('Not allowed by CORS'), false)
       }
     },
+    // Must be explicit — the frontend uses PUT for profile updates; the default
+    // method set is narrower and the preflight would reject PUT/PATCH/DELETE.
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['content-type', 'authorization'],
     credentials: true,
   })
 
@@ -68,6 +73,9 @@ async function build(): Promise<typeof server> {
 
   // ── Profile + onboarding (org + per-user) ───────────────────────────────
   await server.register(profilePlugin)
+
+  // ── Team management (admin adds users) ──────────────────────────────────
+  await server.register(teamPlugin)
 
   // ── Hot-swap feature modules (FEATURE_* flags) ──────────────────────────
   // Phase 4 registers payments here:

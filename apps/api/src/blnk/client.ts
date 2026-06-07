@@ -1,5 +1,5 @@
 import { config } from '../config'
-import { Errors } from '../utils/errors'
+import { Errors, AppError } from '../utils/errors'
 
 // ── blnk_api client ─────────────────────────────────────────────────────────
 // Thin wrapper over blnk_api's authenticated endpoints (email, and later portal
@@ -53,6 +53,50 @@ export async function setAuthName(userToken: string, name: string): Promise<Auth
   })
   if (!res.ok) throw Errors.badGateway(`blnk_auth set name failed: ${res.status}`)
   return res.json() as Promise<AuthMe>
+}
+
+// ── Team management (blnk_auth admin endpoints) ─────────────────────────────
+// client_api forwards to blnk_auth using the caller's token; blnk_auth enforces
+// tenant scope + role rules (defense in depth alongside client_api's guard).
+export interface TeamUser {
+  id: string; email: string; name: string | null; type: string; role: string;
+  active: boolean; last_login_at: string | null;
+}
+
+export async function listTenantUsers(userToken: string): Promise<TeamUser[]> {
+  const res = await fetch(`${config.blnkAuth.url}/admin/users`, {
+    headers: { authorization: `Bearer ${userToken}` },
+  })
+  if (!res.ok) throw Errors.badGateway(`blnk_auth list users failed: ${res.status}`)
+  const json = await res.json() as { users: TeamUser[] }
+  return json.users
+}
+
+export async function createTenantUser(
+  userToken: string,
+  body: { email: string; role: 'admin' | 'member'; type?: string }
+): Promise<TeamUser> {
+  const res = await fetch(`${config.blnkAuth.url}/admin/users`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${userToken}` },
+    body: JSON.stringify(body),
+  })
+  const json = await res.json().catch(() => ({})) as { user?: TeamUser; error?: { message?: string } }
+  if (!res.ok) throw new AppError(res.status === 409 ? 'CONFLICT' : 'BAD_GATEWAY', json.error?.message ?? `create user failed: ${res.status}`, res.status)
+  return json.user!
+}
+
+export async function setTenantUserActive(
+  userToken: string, id: string, active: boolean
+): Promise<TeamUser> {
+  const res = await fetch(`${config.blnkAuth.url}/admin/users/${id}/active`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${userToken}` },
+    body: JSON.stringify({ active }),
+  })
+  const json = await res.json().catch(() => ({})) as { user?: TeamUser; error?: { message?: string } }
+  if (!res.ok) throw new AppError('BAD_GATEWAY', json.error?.message ?? `update user failed: ${res.status}`, res.status)
+  return json.user!
 }
 
 // ── Billing status (blnk's subscription with THIS client) ───────────────────

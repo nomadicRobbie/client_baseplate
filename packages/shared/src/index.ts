@@ -79,6 +79,16 @@ export interface OnboardingState {
   needs_personal: boolean    // any user, when their profile is incomplete
 }
 
+export interface TeamUser {
+  id: string
+  email: string
+  name: string | null
+  type: UserType
+  role: UserRole
+  active: boolean
+  last_login_at: string | null
+}
+
 export interface ProfileResponse {
   org: ClientOrg | null
   me: {
