@@ -1,32 +1,54 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { View, Pressable } from 'react-native';
+import type { PreferredContact } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
-import { Screen, Text, Card, Button, Row, Badge, Notice } from '@/ui/components';
-import { passkeyRegisterBegin, passkeyRegisterComplete } from '@/lib/api';
+import { useProfile } from '@/lib/profile-context';
+import { useTheme } from '@/theme';
+import { Screen, Text, Card, Button, TextField, Notice } from '@/ui/components';
+import { passkeyRegisterBegin, passkeyRegisterComplete, updateMyProfile } from '@/lib/api';
 import { getAccessToken } from '@/lib/session';
 import { doRegister, passkeySupported } from '@/lib/passkey';
 
 type Msg = { text: string; tone: 'success' | 'error' };
+const CONTACT_OPTS: { key: PreferredContact; label: string }[] = [
+  { key: 'email', label: 'Email' }, { key: 'phone', label: 'Phone' },
+  { key: 'sms', label: 'SMS' }, { key: 'in_app', label: 'In-app' },
+];
 
 export default function Account() {
-  const { user, signOut } = useAuth();
-  const [msg, setMsg] = useState<Msg | null>(null);
-  const [busy, setBusy] = useState(false);
+  const t = useTheme();
+  const { signOut } = useAuth();
+  const { data, refresh } = useProfile();
+  const me = data?.me;
 
-  const enrolPasskey = async () => {
-    const token = getAccessToken();
-    if (!token) return;
+  const [name, setName] = useState(me?.name ?? '');
+  const [phone, setPhone] = useState(me?.profile?.phone ?? '');
+  const [contactEmail, setContactEmail] = useState(me?.profile?.contact_email ?? me?.email ?? '');
+  const [preferred, setPreferred] = useState<string | null>(me?.profile?.preferred_contact ?? null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<Msg | null>(null);
+
+  const saveProfile = async () => {
+    if (!name.trim()) { setMsg({ text: 'Name is required.', tone: 'error' }); return; }
     setBusy(true); setMsg(null);
     try {
-      const options = await passkeyRegisterBegin(token);
+      await updateMyProfile(getAccessToken()!, {
+        name: name.trim(), phone: phone || undefined,
+        contact_email: contactEmail || undefined, preferred_contact: preferred ?? undefined,
+      });
+      await refresh();
+      setMsg({ text: 'Profile saved.', tone: 'success' });
+    } catch (e) { setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' }); } finally { setBusy(false); }
+  };
+
+  const enrolPasskey = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      const options = await passkeyRegisterBegin(getAccessToken()!);
       const attestation = await doRegister(options);
-      await passkeyRegisterComplete(token, attestation);
-      setMsg({ text: 'Passkey enrolled on this device', tone: 'success' });
-    } catch (e) {
-      setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' });
-    } finally {
-      setBusy(false);
-    }
+      await passkeyRegisterComplete(getAccessToken()!, attestation);
+      setMsg({ text: 'Passkey enrolled on this device.', tone: 'success' });
+    } catch (e) { setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' }); } finally { setBusy(false); }
   };
 
   return (
@@ -34,10 +56,25 @@ export default function Account() {
       <Text variant="title">Account</Text>
 
       <Card>
-        <Text variant="heading">Profile</Text>
-        <Row><Text muted>Role</Text><View style={{ flex: 1 }} /><Badge label={user?.role ?? '—'} /></Row>
-        <Row><Text muted>Type</Text><View style={{ flex: 1 }} /><Text>{user?.type}</Text></Row>
-        <Row><Text muted>User ID</Text><View style={{ flex: 1 }} /><Text variant="mono">{user?.userId.slice(0, 8)}…</Text></Row>
+        <Text variant="heading">Your details</Text>
+        <TextField label="Name" value={name} onChangeText={setName} placeholder="Full name" autoCapitalize="sentences" />
+        <TextField label="Contact email" value={contactEmail} onChangeText={setContactEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" />
+        <TextField label="Phone" value={phone} onChangeText={setPhone} placeholder="Optional" />
+        <View style={{ gap: 6 }}>
+          <Text variant="label" muted>Best way to reach you</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
+            {CONTACT_OPTS.map((o) => {
+              const sel = preferred === o.key;
+              return (
+                <Pressable key={o.key} onPress={() => setPreferred(o.key)} accessibilityRole="button"
+                  style={{ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }}>
+                  <Text variant="label" color={sel ? t.color.primaryText : t.color.text}>{o.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+        <Button label="Save profile" onPress={saveProfile} loading={busy} />
       </Card>
 
       <Card>
@@ -47,13 +84,11 @@ export default function Account() {
             ? 'Add a passkey for faster, phishing-resistant sign-in on this device.'
             : 'Passkeys are available on the web app today; native support is coming.'}
         </Text>
-        {passkeySupported && (
-          <Button label="Enrol a passkey" onPress={enrolPasskey} loading={busy} />
-        )}
-        {msg && <Notice message={msg.text} tone={msg.tone} />}
+        {passkeySupported && <Button label="Enrol a passkey" variant="secondary" onPress={enrolPasskey} loading={busy} />}
       </Card>
 
       <Button label="Log out" variant="ghost" onPress={signOut} />
+      {msg && <Notice message={msg.text} tone={msg.tone} />}
     </Screen>
   );
 }

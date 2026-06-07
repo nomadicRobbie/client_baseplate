@@ -53,6 +53,45 @@ export interface FeatureFlags {
   subscriptions: boolean
 }
 
+// ── Profile + onboarding (client_api /profile contract) ─────────────────────
+export type PreferredContact = 'email' | 'phone' | 'sms' | 'in_app'
+
+export interface ClientOrg {
+  org_name: string | null
+  logo_url: string | null
+  brand_color: string | null
+  accent_color: string | null
+  support_email: string | null
+  timezone: string | null
+  locale: string | null
+  currency: string | null
+}
+
+export interface MyUserProfile {
+  contact_email: string | null
+  phone: string | null
+  preferred_contact: PreferredContact | null
+  timezone: string | null
+}
+
+export interface OnboardingState {
+  needs_org_setup: boolean   // admins only, when org isn't set up
+  needs_personal: boolean    // any user, when their profile is incomplete
+}
+
+export interface ProfileResponse {
+  org: ClientOrg | null
+  me: {
+    userId: string
+    email: string
+    name: string | null
+    role: UserRole
+    type: UserType
+    profile: MyUserProfile | null
+  }
+  onboarding: OnboardingState
+}
+
 // ── Helpers (pure — safe everywhere) ────────────────────────────────────────
 export function hasRole(claims: Pick<BlnkTokenClaims, 'role'>, ...roles: UserRole[]): boolean {
   return roles.includes(claims.role)

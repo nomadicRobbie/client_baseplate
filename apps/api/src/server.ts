@@ -7,6 +7,7 @@ import { getPool, closePool } from './db/pool'
 import authDecorators, { verifyBlnkAuth } from './blnk/auth'
 import authProxyPlugin from './routes/auth-proxy'
 import wellKnownPlugin from './routes/well-known'
+import profilePlugin from './routes/profile'
 
 const server = Fastify({
   logger: {
@@ -64,6 +65,9 @@ async function build(): Promise<typeof server> {
 
   // ── App association files (passkeys on native) ──────────────────────────
   await server.register(wellKnownPlugin)
+
+  // ── Profile + onboarding (org + per-user) ───────────────────────────────
+  await server.register(profilePlugin)
 
   // ── Hot-swap feature modules (FEATURE_* flags) ──────────────────────────
   // Phase 4 registers payments here:

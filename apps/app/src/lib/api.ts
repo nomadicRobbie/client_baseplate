@@ -1,4 +1,4 @@
-import type { TokenPair } from '@blnk/shared';
+import type { TokenPair, ProfileResponse } from '@blnk/shared';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
 // and verifies tokens — the app never sees blnk_auth directly.
@@ -6,7 +6,7 @@ export const API = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000';
 export const TENANT = process.env.EXPO_PUBLIC_TENANT_SLUG ?? 'ting-test';
 
 interface ReqOpts {
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH';
   body?: unknown;
   token?: string;
 }
@@ -53,3 +53,16 @@ export const passkeyRegisterComplete = (token: string, response: unknown) =>
 
 // ── Session ──────────────────────────────────────────────────────────────────
 export const me = (token: string) => req('/me', { method: 'GET', token });
+
+// ── Profile + onboarding ─────────────────────────────────────────────────────
+export const getProfile = (token: string) => req<ProfileResponse>('/profile', { method: 'GET', token });
+
+export const updateMyProfile = (token: string, data: {
+  name?: string; contact_email?: string; phone?: string;
+  preferred_contact?: string; timezone?: string;
+}) => req('/profile/me', { method: 'PUT', body: data, token });
+
+export const updateOrg = (token: string, data: {
+  org_name?: string; logo_url?: string; brand_color?: string; accent_color?: string;
+  support_email?: string; timezone?: string; locale?: string; currency?: string;
+}) => req('/profile/org', { method: 'PUT', body: data, token });

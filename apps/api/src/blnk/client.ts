@@ -32,6 +32,29 @@ export async function sendEmail(args: { to: string; subject: string; html: strin
   }
 }
 
+// ── Identity (blnk_auth) ─────────────────────────────────────────────────────
+// client_api orchestrates profile: the display name lives in blnk_auth, so we
+// read/write it there using the calling user's own bearer token.
+export interface AuthMe { id: string; email: string; name: string | null; type: string; role: string }
+
+export async function getAuthMe(userToken: string): Promise<AuthMe> {
+  const res = await fetch(`${config.blnkAuth.url}/auth/me`, {
+    headers: { authorization: `Bearer ${userToken}` },
+  })
+  if (!res.ok) throw Errors.badGateway(`blnk_auth /auth/me failed: ${res.status}`)
+  return res.json() as Promise<AuthMe>
+}
+
+export async function setAuthName(userToken: string, name: string): Promise<AuthMe> {
+  const res = await fetch(`${config.blnkAuth.url}/auth/me`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${userToken}` },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) throw Errors.badGateway(`blnk_auth set name failed: ${res.status}`)
+  return res.json() as Promise<AuthMe>
+}
+
 // ── Billing status (blnk's subscription with THIS client) ───────────────────
 // Surfaces the client's own blnk billing state to their admin dashboard.
 // Stub for Phase 3a — wired to blnk_api's tenant-scoped billing endpoints later.
