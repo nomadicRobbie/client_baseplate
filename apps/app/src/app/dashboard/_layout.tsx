@@ -9,10 +9,12 @@ import { Text } from '@/ui/components';
 import { Onboarding } from '@/components/onboarding';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
-type NavItem = { label: string; href: '/dashboard' | '/dashboard/account' | '/dashboard/team' | '/dashboard/settings'; icon: IconName; adminOnly?: boolean };
+type NavHref = '/dashboard' | '/dashboard/account' | '/dashboard/billing' | '/dashboard/team' | '/dashboard/settings';
+type NavItem = { label: string; href: NavHref; icon: IconName; adminOnly?: boolean; feature?: 'stripe' };
 
 const NAV: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: 'grid-outline' },
+  { label: 'Billing', href: '/dashboard/billing', icon: 'card-outline', feature: 'stripe' },
   { label: 'Account', href: '/dashboard/account', icon: 'person-outline' },
   { label: 'Team', href: '/dashboard/team', icon: 'people-outline', adminOnly: true },
   { label: 'Settings', href: '/dashboard/settings', icon: 'settings-outline', adminOnly: true },
@@ -34,11 +36,11 @@ function Spinner() {
   );
 }
 
-function NavList({ vertical, isAdmin }: { vertical: boolean; isAdmin: boolean }) {
+function NavList({ vertical, isAdmin, stripeOn }: { vertical: boolean; isAdmin: boolean; stripeOn: boolean }) {
   const t = useTheme();
   const router = useRouter();
   const pathname = usePathname();
-  const items = NAV.filter((i) => !i.adminOnly || isAdmin);
+  const items = NAV.filter((i) => (!i.adminOnly || isAdmin) && (!i.feature || (i.feature === 'stripe' && stripeOn)));
   return (
     <View style={{ flexDirection: vertical ? 'column' : 'row', gap: t.space.xs, justifyContent: vertical ? 'flex-start' : 'space-around' }}>
       {items.map((item) => {
@@ -73,13 +75,14 @@ function NavList({ vertical, isAdmin }: { vertical: boolean; isAdmin: boolean })
 function Shell() {
   const t = useTheme();
   const { width } = useWindowDimensions();
-  const { tenantSlug, signOut } = useAuth();
+  const { tenantSlug, signOut, features } = useAuth();
   const { data } = useProfile();
   const wide = width >= 900;
 
   const orgName = data?.org?.org_name ?? tenantSlug ?? 'dashboard';
   const firstName = data?.me.name?.split(' ')[0];
   const isAdmin = data?.me.role === 'admin' || data?.me.role === 'super';
+  const stripeOn = !!features?.stripe;
 
   const Brand = (
     <View style={{ gap: 2 }}>
@@ -94,7 +97,7 @@ function Shell() {
         <View style={{ width: 248, backgroundColor: t.color.surface, borderRightWidth: 1, borderRightColor: t.color.border, padding: t.space.lg, justifyContent: 'space-between' }}>
           <View style={{ gap: t.space.lg }}>
             {Brand}
-            <NavList vertical isAdmin={isAdmin} />
+            <NavList vertical isAdmin={isAdmin} stripeOn={stripeOn} />
           </View>
           <Pressable onPress={signOut} accessibilityRole="button" accessibilityLabel="Log out">
             <Text variant="label" color={t.color.accent}>Log out</Text>
@@ -109,7 +112,7 @@ function Shell() {
     <SafeAreaView style={{ flex: 1, backgroundColor: t.color.bg }} edges={['bottom']}>
       <View style={{ flex: 1 }}><Slot /></View>
       <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: t.color.border, backgroundColor: t.color.surface }}>
-        <NavList vertical={false} isAdmin={isAdmin} />
+        <NavList vertical={false} isAdmin={isAdmin} stripeOn={stripeOn} />
       </View>
     </SafeAreaView>
   );

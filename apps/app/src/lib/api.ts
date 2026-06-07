@@ -1,4 +1,4 @@
-import type { TokenPair, ProfileResponse, TeamUser } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser, ClientSubscription } from '@blnk/shared';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
 // and verifies tokens — the app never sees blnk_auth directly.
@@ -76,3 +76,16 @@ export const addTeamUser = (token: string, data: { email: string; role: 'admin' 
 
 export const setTeamUserActive = (token: string, id: string, active: boolean) =>
   req<{ user: TeamUser }>(`/team/${id}/active`, { method: 'PATCH', body: { active }, token });
+
+// ── Payments (client charges end users via Stripe Checkout) ──────────────────
+export const subscribeCheckout = (token: string, data: { price_id: string; success_url: string; cancel_url: string }) =>
+  req<{ url: string }>('/payments/subscriptions/checkout', { method: 'POST', body: data, token });
+
+export const listMySubscriptions = (token: string) =>
+  req<{ subscriptions: ClientSubscription[] }>('/payments/subscriptions', { method: 'GET', token });
+
+export const cancelSubscription = (token: string, id: string) =>
+  req(`/payments/subscriptions/${id}/cancel`, { method: 'PATCH', token });
+
+export const oneOffCheckout = (token: string, data: { amount_cents: number; description: string; success_url: string; cancel_url: string }) =>
+  req<{ url: string }>('/payments/one-off/checkout', { method: 'POST', body: data, token });

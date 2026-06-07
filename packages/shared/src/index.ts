@@ -79,6 +79,15 @@ export interface OnboardingState {
   needs_personal: boolean    // any user, when their profile is incomplete
 }
 
+export interface ClientSubscription {
+  id: string
+  stripe_subscription_id: string
+  stripe_price_id: string
+  status: string
+  current_period_end: string | null
+  cancel_at_period_end: boolean
+}
+
 export interface TeamUser {
   id: string
   email: string

@@ -29,6 +29,11 @@ function list(key: string): string[] {
 // without a key shouldn't fail at import. Required only in production.
 let _blnkApi: { url: string; apiKey: string } | null = null
 
+// The CLIENT's own Stripe account (charges their end users). Validated lazily,
+// required only when Stripe is enabled AND in production — so the baseplate
+// builds/runs with payments off and no keys.
+let _stripe: { apiKey: string; webhookSecret: string; currency: string } | null = null
+
 export const config = {
   env: required('NODE_ENV') as 'production' | 'development' | 'test',
   port: parseInt(optional('PORT', '4000'), 10),
@@ -58,6 +63,18 @@ export const config = {
     oneOff: flag('FEATURE_ONE_OFF'),
     subscriptions: flag('FEATURE_SUBSCRIPTIONS'),
   } satisfies FeatureFlags,
+
+  get stripe() {
+    if (!_stripe) {
+      const need = process.env.FEATURE_STRIPE === 'true' && process.env.NODE_ENV === 'production';
+      _stripe = {
+        apiKey: need ? required('STRIPE_API_KEY') : optional('STRIPE_API_KEY', ''),
+        webhookSecret: need ? required('STRIPE_WEBHOOK_SECRET') : optional('STRIPE_WEBHOOK_SECRET', ''),
+        currency: optional('STRIPE_CURRENCY', 'nzd'),
+      };
+    }
+    return _stripe;
+  },
 
   allowedOrigins: list('ALLOWED_ORIGINS'),
 

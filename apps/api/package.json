@@ -21,7 +21,8 @@
     "fastify-plugin": "^4.5.1",
     "jose": "^5.9.4",
     "pg": "^8.13.1",
-    "pino": "^9.5.0"
+    "pino": "^9.5.0",
+    "stripe": "^22.2.0"
   },
   "devDependencies": {
     "@types/node": "^20.17.10",

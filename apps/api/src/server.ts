@@ -9,6 +9,7 @@ import authProxyPlugin from './routes/auth-proxy'
 import wellKnownPlugin from './routes/well-known'
 import profilePlugin from './routes/profile'
 import teamPlugin from './routes/team'
+import paymentsPlugin from './modules/payments'
 
 const server = Fastify({
   logger: {
@@ -78,9 +79,8 @@ async function build(): Promise<typeof server> {
   await server.register(teamPlugin)
 
   // ── Hot-swap feature modules (FEATURE_* flags) ──────────────────────────
-  // Phase 4 registers payments here:
-  //   if (config.features.subscriptions) await server.register(subscriptionsPlugin)
-  //   if (config.features.oneOff)        await server.register(oneOffPlugin)
+  // Client payments (Stripe Checkout) — only if provisioned for Stripe.
+  if (config.features.stripe) await server.register(paymentsPlugin)
 
   // ── Protected gate (proves blnk_auth JWT verification works) ────────────
   server.get('/me', { preHandler: [verifyBlnkAuth] }, async (req) => ({
