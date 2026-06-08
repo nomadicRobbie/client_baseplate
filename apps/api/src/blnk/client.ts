@@ -99,11 +99,37 @@ export async function setTenantUserActive(
   return json.user!
 }
 
-// ── Billing status (blnk's subscription with THIS client) ───────────────────
-// Surfaces the client's own blnk billing state to their admin dashboard.
-// Stub for Phase 3a — wired to blnk_api's tenant-scoped billing endpoints later.
-export async function getBlnkBillingStatus(_accessToken: string): Promise<unknown> {
-  // Placeholder: in a later phase this calls blnk_api /payments/* with the
-  // client's credentials and returns subscription + invoice summaries.
-  return { status: 'not_wired', note: 'blnk billing status integration lands with Phase 4' }
+// ── blnk platform billing (blnk bills THIS client) ──────────────────────────
+// On blnk's Stripe account. Authenticated to blnk_api with this client's ApiKey
+// (tenant-scoped). Contract (blnk_api side, pending the payments module on main):
+//   GET  /billing/me       → BlnkBillingStatus
+//   POST /billing/checkout → { url }   (start/pay the tenant's blnk subscription)
+//   POST /billing/portal   → { url }   (Stripe Customer Portal to manage card/invoices)
+export interface BlnkBillingStatus {
+  status: string; plan_name: string | null; current_period_end: string | null;
+  next_invoice_cents: number | null; currency: string | null; card_last4: string | null;
+  cancel_at_period_end: boolean;
+}
+
+async function blnkApiJson<T>(path: string, init: RequestInit): Promise<T> {
+  const res = await blnkApiFetch(path, init)
+  const json = await res.json().catch(() => ({})) as T & { error?: { message?: string } }
+  if (!res.ok) throw Errors.badGateway((json as { error?: { message?: string } })?.error?.message ?? `blnk_api ${path} failed: ${res.status}`)
+  return json as T
+}
+
+export async function getBlnkBilling(): Promise<BlnkBillingStatus> {
+  return blnkApiJson<BlnkBillingStatus>('/billing/me', { method: 'GET' })
+}
+
+export async function createBlnkCheckout(successUrl: string, cancelUrl: string): Promise<{ url: string }> {
+  return blnkApiJson<{ url: string }>('/billing/checkout', {
+    method: 'POST', body: JSON.stringify({ success_url: successUrl, cancel_url: cancelUrl }),
+  })
+}
+
+export async function createBlnkPortal(returnUrl: string): Promise<{ url: string }> {
+  return blnkApiJson<{ url: string }>('/billing/portal', {
+    method: 'POST', body: JSON.stringify({ return_url: returnUrl }),
+  })
 }

@@ -9,12 +9,14 @@ import { Text } from '@/ui/components';
 import { Onboarding } from '@/components/onboarding';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
-type NavHref = '/dashboard' | '/dashboard/account' | '/dashboard/billing' | '/dashboard/team' | '/dashboard/settings';
-type NavItem = { label: string; href: NavHref; icon: IconName; adminOnly?: boolean; feature?: 'stripe' };
+type NavHref = '/dashboard' | '/dashboard/account' | '/dashboard/payments' | '/dashboard/billing' | '/dashboard/team' | '/dashboard/settings';
+// audience: 'admin' → admin/super only · 'member' → non-admins only · undefined → everyone
+type NavItem = { label: string; href: NavHref; icon: IconName; adminOnly?: boolean; audience?: 'admin' | 'member'; feature?: 'stripe' };
 
 const NAV: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: 'grid-outline' },
-  { label: 'Billing', href: '/dashboard/billing', icon: 'card-outline', feature: 'stripe' },
+  { label: 'Payments', href: '/dashboard/payments', icon: 'card-outline', feature: 'stripe', audience: 'member' },
+  { label: 'Billing', href: '/dashboard/billing', icon: 'receipt-outline', feature: 'stripe', audience: 'admin' },
   { label: 'Account', href: '/dashboard/account', icon: 'person-outline' },
   { label: 'Team', href: '/dashboard/team', icon: 'people-outline', adminOnly: true },
   { label: 'Settings', href: '/dashboard/settings', icon: 'settings-outline', adminOnly: true },
@@ -40,7 +42,11 @@ function NavList({ vertical, isAdmin, stripeOn }: { vertical: boolean; isAdmin: 
   const t = useTheme();
   const router = useRouter();
   const pathname = usePathname();
-  const items = NAV.filter((i) => (!i.adminOnly || isAdmin) && (!i.feature || (i.feature === 'stripe' && stripeOn)));
+  const items = NAV.filter((i) =>
+    (!i.adminOnly || isAdmin) &&
+    (!i.feature || (i.feature === 'stripe' && stripeOn)) &&
+    (!i.audience || (i.audience === 'admin' ? isAdmin : !isAdmin))
+  );
   return (
     <View style={{ flexDirection: vertical ? 'column' : 'row', gap: t.space.xs, justifyContent: vertical ? 'flex-start' : 'space-around' }}>
       {items.map((item) => {

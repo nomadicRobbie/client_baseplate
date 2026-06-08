@@ -1,12 +1,18 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { verifyBlnkAuth } from '../../../blnk/auth';
-import { createSubscriptionCheckout, listMySubscriptions, cancelMySubscription } from './service';
+import { createSubscriptionCheckout, listMySubscriptions, cancelMySubscription, listPlans } from './service';
 
 function bearer(req: FastifyRequest): string {
   return (req.headers.authorization ?? '').slice(7);
 }
 
 const subscriptionsPlugin: FastifyPluginAsync = async (fastify) => {
+  // ── GET /payments/plans ───────────────────────────────────────────────────
+  // The client's subscription plans, from their Stripe catalogue (source of truth).
+  fastify.get('/payments/plans', { preHandler: [verifyBlnkAuth] }, async (_req, reply) => {
+    return reply.status(200).send({ plans: await listPlans() });
+  });
+
   // ── POST /payments/subscriptions/checkout ─────────────────────────────────
   fastify.post('/payments/subscriptions/checkout', {
     preHandler: [verifyBlnkAuth],

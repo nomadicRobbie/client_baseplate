@@ -9,6 +9,7 @@ import authProxyPlugin from './routes/auth-proxy'
 import wellKnownPlugin from './routes/well-known'
 import profilePlugin from './routes/profile'
 import teamPlugin from './routes/team'
+import billingPlugin from './routes/billing'
 import paymentsPlugin from './modules/payments'
 
 const server = Fastify({
@@ -77,6 +78,9 @@ async function build(): Promise<typeof server> {
 
   // ── Team management (admin adds users) ──────────────────────────────────
   await server.register(teamPlugin)
+
+  // ── blnk platform billing (the client's blnk plan; admin only) ──────────
+  await server.register(billingPlugin)
 
   // ── Hot-swap feature modules (FEATURE_* flags) ──────────────────────────
   // Client payments (Stripe Checkout) — only if provisioned for Stripe.
