@@ -51,6 +51,128 @@ export interface FeatureFlags {
   stripe: boolean
   oneOff: boolean
   subscriptions: boolean
+  commerce: boolean
+  analytics: boolean
+}
+
+// ── Commerce ─────────────────────────────────────────────────────────────────
+export interface ProductStockLevel {
+  [size: string]: number | undefined
+}
+
+export interface Product {
+  id: string
+  title: string
+  description: string
+  desc_points: string[]
+  price_cents: number
+  image_url: string | null
+  images: string[]
+  sizes: string[]
+  stock_level: ProductStockLevel
+  postable: boolean
+  is_new: boolean
+  model_size: boolean
+  model_details: string[]
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type OrderPaymentStatus = 'pending' | 'paid' | 'failed'
+export type FulfillmentStatus = 'pending' | 'packed' | 'fulfilled'
+
+export interface ShippingAddress {
+  line1: string
+  line2?: string
+  city: string
+  postal_code: string
+  country?: string
+}
+
+export interface OrderItem {
+  product_id: string
+  title: string
+  price_cents: number
+  quantity: number
+  selected_size: string | null
+}
+
+// CartItem is an OrderItem in progress — same shape, kept separate so the
+// client can add cart-only fields (e.g. image_url for display) without
+// polluting the order contract.
+export interface CartItem {
+  product_id: string
+  title: string
+  price_cents: number
+  quantity: number
+  selected_size: string | null
+  image_url?: string | null
+}
+
+export interface Order {
+  id: string
+  order_ref: string
+  email: string
+  name: string
+  phone: string | null
+  shipping_address: ShippingAddress
+  items: OrderItem[]
+  total_cents: number
+  payment_intent_id: string | null
+  payment_status: OrderPaymentStatus
+  fulfillment_status: FulfillmentStatus
+  packed_at: string | null
+  packed_by: string | null
+  fulfilled_at: string | null
+  fulfilled_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Enquiry {
+  id: string
+  enquiry_ref: string
+  name: string
+  email: string
+  subject: string
+  message: string
+  created_at: string
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+export type AnalyticsEventType =
+  | 'page_view'
+  | 'product_view'
+  | 'add_to_cart'
+  | 'checkout_start'
+  | 'order_complete'
+
+export interface AnalyticsEvent {
+  event_type: AnalyticsEventType
+  session_id: string
+  url: string
+  referrer?: string
+  product_id?: string
+  meta?: Record<string, unknown>
+}
+
+export interface AnalyticsTopProduct {
+  product_id: string
+  title: string
+  units_sold: number
+  revenue_cents: number
+}
+
+export interface AnalyticsSummary {
+  revenue_cents: number
+  order_count: number
+  unique_sessions: number
+  page_views: number
+  conversion_rate: number
+  top_products: AnalyticsTopProduct[]
+  period_start: string
+  period_end: string
 }
 
 // ── Profile + onboarding (client_api /profile contract) ─────────────────────

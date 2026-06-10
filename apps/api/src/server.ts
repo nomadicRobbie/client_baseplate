@@ -11,6 +11,8 @@ import profilePlugin from './routes/profile'
 import teamPlugin from './routes/team'
 import billingPlugin from './routes/billing'
 import paymentsPlugin from './modules/payments'
+import commercePlugin from './modules/commerce'
+import analyticsPlugin from './modules/analytics'
 
 const server = Fastify({
   logger: {
@@ -85,6 +87,10 @@ async function build(): Promise<typeof server> {
   // ── Hot-swap feature modules (FEATURE_* flags) ──────────────────────────
   // Client payments (Stripe Checkout) — only if provisioned for Stripe.
   if (config.features.stripe) await server.register(paymentsPlugin)
+  // Online store — products, orders, enquiries, Stripe payment intents.
+  if (config.features.commerce) await server.register(commercePlugin)
+  // Analytics — event ingest (public) + dashboard query routes (admin).
+  if (config.features.analytics) await server.register(analyticsPlugin)
 
   // ── Protected gate (proves blnk_auth JWT verification works) ────────────
   server.get('/me', { preHandler: [verifyBlnkAuth] }, async (req) => ({

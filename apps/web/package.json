@@ -1,0 +1,23 @@
+{
+  "name": "@blnk/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nuxt 3 public-facing web app for a blnk client. Composables wire to client_api; pages are built per-client.",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev --port 3000",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@blnk/shared": "workspace:*",
+    "nuxt": "^3.17.0",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@nuxt/eslint": "^1.4.0",
+    "typescript": "^5.9.3"
+  }
+}
