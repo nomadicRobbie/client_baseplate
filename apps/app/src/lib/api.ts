@@ -1,4 +1,4 @@
-import type { TokenPair, ProfileResponse, TeamUser, ClientSubscription, Plan, BlnkBillingStatus } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser, ClientSubscription } from '@blnk/shared';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
 // and verifies tokens — the app never sees blnk_auth directly.
@@ -78,9 +78,6 @@ export const setTeamUserActive = (token: string, id: string, active: boolean) =>
   req<{ user: TeamUser }>(`/team/${id}/active`, { method: 'PATCH', body: { active }, token });
 
 // ── Payments (client charges end users via Stripe Checkout) ──────────────────
-export const listPlans = (token: string) =>
-  req<{ plans: Plan[] }>('/payments/plans', { method: 'GET', token });
-
 export const subscribeCheckout = (token: string, data: { price_id: string; success_url: string; cancel_url: string }) =>
   req<{ url: string }>('/payments/subscriptions/checkout', { method: 'POST', body: data, token });
 
@@ -92,13 +89,3 @@ export const cancelSubscription = (token: string, id: string) =>
 
 export const oneOffCheckout = (token: string, data: { amount_cents: number; description: string; success_url: string; cancel_url: string }) =>
   req<{ url: string }>('/payments/one-off/checkout', { method: 'POST', body: data, token });
-
-// ── blnk platform billing (the client's blnk plan; admin only) ───────────────
-export const getBlnkBilling = (token: string) =>
-  req<{ billing: BlnkBillingStatus }>('/billing', { method: 'GET', token });
-
-export const blnkCheckout = (token: string, data: { success_url: string; cancel_url: string }) =>
-  req<{ url: string }>('/billing/checkout', { method: 'POST', body: data, token });
-
-export const blnkPortal = (token: string, data: { return_url: string }) =>
-  req<{ url: string }>('/billing/portal', { method: 'POST', body: data, token });

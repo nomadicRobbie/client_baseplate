@@ -201,26 +201,6 @@ export interface OnboardingState {
   needs_personal: boolean    // any user, when their profile is incomplete
 }
 
-// The client's blnk platform subscription (blnk bills the client). Surfaced to
-// admins only. Assembled by blnk_api from blnk's own Stripe account.
-export interface BlnkBillingStatus {
-  status: string                 // active | trialing | past_due | incomplete | canceled | none
-  plan_name: string | null
-  current_period_end: string | null
-  next_invoice_cents: number | null
-  currency: string | null
-  card_last4: string | null
-  cancel_at_period_end: boolean
-}
-
-export interface Plan {
-  price_id: string
-  product_name: string
-  unit_amount: number     // cents
-  currency: string
-  interval: string        // month | year | week | day
-}
-
 export interface ClientSubscription {
   id: string
   stripe_subscription_id: string
