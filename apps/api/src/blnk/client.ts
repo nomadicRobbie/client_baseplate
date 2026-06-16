@@ -32,6 +32,36 @@ export async function sendEmail(args: { to: string; subject: string; html: strin
   }
 }
 
+// ── Email config (notification recipients — blnk_api is source of truth) ──────
+// Where inbound replies are forwarded. Set by the client admin at onboarding;
+// client_api proxies to blnk_api (server-to-server ApiKey).
+export interface EmailRecipients {
+  notification_email: string | null
+  backup_email: string | null
+}
+
+export async function getEmailConfig(): Promise<EmailRecipients> {
+  if (config.env === 'development' && !config.blnkApi.apiKey) {
+    return { notification_email: null, backup_email: null }
+  }
+  const res = await blnkApiFetch('/email/config', { method: 'GET' })
+  if (!res.ok) throw Errors.badGateway(`blnk_api get email config failed: ${res.status}`)
+  return res.json() as Promise<EmailRecipients>
+}
+
+export async function setEmailConfig(patch: Partial<EmailRecipients>): Promise<EmailRecipients> {
+  if (config.env === 'development' && !config.blnkApi.apiKey) {
+    console.log(`[blnk email-config dev] ${JSON.stringify(patch)}`)
+    return { notification_email: patch.notification_email ?? null, backup_email: patch.backup_email ?? null }
+  }
+  const res = await blnkApiFetch('/email/config', { method: 'PATCH', body: JSON.stringify(patch) })
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw Errors.badGateway(`blnk_api set email config failed: ${res.status} ${body}`)
+  }
+  return res.json() as Promise<EmailRecipients>
+}
+
 // ── Identity (blnk_auth) ─────────────────────────────────────────────────────
 // client_api orchestrates profile: the display name lives in blnk_auth, so we
 // read/write it there using the calling user's own bearer token.

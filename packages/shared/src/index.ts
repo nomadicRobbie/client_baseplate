@@ -196,8 +196,16 @@ export interface MyUserProfile {
   timezone: string | null
 }
 
+// Notification recipients — source of truth is blnk_api (tenants.email_config).
+// Where inbound email replies are forwarded; set by an admin at onboarding.
+export interface EmailRecipients {
+  notification_email: string | null
+  backup_email: string | null
+}
+
 export interface OnboardingState {
   needs_org_setup: boolean   // admins only, when org isn't set up
+  needs_email_setup: boolean // admins only, until a notification_email is set
   needs_personal: boolean    // any user, when their profile is incomplete
 }
 
@@ -222,6 +230,7 @@ export interface TeamUser {
 
 export interface ProfileResponse {
   org: ClientOrg | null
+  email: EmailRecipients
   me: {
     userId: string
     email: string

@@ -65,6 +65,8 @@ export const updateMyProfile = (token: string, data: {
 export const updateOrg = (token: string, data: {
   org_name?: string; logo_url?: string; brand_color?: string; accent_color?: string;
   support_email?: string; timezone?: string; locale?: string; currency?: string;
+  // Forwarded by client_api to blnk_api (inbound forwarding recipients).
+  notification_email?: string; backup_email?: string | null;
 }) => req('/profile/org', { method: 'PUT', body: data, token });
 
 // ── Team management ──────────────────────────────────────────────────────────

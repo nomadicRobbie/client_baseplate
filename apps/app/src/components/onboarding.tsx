@@ -46,9 +46,10 @@ function Swatches({ value, onChange }: { value: string | null; onChange: (v: str
 
 export function Onboarding({ onDone }: { onDone: () => Promise<void> | void }) {
   const { data } = useProfile();
-  const steps: ('personal' | 'org')[] = [];
+  const steps: ('personal' | 'org' | 'email')[] = [];
   if (data?.onboarding.needs_personal) steps.push('personal');
   if (data?.onboarding.needs_org_setup) steps.push('org');
+  if (data?.onboarding.needs_email_setup) steps.push('email');
 
   const [idx, setIdx] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -62,6 +63,11 @@ export function Onboarding({ onDone }: { onDone: () => Promise<void> | void }) {
   // org
   const [orgName, setOrgName] = useState(data?.org?.org_name ?? '');
   const [brand, setBrand] = useState<string | null>(data?.org?.brand_color ?? null);
+  // email recipients — default notification to support_email, overridable
+  const [notifyEmail, setNotifyEmail] = useState(
+    data?.email?.notification_email ?? data?.org?.support_email ?? data?.me.email ?? ''
+  );
+  const [backupEmail, setBackupEmail] = useState(data?.email?.backup_email ?? '');
 
   const step = steps[idx];
   if (!step) { void onDone(); return null; }
@@ -89,6 +95,18 @@ export function Onboarding({ onDone }: { onDone: () => Promise<void> | void }) {
     } catch (e) { setErr(String(e instanceof Error ? e.message : e)); } finally { setBusy(false); }
   };
 
+  const submitEmail = async () => {
+    const notify = notifyEmail.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(notify)) { setErr('A valid notification email is required.'); return; }
+    const backup = backupEmail.trim();
+    if (backup && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(backup)) { setErr('The backup email is not valid.'); return; }
+    setBusy(true); setErr('');
+    try {
+      await updateOrg(getAccessToken()!, { notification_email: notify, backup_email: backup || null });
+      await advance();
+    } catch (e) { setErr(String(e instanceof Error ? e.message : e)); } finally { setBusy(false); }
+  };
+
   const stepNo = idx + 1;
   const total = steps.length;
 
@@ -96,7 +114,7 @@ export function Onboarding({ onDone }: { onDone: () => Promise<void> | void }) {
     <Screen>
       <View style={{ gap: 4 }}>
         <Text variant="small" muted>Step {stepNo} of {total}</Text>
-        <Text variant="title">{step === 'personal' ? 'Welcome — tell us about you' : 'Set up your organisation'}</Text>
+        <Text variant="title">{step === 'personal' ? 'Welcome — tell us about you' : step === 'org' ? 'Set up your organisation' : 'Where should replies go?'}</Text>
       </View>
 
       {step === 'personal' ? (
@@ -110,7 +128,7 @@ export function Onboarding({ onDone }: { onDone: () => Promise<void> | void }) {
           </View>
           <Button label={total > 1 ? 'Continue' : 'Finish'} onPress={submitPersonal} loading={busy} />
         </Card>
-      ) : (
+      ) : step === 'org' ? (
         <Card>
           <TextField label="Organisation name" value={orgName} onChangeText={setOrgName} placeholder="e.g. ting test studios" autoCapitalize="sentences" />
           <View style={{ gap: 6 }}>
@@ -118,8 +136,15 @@ export function Onboarding({ onDone }: { onDone: () => Promise<void> | void }) {
             <Text variant="small" muted>Sets the app's accent for everyone. You can change or set this later in Settings.</Text>
             <Swatches value={brand} onChange={setBrand} />
           </View>
-          <Button label="Finish" onPress={submitOrg} loading={busy} />
+          <Button label={idx + 1 < total ? 'Continue' : 'Finish'} onPress={submitOrg} loading={busy} />
           {!!brand && <Button label="Skip colour for now" variant="ghost" onPress={() => setBrand(null)} />}
+        </Card>
+      ) : (
+        <Card>
+          <Text variant="small" muted>When a customer replies to an email from your organisation, we forward it to this inbox. You can change it later in Settings.</Text>
+          <TextField label="Notification email" value={notifyEmail} onChangeText={setNotifyEmail} placeholder="you@yourorg.com" keyboardType="email-address" autoCapitalize="none" />
+          <TextField label="Backup email (optional)" value={backupEmail} onChangeText={setBackupEmail} placeholder="Used if the primary bounces" keyboardType="email-address" autoCapitalize="none" />
+          <Button label="Finish" onPress={submitEmail} loading={busy} />
         </Card>
       )}
 

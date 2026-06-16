@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { verifyBlnkAuth, requireRole } from '../blnk/auth';
-import { getAuthMe, setAuthName } from '../blnk/client';
+import { getAuthMe, setAuthName, getEmailConfig, setEmailConfig } from '../blnk/client';
 import {
   getClientProfile, upsertClientProfile, getUserProfile, upsertUserProfile,
 } from '../db/queries/profile';
@@ -15,10 +15,12 @@ const profilePlugin: FastifyPluginAsync = async (fastify) => {
   // from here) + a derived onboarding state the app uses to route the wizard.
   fastify.get('/profile', { preHandler: [verifyBlnkAuth] }, async (req) => {
     const u = req.user!;
-    const [org, userProfile, authMe] = await Promise.all([
+    const [org, userProfile, authMe, email] = await Promise.all([
       getClientProfile(),
       getUserProfile(u.userId),
       getAuthMe(bearer(req)),
+      // Source of truth is blnk_api; never let it break the whole profile load.
+      getEmailConfig().catch(() => ({ notification_email: null, backup_email: null })),
     ]);
 
     const isAdmin = u.role === 'admin' || u.role === 'super';
@@ -27,6 +29,7 @@ const profilePlugin: FastifyPluginAsync = async (fastify) => {
 
     return {
       org: org ?? null,
+      email,
       me: {
         userId: u.userId,
         email: authMe.email,
@@ -37,6 +40,8 @@ const profilePlugin: FastifyPluginAsync = async (fastify) => {
       },
       onboarding: {
         needs_org_setup: isAdmin && !orgComplete,
+        // Inbound replies have nowhere to go until an admin sets this — gate it.
+        needs_email_setup: isAdmin && !email.notification_email,
         needs_personal: !personalComplete,
       },
     };
@@ -92,12 +97,29 @@ const profilePlugin: FastifyPluginAsync = async (fastify) => {
           timezone: { type: 'string', maxLength: 64 },
           locale: { type: 'string', maxLength: 16 },
           currency: { type: 'string', maxLength: 8 },
+          // Forwarded to blnk_api (source of truth), not stored in client_profile.
+          notification_email: { type: 'string', format: 'email' },
+          backup_email: { type: ['string', 'null'], format: 'email' },
         },
       },
     },
   }, async (req, reply) => {
-    const org = await upsertClientProfile(req.body as Record<string, string>, req.user!.userId);
-    return reply.status(200).send({ org });
+    // notification_email / backup_email live in blnk_api (they drive inbound
+    // forwarding); everything else is local org profile. Split and route each.
+    const { notification_email, backup_email, ...orgFields } =
+      req.body as Record<string, string | null>;
+
+    const org = await upsertClientProfile(orgFields as Record<string, string>, req.user!.userId);
+
+    let email: Awaited<ReturnType<typeof setEmailConfig>> | undefined;
+    if (notification_email !== undefined || backup_email !== undefined) {
+      const patch: { notification_email?: string; backup_email?: string | null } = {};
+      if (notification_email !== undefined) patch.notification_email = notification_email as string;
+      if (backup_email !== undefined) patch.backup_email = backup_email;
+      email = await setEmailConfig(patch);
+    }
+
+    return reply.status(200).send({ org, email });
   });
 };
 

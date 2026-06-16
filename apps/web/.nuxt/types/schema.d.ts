@@ -16,13 +16,7 @@ import { NuxtModule, ModuleDependencyMeta } from '@nuxt/schema'
    },
   }
   interface SharedPublicRuntimeConfig {
-   apiUrl: string,
 
-   features: {
-      commerce: boolean,
-
-      analytics: boolean,
-   },
   }
 declare module '@nuxt/schema' {
   interface ModuleDependencies {
