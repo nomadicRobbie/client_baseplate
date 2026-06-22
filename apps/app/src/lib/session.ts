@@ -35,6 +35,10 @@ export function getAccessToken(): string | null {
   return getItem(ACCESS);
 }
 
+export function getRefreshToken(): string | null {
+  return getItem(REFRESH);
+}
+
 export function setTokens(accessToken: string, refreshToken: string): void {
   setItem(ACCESS, accessToken);
   setItem(REFRESH, refreshToken);

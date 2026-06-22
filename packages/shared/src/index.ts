@@ -175,6 +175,35 @@ export interface AnalyticsSummary {
   period_end: string
 }
 
+// ── Web traffic analytics (generic — any client site) ───────────────────────
+export interface TimeSeriesPoint {
+  date: string        // ISO date (day bucket)
+  page_views: number
+  visitors: number
+}
+
+export interface TopPage {
+  url: string
+  views: number
+  visitors: number
+}
+
+export interface TopReferrer {
+  referrer: string    // 'direct' when none
+  count: number
+}
+
+export interface WebTrafficOverview {
+  page_views: number
+  unique_visitors: number
+  sessions: number
+  timeseries: TimeSeriesPoint[]
+  top_pages: TopPage[]
+  top_referrers: TopReferrer[]
+  period_start: string
+  period_end: string
+}
+
 // ── Profile + onboarding (client_api /profile contract) ─────────────────────
 export type PreferredContact = 'email' | 'phone' | 'sms' | 'in_app'
 

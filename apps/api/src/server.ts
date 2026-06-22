@@ -12,6 +12,7 @@ import teamPlugin from './routes/team'
 import paymentsPlugin from './modules/payments'
 import commercePlugin from './modules/commerce'
 import analyticsPlugin from './modules/analytics'
+import locationsPlugin from './modules/locations/plugin'
 
 const server = Fastify({
   logger: {
@@ -87,6 +88,8 @@ async function build(): Promise<typeof server> {
   if (config.features.commerce) await server.register(commercePlugin)
   // Analytics — event ingest (public) + dashboard query routes (admin).
   if (config.features.analytics) await server.register(analyticsPlugin)
+  // Locations — ETO trailer location banner (always on).
+  await server.register(locationsPlugin)
 
   // ── Protected gate (proves blnk_auth JWT verification works) ────────────
   server.get('/me', { preHandler: [verifyBlnkAuth] }, async (req) => ({

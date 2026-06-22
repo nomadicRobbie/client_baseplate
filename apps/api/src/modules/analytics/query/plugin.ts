@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { verifyBlnkAuth, requireRole } from '../../../blnk/auth'
-import { getSummary } from '../../../db/queries/analytics'
+import { getSummary, getWebOverview } from '../../../db/queries/analytics'
 
 function parsePeriod(query: Record<string, string>): { from: Date; to: Date } {
   const to = query.to ? new Date(query.to) : new Date()
@@ -19,6 +19,17 @@ const queryPlugin: FastifyPluginAsync = async (fastify) => {
     const { from, to } = parsePeriod(req.query as Record<string, string>)
     const summary = await getSummary(from, to)
     return reply.send({ summary })
+  })
+
+  // ── GET /analytics/overview ───────────────────────────────────────────────
+  // Generic web-traffic overview (page views, visitors, time series, top pages,
+  // top referrers). Query params: from/to (ISO date). Default: last 30 days.
+  fastify.get('/analytics/overview', {
+    preHandler: [verifyBlnkAuth, requireRole('admin', 'super')],
+  }, async (req, reply) => {
+    const { from, to } = parsePeriod(req.query as Record<string, string>)
+    const overview = await getWebOverview(from, to)
+    return reply.send({ overview })
   })
 }
 
