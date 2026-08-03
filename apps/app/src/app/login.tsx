@@ -12,7 +12,7 @@ type Msg = { text: string; tone: 'info' | 'success' | 'error' };
 export default function Login() {
   const t = useTheme();
   const router = useRouter();
-  const [email, setEmail] = useState('admin@ting-test.studio');
+  const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
