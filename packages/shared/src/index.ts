@@ -53,6 +53,76 @@ export interface FeatureFlags {
   subscriptions: boolean
   commerce: boolean
   analytics: boolean
+  compliance: boolean
+  locations: boolean
+}
+
+// ── Compliance (food safety records — requires FEATURE_COMPLIANCE) ───────────
+export interface ComplianceFieldSpec {
+  key: string
+  label: string
+  type: 'text' | 'number' | 'bool' | 'date' | 'datetime' | 'enum' | 'multiselect'
+  unit?: string
+  options?: string[]
+  required?: boolean
+}
+
+export interface ComplianceRecordType {
+  jurisdiction: string
+  code: string
+  label: string
+  category: string | null
+  tiers: string[]
+  frequency: string | null
+  mandatory: boolean
+  field_schema: ComplianceFieldSpec[]
+  critical_limit: unknown
+  sort_order: number
+  active: boolean
+}
+
+export interface ComplianceRecord {
+  id: string
+  jurisdiction: string
+  record_type: string
+  site_id: string | null
+  entered_by: string
+  created_by: string | null
+  datetime: string
+  result: 'pass' | 'fail' | 'na'
+  data: Record<string, unknown>
+  corrective_action_id: string | null
+  attachment_url: string | null
+  schedule_id: string | null
+  voided_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// ── Compliance scheduling (recurring checks that surface in "Today") ─────────
+export type ScheduleCadence = 'daily' | 'weekly' | 'monthly' | 'interval'
+
+export interface ComplianceSchedule {
+  id: string
+  jurisdiction: string
+  record_type: string
+  label: string                 // operator's name, e.g. "Main chiller"
+  site_id: string | null
+  cadence: ScheduleCadence
+  weekdays: number[]            // weekly: 0=Sun … 6=Sat (one or more days)
+  day_of_month: number | null   // monthly: 1–31
+  interval_days: number | null  // interval: every N days from anchor_date
+  anchor_date: string | null    // interval reference date (YYYY-MM-DD)
+  times_per_day: number         // how many completions are required on a due day
+  active: boolean
+  created_at: string
+}
+
+// A schedule that is due on a given date, with how much of it is done.
+export interface ScheduleDue {
+  schedule: ComplianceSchedule
+  done_count: number
+  remaining: number
 }
 
 // ── Commerce ─────────────────────────────────────────────────────────────────

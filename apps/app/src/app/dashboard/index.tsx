@@ -1,60 +1,57 @@
-import { View } from 'react-native';
-import { useAuth } from '@/lib/auth-context';
+import { View, Pressable } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { usePins } from '@/lib/pins-context';
+import { MAX_PINS } from '@/lib/nav';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Badge } from '@/ui/components';
+import { Screen, Text, Card, Row, Badge } from '@/ui/components';
 
-// Overview — the dashboard landing. Greeting + at-a-glance cards + activity.
-// Cards here are placeholders the client fills with their real data/metrics.
-export default function Overview() {
+// Library — the dashboard landing. Lists the client's blnk modules and lets
+// them star up to two onto the mobile bottom bar (the "two most used").
+export default function Library() {
   const t = useTheme();
-  const { features } = useAuth();
-
-  const enabled = features
-    ? Object.entries(features).filter(([, on]) => on).map(([k]) => k)
-    : [];
-
-  const today = new Date().toLocaleDateString(undefined, {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-  });
+  const router = useRouter();
+  const { modules, isPinned, toggle } = usePins();
 
   return (
     <Screen>
       <View style={{ gap: 4 }}>
-        <Text variant="title">Overview</Text>
-        <Text muted>{today}</Text>
+        <Text variant="title">Library</Text>
+        <Text muted>Your blnk modules</Text>
       </View>
 
-      {/* Stat cards — replace with real metrics per client */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.lg }}>
-        <Card style={{ flex: 1, minWidth: 160 }}>
-          <Text variant="small" muted>MEMBERS</Text>
-          <Text variant="title">—</Text>
-          <Text variant="small" muted>wire to your data</Text>
+      {modules.length === 0 ? (
+        <Card><Text muted>No modules enabled yet. Modules turned on for your account appear here.</Text></Card>
+      ) : (
+        <Card>
+          {modules.map((m) => {
+            const pinned = isPinned(m.href);
+            return (
+              <View key={m.href} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Row onPress={() => router.push(m.href)} style={{ flex: 1 }}>
+                  <Ionicons name={m.icon} size={20} color={t.color.text} />
+                  <Text variant="label" style={{ flex: 1 }}>{m.label}</Text>
+                  {pinned && <Badge label="On bar" tone="success" />}
+                </Row>
+                <Pressable
+                  onPress={() => toggle(m.href)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: pinned }}
+                  accessibilityLabel={pinned ? `Remove ${m.label} from bottom bar` : `Pin ${m.label} to bottom bar`}
+                  hitSlop={8}
+                  style={{ padding: t.space.sm, minHeight: 44, justifyContent: 'center' }}
+                >
+                  <Ionicons name={pinned ? 'star' : 'star-outline'} size={22} color={pinned ? t.color.primary : t.color.textMuted} />
+                </Pressable>
+              </View>
+            );
+          })}
         </Card>
-        <Card style={{ flex: 1, minWidth: 160 }}>
-          <Text variant="small" muted>ACTIVE</Text>
-          <Text variant="title">—</Text>
-          <Text variant="small" muted>wire to your data</Text>
-        </Card>
-        <Card style={{ flex: 1, minWidth: 160 }}>
-          <Text variant="small" muted>THIS MONTH</Text>
-          <Text variant="title">—</Text>
-          <Text variant="small" muted>wire to your data</Text>
-        </Card>
-      </View>
+      )}
 
       <Card>
-        <Text variant="heading">Enabled modules</Text>
-        {enabled.length === 0
-          ? <Text muted>No feature modules enabled. Toggle FEATURE_* in the api .env.</Text>
-          : <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
-              {enabled.map((f) => <Badge key={f} label={f} tone="success" />)}
-            </View>}
-      </Card>
-
-      <Card>
-        <Text variant="heading">Recent activity</Text>
-        <Text muted>Nothing yet — this is where the client surfaces their feed.</Text>
+        <Text variant="heading">Bottom bar</Text>
+        <Text muted>Star up to {MAX_PINS} modules to keep them one tap away on the bottom bar. Starring another replaces the oldest.</Text>
       </Card>
     </Screen>
   );

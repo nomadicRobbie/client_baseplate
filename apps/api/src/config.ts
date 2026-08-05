@@ -64,6 +64,8 @@ export const config = {
     subscriptions: flag('FEATURE_SUBSCRIPTIONS'),
     commerce: flag('FEATURE_COMMERCE'),
     analytics: flag('FEATURE_ANALYTICS'),
+    compliance: flag('FEATURE_COMPLIANCE'),
+    locations: flag('FEATURE_LOCATIONS'),
   } satisfies FeatureFlags,
 
   get stripe() {

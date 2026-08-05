@@ -1,27 +1,16 @@
+import { useEffect } from 'react';
 import { Slot, Redirect, usePathname, useRouter } from 'expo-router';
-import { View, Pressable, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { View, Pressable, useWindowDimensions, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import type { FeatureFlags } from '@blnk/shared';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { ProfileProvider, useProfile } from '@/lib/profile-context';
+import { PinsProvider, usePins } from '@/lib/pins-context';
+import { visibleNav, HOME_HREF, ACCOUNT_HREF, type IconName, type NavHref } from '@/lib/nav';
 import { ThemeProvider, useTheme } from '@/theme';
 import { Text } from '@/ui/components';
 import { Onboarding } from '@/components/onboarding';
-
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
-type NavHref = '/dashboard' | '/dashboard/account' | '/dashboard/billing' | '/dashboard/team' | '/dashboard/settings' | '/dashboard/analytics' | '/dashboard/locations';
-type FeatureKey = 'stripe' | 'analytics';
-type NavItem = { label: string; href: NavHref; icon: IconName; adminOnly?: boolean; feature?: FeatureKey };
-
-const NAV: NavItem[] = [
-  { label: 'Overview', href: '/dashboard', icon: 'grid-outline' },
-  { label: 'Analytics', href: '/dashboard/analytics', icon: 'bar-chart-outline', adminOnly: true, feature: 'analytics' },
-  { label: 'Locations', href: '/dashboard/locations', icon: 'location-outline', adminOnly: true },
-  { label: 'Billing', href: '/dashboard/billing', icon: 'card-outline', feature: 'stripe' },
-  { label: 'Account', href: '/dashboard/account', icon: 'person-outline' },
-  { label: 'Team', href: '/dashboard/team', icon: 'people-outline', adminOnly: true },
-  { label: 'Settings', href: '/dashboard/settings', icon: 'settings-outline', adminOnly: true },
-];
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -39,13 +28,14 @@ function Spinner() {
   );
 }
 
-function NavList({ vertical, isAdmin, features }: { vertical: boolean; isAdmin: boolean; features: Record<FeatureKey, boolean> }) {
+// Desktop sidebar — the full set of destinations, stacked vertically.
+function Sidebar({ isAdmin, features }: { isAdmin: boolean; features: FeatureFlags | null }) {
   const t = useTheme();
   const router = useRouter();
   const pathname = usePathname();
-  const items = NAV.filter((i) => (!i.adminOnly || isAdmin) && (!i.feature || features[i.feature]));
+  const items = visibleNav(isAdmin, features);
   return (
-    <View style={{ flexDirection: vertical ? 'column' : 'row', gap: t.space.xs, justifyContent: vertical ? 'flex-start' : 'space-around' }}>
+    <View style={{ gap: t.space.xs }}>
       {items.map((item) => {
         const active = pathname === item.href;
         return (
@@ -57,17 +47,58 @@ function NavList({ vertical, isAdmin, features }: { vertical: boolean; isAdmin: 
             accessibilityLabel={item.label}
             style={(state) => {
               const { pressed, hovered } = state as { pressed: boolean; hovered?: boolean };
-              const bg = active || pressed ? t.color.surfaceAlt : hovered ? t.color.bg : 'transparent';
               return {
-                flexDirection: vertical ? 'row' : 'column', alignItems: 'center', gap: vertical ? t.space.md : 2,
-                paddingVertical: t.space.md, paddingHorizontal: vertical ? t.space.md : t.space.sm,
-                borderRadius: t.radius.md, minHeight: 44, flex: vertical ? undefined : 1,
-                backgroundColor: vertical ? bg : active ? t.color.surfaceAlt : 'transparent',
+                flexDirection: 'row', alignItems: 'center', gap: t.space.md,
+                paddingVertical: t.space.md, paddingHorizontal: t.space.md,
+                borderRadius: t.radius.md, minHeight: 44,
+                backgroundColor: active || pressed ? t.color.surfaceAlt : hovered ? t.color.bg : 'transparent',
               };
             }}
           >
             <Ionicons name={item.icon} size={20} color={active ? t.color.primary : t.color.textMuted} />
-            <Text variant={vertical ? 'label' : 'small'} color={active ? t.color.text : t.color.textMuted}>{item.label}</Text>
+            <Text variant="label" color={active ? t.color.text : t.color.textMuted}>{item.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// Mobile bottom bar — curated: Library · Account · two pinned modules.
+function MobileTabBar() {
+  const t = useTheme();
+  const router = useRouter();
+  const pathname = usePathname();
+  const { pinned } = usePins();
+
+  const tabs: { label: string; href: NavHref; icon: IconName }[] = [
+    { label: 'Library', href: HOME_HREF, icon: 'library-outline' },
+    { label: 'Account', href: ACCOUNT_HREF, icon: 'person-outline' },
+    ...pinned.map((m) => ({ label: m.label, href: m.href, icon: m.icon })),
+  ];
+
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-around', borderTopWidth: 1, borderTopColor: t.color.border, backgroundColor: t.color.surface }}>
+      {tabs.map((tab) => {
+        const active = pathname === tab.href;
+        return (
+          <Pressable
+            key={tab.href}
+            onPress={() => router.replace(tab.href)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={tab.label}
+            style={(state) => {
+              const { pressed } = state as { pressed: boolean };
+              return {
+                flex: 1, flexDirection: 'column', alignItems: 'center', gap: 2,
+                paddingTop: t.space.sm, paddingBottom: t.space.xs, minHeight: 52,
+                backgroundColor: active || pressed ? t.color.surfaceAlt : 'transparent',
+              };
+            }}
+          >
+            <Ionicons name={tab.icon} size={22} color={active ? t.color.primary : t.color.textMuted} />
+            <Text variant="small" color={active ? t.color.text : t.color.textMuted} numberOfLines={1}>{tab.label}</Text>
           </Pressable>
         );
       })}
@@ -78,17 +109,18 @@ function NavList({ vertical, isAdmin, features }: { vertical: boolean; isAdmin: 
 function Shell() {
   const t = useTheme();
   const { width } = useWindowDimensions();
-  const { tenantSlug, signOut, features } = useAuth();
+  const { tenantSlug, signOut, features, user } = useAuth();
   const { data } = useProfile();
   const wide = width >= 900;
 
   const orgName = data?.org?.org_name ?? tenantSlug ?? 'dashboard';
+
+  // Web browser-tab title follows the business name, not the raw URL.
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') document.title = orgName;
+  }, [orgName]);
   const firstName = data?.me.name?.split(' ')[0];
-  const isAdmin = data?.me.role === 'admin' || data?.me.role === 'super';
-  const featureFlags: Record<FeatureKey, boolean> = {
-    stripe: !!features?.stripe,
-    analytics: !!features?.analytics,
-  };
+  const isAdmin = user?.role === 'admin' || user?.role === 'super';
 
   const Brand = (
     <View style={{ gap: 2 }}>
@@ -103,7 +135,7 @@ function Shell() {
         <View style={{ width: 248, backgroundColor: t.color.surface, borderRightWidth: 1, borderRightColor: t.color.border, padding: t.space.lg, justifyContent: 'space-between' }}>
           <View style={{ gap: t.space.lg }}>
             {Brand}
-            <NavList vertical isAdmin={isAdmin} features={featureFlags} />
+            <Sidebar isAdmin={isAdmin} features={features} />
           </View>
           <Pressable onPress={signOut} accessibilityRole="button" accessibilityLabel="Log out">
             <Text variant="label" color={t.color.accent}>Log out</Text>
@@ -117,9 +149,7 @@ function Shell() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.color.bg }} edges={['bottom']}>
       <View style={{ flex: 1 }}><Slot /></View>
-      <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: t.color.border, backgroundColor: t.color.surface }}>
-        <NavList vertical={false} isAdmin={isAdmin} features={featureFlags} />
-      </View>
+      <MobileTabBar />
     </SafeAreaView>
   );
 }
@@ -139,7 +169,9 @@ function Themed() {
 
   return (
     <ThemeProvider theme={theme}>
-      {needsOnboarding ? <Onboarding onDone={refresh} /> : <Shell />}
+      {needsOnboarding
+        ? <Onboarding onDone={refresh} />
+        : <PinsProvider><Shell /></PinsProvider>}
     </ThemeProvider>
   );
 }

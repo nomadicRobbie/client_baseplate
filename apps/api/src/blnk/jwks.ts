@@ -20,5 +20,13 @@ export async function verifyBlnkToken(token: string): Promise<BlnkTokenClaims> {
     throw new Error('malformed blnk_auth token')
   }
 
+  // Tenant isolation — a valid signature is NOT enough. A genuine blnk_auth
+  // token minted for a DIFFERENT tenant must be rejected here, or this backend
+  // would accept another tenant's users. This is the single line that keeps
+  // tenants isolated at the client boundary; never remove it.
+  if (payload['tslug'] !== config.tenantSlug) {
+    throw new Error(`token issued for tenant '${String(payload['tslug'])}', not '${config.tenantSlug}'`)
+  }
+
   return payload as unknown as BlnkTokenClaims
 }

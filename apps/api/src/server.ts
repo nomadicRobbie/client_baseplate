@@ -13,6 +13,7 @@ import paymentsPlugin from './modules/payments'
 import commercePlugin from './modules/commerce'
 import analyticsPlugin from './modules/analytics'
 import locationsPlugin from './modules/locations/plugin'
+import compliancePlugin from './modules/compliance'
 
 const server = Fastify({
   logger: {
@@ -29,7 +30,7 @@ const server = Fastify({
   trustProxy: config.env === 'production',
 })
 
-async function build(): Promise<typeof server> {
+export async function build(): Promise<typeof server> {
   await server.register(helmet, { contentSecurityPolicy: config.env === 'production' })
 
   // Strip fingerprint headers (same hardening as blnk_auth).
@@ -88,8 +89,10 @@ async function build(): Promise<typeof server> {
   if (config.features.commerce) await server.register(commercePlugin)
   // Analytics — event ingest (public) + dashboard query routes (admin).
   if (config.features.analytics) await server.register(analyticsPlugin)
-  // Locations — ETO trailer location banner (always on).
-  await server.register(locationsPlugin)
+  // Locations — public-site location banner.
+  if (config.features.locations) await server.register(locationsPlugin)
+  // Compliance — food safety records (registry + validation engine).
+  if (config.features.compliance) await server.register(compliancePlugin)
 
   // ── Protected gate (proves blnk_auth JWT verification works) ────────────
   server.get('/me', { preHandler: [verifyBlnkAuth] }, async (req) => ({
@@ -151,7 +154,10 @@ async function shutdown(): Promise<void> {
   process.exit(0)
 }
 
-process.on('SIGTERM', shutdown)
-process.on('SIGINT', shutdown)
-
-start()
+// Only boot (connect DB, bind port, install signal handlers) when run directly —
+// importing this module for tests must not start a live server.
+if (require.main === module) {
+  process.on('SIGTERM', shutdown)
+  process.on('SIGINT', shutdown)
+  start()
+}

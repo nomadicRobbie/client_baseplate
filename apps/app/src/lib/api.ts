@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { TokenPair, ProfileResponse, TeamUser, ClientSubscription, WebTrafficOverview } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue } from '@blnk/shared';
 import { getAccessToken, getRefreshToken, setTokens, clearSession } from './session';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
@@ -8,7 +8,7 @@ export const API = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000';
 export const TENANT = process.env.EXPO_PUBLIC_TENANT_SLUG ?? 'ting-test';
 
 interface ReqOpts {
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   token?: string;
   _retried?: boolean; // internal: guards the single silent-refresh retry
@@ -142,7 +142,7 @@ export const getAnalyticsOverview = (token: string, range?: { from?: string; to?
 };
 
 // ── Locations ────────────────────────────────────────────────────────────────
-export interface EtoLocation {
+export interface LocationEntry {
   id: string;
   location: string;
   starts_at: string;
@@ -151,10 +151,56 @@ export interface EtoLocation {
 }
 
 export const getLocations = (token: string) =>
-  req<{ locations: EtoLocation[] }>('/locations', { method: 'GET', token });
+  req<{ locations: LocationEntry[] }>('/locations', { method: 'GET', token });
 
 export const createLocation = (token: string, data: { location: string; starts_at: string; note?: string }) =>
-  req<{ location: EtoLocation }>('/locations', { method: 'POST', body: data, token });
+  req<{ location: LocationEntry }>('/locations', { method: 'POST', body: data, token });
 
 export const deleteLocation = (token: string, id: string) =>
   req<void>(`/locations/${id}`, { method: 'DELETE', token });
+
+// ── Compliance (food safety records — requires FEATURE_COMPLIANCE) ───────────
+export const getRecordTypes = (token: string, tier?: string) =>
+  req<{ record_types: ComplianceRecordType[] }>(
+    `/compliance/record-types${tier ? `?tier=${tier}` : ''}`, { method: 'GET', token });
+
+export const getComplianceRecords = (token: string, filters?: { type?: string; result?: string; from?: string; to?: string }) => {
+  const qs = new URLSearchParams();
+  if (filters?.type) qs.set('type', filters.type);
+  if (filters?.result) qs.set('result', filters.result);
+  if (filters?.from) qs.set('from', filters.from);
+  if (filters?.to) qs.set('to', filters.to);
+  const q = qs.toString();
+  return req<{ records: ComplianceRecord[] }>(`/compliance/records${q ? `?${q}` : ''}`, { method: 'GET', token });
+};
+
+export const createComplianceRecord = (token: string, body: {
+  record_type: string; entered_by: string; data: Record<string, unknown>; site_id?: string | null; schedule_id?: string | null;
+}) => req<{ record: ComplianceRecord; corrective_action: ComplianceRecord | null }>(
+  '/compliance/records', { method: 'POST', body, token });
+
+export const updateComplianceRecord = (token: string, id: string, body: {
+  entered_by?: string; data?: Record<string, unknown>;
+}) => req<{ record: ComplianceRecord }>(`/compliance/records/${id}`, { method: 'PATCH', body, token });
+
+// ── Compliance schedules (recurring checks) ──────────────────────────────────
+export type NewSchedule = {
+  record_type: string; label: string; site_id?: string | null; cadence: string;
+  weekdays?: number[]; day_of_month?: number | null; interval_days?: number | null;
+  anchor_date?: string | null; times_per_day?: number;
+};
+
+export const getSchedulesDue = (token: string, on: string) =>
+  req<{ due: ScheduleDue[] }>(`/compliance/schedules/due?on=${on}`, { method: 'GET', token });
+
+export const listSchedules = (token: string) =>
+  req<{ schedules: ComplianceSchedule[] }>('/compliance/schedules', { method: 'GET', token });
+
+export const createSchedule = (token: string, body: NewSchedule) =>
+  req<{ schedule: ComplianceSchedule }>('/compliance/schedules', { method: 'POST', body, token });
+
+export const updateSchedule = (token: string, id: string, body: Partial<NewSchedule> & { active?: boolean }) =>
+  req<{ schedule: ComplianceSchedule }>(`/compliance/schedules/${id}`, { method: 'PATCH', body, token });
+
+export const deleteSchedule = (token: string, id: string) =>
+  req<void>(`/compliance/schedules/${id}`, { method: 'DELETE', token });

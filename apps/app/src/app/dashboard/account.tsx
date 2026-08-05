@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { View, Pressable } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import type { PreferredContact } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { useProfile } from '@/lib/profile-context';
+import { visibleNav } from '@/lib/nav';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Button, TextField, Notice } from '@/ui/components';
+import { Screen, Text, Card, Row, Button, TextField, Notice } from '@/ui/components';
 import { passkeyRegisterBegin, passkeyRegisterComplete, updateMyProfile } from '@/lib/api';
 import { getAccessToken } from '@/lib/session';
 import { doRegister, passkeySupported } from '@/lib/passkey';
@@ -17,9 +20,15 @@ const CONTACT_OPTS: { key: PreferredContact; label: string }[] = [
 
 export default function Account() {
   const t = useTheme();
-  const { signOut } = useAuth();
+  const router = useRouter();
+  const { signOut, features, user } = useAuth();
   const { data, refresh } = useProfile();
   const me = data?.me;
+
+  // Billing + admin screens live under Account on mobile (they're off the bar).
+  const isAdmin = user?.role === 'admin' || user?.role === 'super';
+  const manageLinks = visibleNav(isAdmin, features)
+    .filter((i) => i.href !== '/dashboard/account' && (i.group === 'account' || i.group === 'admin'));
 
   const [name, setName] = useState(me?.name ?? '');
   const [phone, setPhone] = useState(me?.profile?.phone ?? '');
@@ -86,6 +95,19 @@ export default function Account() {
         </Text>
         {passkeySupported && <Button label="Enrol a passkey" variant="secondary" onPress={enrolPasskey} loading={busy} />}
       </Card>
+
+      {manageLinks.length > 0 && (
+        <Card>
+          <Text variant="heading">Manage</Text>
+          {manageLinks.map((l) => (
+            <Row key={l.href} onPress={() => router.push(l.href)}>
+              <Ionicons name={l.icon} size={20} color={t.color.text} />
+              <Text variant="label" style={{ flex: 1 }}>{l.label}</Text>
+              <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
+            </Row>
+          ))}
+        </Card>
+      )}
 
       <Button label="Log out" variant="ghost" onPress={signOut} />
       {msg && <Notice message={msg.text} tone={msg.tone} />}
