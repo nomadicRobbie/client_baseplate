@@ -1,5 +1,5 @@
 import { query } from '../pool'
-import type { ComplianceSchedule } from '@blnk/shared'
+import type { ComplianceSchedule, CoolingBatch } from '@blnk/shared'
 
 // ── Types (mirrors the compliance_* tables) ─────────────────────────────────
 export interface RecordType {
@@ -285,4 +285,43 @@ export async function scheduleDoneCounts(on: string): Promise<Record<string, num
   const map: Record<string, number> = {}
   for (const r of rows) map[r.schedule_id] = r.n
   return map
+}
+
+// ── Cooling batches (live tracking) ──────────────────────────────────────────
+export async function createCoolingBatch(b: {
+  jurisdiction: string; product: string; site_id?: string | null; started_by: string; created_by?: string | null;
+}): Promise<CoolingBatch> {
+  const rows = await query<CoolingBatch>(
+    `INSERT INTO compliance_cooling_batches (jurisdiction, product, site_id, started_by, created_by)
+     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    [b.jurisdiction, b.product, b.site_id ?? null, b.started_by, b.created_by ?? null],
+  )
+  return rows[0]
+}
+
+export async function listActiveCoolingBatches(): Promise<CoolingBatch[]> {
+  return query<CoolingBatch>(
+    `SELECT * FROM compliance_cooling_batches WHERE status = 'in_progress' ORDER BY started_at`, [],
+  )
+}
+
+export async function getCoolingBatch(id: string): Promise<CoolingBatch | null> {
+  const rows = await query<CoolingBatch>(`SELECT * FROM compliance_cooling_batches WHERE id = $1`, [id])
+  return rows[0] ?? null
+}
+
+export async function updateCoolingBatch(
+  id: string,
+  p: Partial<Pick<CoolingBatch, 'reached_21_at' | 'reached_5_at' | 'status' | 'record_id'>>,
+): Promise<CoolingBatch | null> {
+  const rows = await query<CoolingBatch>(
+    `UPDATE compliance_cooling_batches SET
+       reached_21_at = COALESCE($2, reached_21_at),
+       reached_5_at  = COALESCE($3, reached_5_at),
+       status        = COALESCE($4, status),
+       record_id     = COALESCE($5, record_id)
+     WHERE id = $1 RETURNING *`,
+    [id, p.reached_21_at ?? null, p.reached_5_at ?? null, p.status ?? null, p.record_id ?? null],
+  )
+  return rows[0] ?? null
 }

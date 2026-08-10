@@ -5,14 +5,19 @@ import { otpSend, otpVerify, passkeyLoginBegin, passkeyLoginComplete, TENANT } f
 import { setTokens } from '@/lib/session';
 import { doAuthenticate, passkeySupported } from '@/lib/passkey';
 import { useTheme } from '@/theme';
+import { getItem, setItem } from '@/lib/storage';
 import { Screen, Text, Card, Button, TextField, Notice } from '@/ui/components';
 
 type Msg = { text: string; tone: 'info' | 'success' | 'error' };
 
+// Last address that signed in — prefilled so returning users don't retype it.
+// Kept out of session.ts on purpose: it must survive logout (clearSession).
+const LAST_EMAIL = 'blnk_last_email';
+
 export default function Login() {
   const t = useTheme();
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => getItem(LAST_EMAIL) ?? '');
   const [code, setCode] = useState('');
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -25,6 +30,7 @@ export default function Login() {
 
   const sendCode = () => run(async () => {
     await otpSend(email);
+    setItem(LAST_EMAIL, email.trim()); // remember only once blnk_auth accepted it
     setSent(true);
     setMsg({ text: 'Code sent — check the blnk_auth dev log', tone: 'success' });
   });
@@ -60,6 +66,7 @@ export default function Login() {
               placeholder="you@example.com"
               keyboardType="email-address"
               autoCapitalize="none"
+              autoComplete="email"
             />
 
             {!sent ? (

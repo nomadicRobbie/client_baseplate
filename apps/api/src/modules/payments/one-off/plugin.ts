@@ -1,16 +1,21 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
-import { verifyBlnkAuth } from '../../../blnk/auth';
+import { verifyBlnkAuth, requireRole } from '../../../blnk/auth';
 import { createOneOffCheckout, listMyPayments } from './service';
 
 function bearer(req: FastifyRequest): string {
   return (req.headers.authorization ?? '').slice(7);
 }
 
+// Billing is a tenant-admin concern — members never manage payments. (Only the
+// admin Billing screen uses these; a customer-facing one-off flow would live in
+// its own module with its own access rules.)
+const admin = [verifyBlnkAuth, requireRole('admin', 'super')];
+
 const oneOffPlugin: FastifyPluginAsync = async (fastify) => {
   // ── POST /payments/one-off/checkout ───────────────────────────────────────
-  // End user starts a one-time payment; returns a Stripe Checkout URL.
+  // Admin starts a one-time payment; returns a Stripe Checkout URL.
   fastify.post('/payments/one-off/checkout', {
-    preHandler: [verifyBlnkAuth],
+    preHandler: admin,
     schema: {
       body: {
         type: 'object',
@@ -40,7 +45,7 @@ const oneOffPlugin: FastifyPluginAsync = async (fastify) => {
   });
 
   // ── GET /payments/one-off ─────────────────────────────────────────────────
-  fastify.get('/payments/one-off', { preHandler: [verifyBlnkAuth] }, async (req, reply) => {
+  fastify.get('/payments/one-off', { preHandler: admin }, async (req, reply) => {
     return reply.status(200).send({ payments: await listMyPayments(req.user!.userId) });
   });
 };

@@ -4,11 +4,12 @@ import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
 import { config } from './config'
 import { getPool, closePool } from './db/pool'
-import authDecorators, { verifyBlnkAuth } from './blnk/auth'
+import authDecorators, { verifyBlnkAuth, requireAppAccess } from './blnk/auth'
 import authProxyPlugin from './routes/auth-proxy'
 import wellKnownPlugin from './routes/well-known'
 import profilePlugin from './routes/profile'
 import teamPlugin from './routes/team'
+import peoplePlugin from './modules/people'
 import paymentsPlugin from './modules/payments'
 import commercePlugin from './modules/commerce'
 import analyticsPlugin from './modules/analytics'
@@ -82,6 +83,9 @@ export async function build(): Promise<typeof server> {
   // ── Team management (admin adds users) ──────────────────────────────────
   await server.register(teamPlugin)
 
+  // ── People core (canonical human directory — always on, shared by modules) ─
+  await server.register(peoplePlugin)
+
   // ── Hot-swap feature modules (FEATURE_* flags) ──────────────────────────
   // Client payments (Stripe Checkout) — only if provisioned for Stripe.
   if (config.features.stripe) await server.register(paymentsPlugin)
@@ -94,8 +98,8 @@ export async function build(): Promise<typeof server> {
   // Compliance — food safety records (registry + validation engine).
   if (config.features.compliance) await server.register(compliancePlugin)
 
-  // ── Protected gate (proves blnk_auth JWT verification works) ────────────
-  server.get('/me', { preHandler: [verifyBlnkAuth] }, async (req) => ({
+  // ── Protected gate — must be provisioned for this app (admin or on the roster) ─
+  server.get('/me', { preHandler: [verifyBlnkAuth, requireAppAccess] }, async (req) => ({
     user: req.user,
     tenant_slug: config.tenantSlug,
     features: config.features,

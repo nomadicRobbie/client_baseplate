@@ -29,11 +29,13 @@ function Spinner() {
 }
 
 // Desktop sidebar — the full set of destinations, stacked vertically.
-function Sidebar({ isAdmin, features }: { isAdmin: boolean; features: FeatureFlags | null }) {
+function Sidebar({ isAdmin, features, myModules }: { isAdmin: boolean; features: FeatureFlags | null; myModules: string[] }) {
   const t = useTheme();
   const router = useRouter();
   const pathname = usePathname();
-  const items = visibleNav(isAdmin, features);
+  // Admin destinations (People, Settings) live under Account → Manage, not the
+  // sidebar — keeps the desktop nav to Library · modules · Billing · Account.
+  const items = visibleNav(isAdmin, features, myModules).filter((i) => i.group !== 'admin');
   return (
     <View style={{ gap: t.space.xs }}>
       {items.map((item) => {
@@ -110,7 +112,7 @@ function Shell() {
   const t = useTheme();
   const { width } = useWindowDimensions();
   const { tenantSlug, signOut, features, user } = useAuth();
-  const { data } = useProfile();
+  const { data, myModules } = useProfile();
   const wide = width >= 900;
 
   const orgName = data?.org?.org_name ?? tenantSlug ?? 'dashboard';
@@ -135,7 +137,7 @@ function Shell() {
         <View style={{ width: 248, backgroundColor: t.color.surface, borderRightWidth: 1, borderRightColor: t.color.border, padding: t.space.lg, justifyContent: 'space-between' }}>
           <View style={{ gap: t.space.lg }}>
             {Brand}
-            <Sidebar isAdmin={isAdmin} features={features} />
+            <Sidebar isAdmin={isAdmin} features={features} myModules={myModules} />
           </View>
           <Pressable onPress={signOut} accessibilityRole="button" accessibilityLabel="Log out">
             <Text variant="label" color={t.color.accent}>Log out</Text>

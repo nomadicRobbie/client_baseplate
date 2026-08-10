@@ -125,6 +125,23 @@ export interface ScheduleDue {
   remaining: number
 }
 
+// ── Real-time cooling batch (two-stage cooling monitored live) ───────────────
+export type CoolingStatus = 'in_progress' | 'done' | 'discarded'
+export interface CoolingBatch {
+  id: string
+  jurisdiction: string
+  product: string
+  site_id: string | null
+  started_by: string
+  created_by: string | null
+  started_at: string          // 60°C — cooling clock starts
+  reached_21_at: string | null // stage 1 complete (must be within 2h of start)
+  reached_5_at: string | null  // stage 2 complete (must be within 4h of reaching 21°C)
+  status: CoolingStatus
+  record_id: string | null    // the finalized `cooling` compliance record
+  created_at: string
+}
+
 // ── Commerce ─────────────────────────────────────────────────────────────────
 export interface ProductStockLevel {
   [size: string]: number | undefined
@@ -339,6 +356,24 @@ export interface ProfileResponse {
     profile: MyUserProfile | null
   }
   onboarding: OnboardingState
+}
+
+// ── People core (canonical human directory, shared across modules) ──────────
+export interface PersonModule {
+  module: string   // e.g. 'vessel', 'compliance'
+  role: string     // module-defined (vessel: 'admin' | 'manager' | 'user')
+}
+
+export interface Person {
+  id: string
+  user_id: string | null   // blnk_auth user id; null = login-less (no app access)
+  name: string
+  email: string | null
+  phone: string | null
+  active: boolean
+  modules: PersonModule[]   // per-module membership + role, populated on reads
+  created_at: string
+  updated_at: string
 }
 
 // ── Helpers (pure — safe everywhere) ────────────────────────────────────────

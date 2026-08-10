@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
-import { View, TextInput, Pressable, StyleSheet } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { View, TextInput, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type {
-  ComplianceRecordType, ComplianceRecord, ComplianceFieldSpec, ComplianceSchedule, ScheduleDue,
+  ComplianceRecordType, ComplianceRecord, ComplianceFieldSpec, ComplianceSchedule, ScheduleDue, CoolingBatch,
 } from '@blnk/shared';
 import { getAccessToken } from '@/lib/session';
 import {
   getRecordTypes, getComplianceRecords, createComplianceRecord, updateComplianceRecord,
   getSchedulesDue, listSchedules, createSchedule, updateSchedule, deleteSchedule, type NewSchedule,
+  startCooling, getActiveCooling, reachCoolingStage, discardCooling,
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { useProfile } from '@/lib/profile-context';
 import { evalLimit, describeLimit } from '@/lib/compliance';
 import { Screen, Text, Card, Button, Notice, Badge } from '@/ui/components';
 import { recordIcon } from '@/ui/record-icon';
@@ -106,6 +108,18 @@ function summarizeFailure(schema: ComplianceFieldSpec[], data: Record<string, un
 function caComplete(ca?: ComplianceRecord): boolean {
   const d = ca?.data ?? {};
   return Boolean(d.action_taken || d.cause || d.prevention);
+}
+
+// ── Cooling batch helpers ────────────────────────────────────────────────────
+const H2 = 2 * 3_600_000, H4 = 4 * 3_600_000;
+// Current stage + deadline for a live cooling batch.
+function coolingStage(b: CoolingBatch): { stage: 'stage1' | 'stage2'; label: string; deadline: number } {
+  if (!b.reached_21_at) return { stage: 'stage1', label: 'Cool to 21 °C', deadline: Date.parse(b.started_at) + H2 };
+  return { stage: 'stage2', label: 'Cool to 5 °C', deadline: Date.parse(b.reached_21_at) + H4 };
+}
+function humanDur(ms: number): string {
+  const abs = Math.abs(ms), h = Math.floor(abs / 3_600_000), m = Math.floor((abs % 3_600_000) / 60_000);
+  return h ? `${h}h ${m}m` : `${m}m`;
 }
 
 // ── Styles (single source, theme-driven) ─────────────────────────────────────
@@ -381,17 +395,24 @@ export default function Compliance() {
   const t = useTheme();
   const { s, soft } = useStyles();
   const { user } = useAuth();
+  const { data: profile } = useProfile();
   const isAdmin = user?.role === 'admin' || user?.role === 'super';
+  // The person logging a check is whoever is signed in on this device.
+  const userName = profile?.me?.name ?? '';
 
   const [types, setTypes] = useState<ComplianceRecordType[]>([]);
   const [records, setRecords] = useState<ComplianceRecord[]>([]);
   const [due, setDue] = useState<ScheduleDue[]>([]);
+  const [cooling, setCooling] = useState<CoolingBatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
   const [tab, setTab] = useState<Tab>('today');
   const [manage, setManage] = useState(false);
   const [historyRange, setHistoryRange] = useState<HistoryRange>('all');
+  const [showCoolingStart, setShowCoolingStart] = useState(false);
+  const [coolingProduct, setCoolingProduct] = useState('');
+  const [now, setNow] = useState(() => Date.now()); // ticks so cooling timers stay live
 
   const [editing, setEditing] = useState<Editing>(null);
   const [enteredBy, setEnteredBy] = useState('');
@@ -401,16 +422,26 @@ export default function Compliance() {
 
   const typeByCode = useMemo(() => Object.fromEntries(types.map((x) => [x.code, x])), [types]);
 
+  // Preserve the list's scroll position across opening/closing a form or the
+  // schedules manager: remember it while browsing, jump to top on open, restore on close.
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollYRef = useRef(0);
+  const overlay = !!editing || manage;
+  useEffect(() => {
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: overlay ? 0 : scrollYRef.current, animated: false }));
+  }, [overlay]);
+
   const load = async () => {
     setLoading(true);
     try {
       const token = getAccessToken()!;
-      const [tRes, rRes, dRes] = await Promise.all([
-        getRecordTypes(token), getComplianceRecords(token), getSchedulesDue(token, todayLocal()),
+      const [tRes, rRes, dRes, cRes] = await Promise.all([
+        getRecordTypes(token), getComplianceRecords(token), getSchedulesDue(token, todayLocal()), getActiveCooling(token),
       ]);
       setTypes(tRes.record_types);
       setRecords(rRes.records);
       setDue(dRes.due);
+      setCooling(cRes.batches);
     } catch (e) {
       setMsg({ text: e instanceof Error ? e.message : String(e), tone: 'error' });
     } finally {
@@ -418,10 +449,16 @@ export default function Compliance() {
     }
   };
   useEffect(() => { void load(); }, []);
+  // Keep cooling countdowns live while there are active batches.
+  useEffect(() => {
+    if (cooling.length === 0) return;
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, [cooling.length]);
 
   const openForm = (type: ComplianceRecordType, record?: ComplianceRecord, schedule?: ComplianceSchedule, opts?: { required?: boolean }) => {
     setEditing({ type, record, schedule, required: opts?.required });
-    setEnteredBy(record?.entered_by ?? '');
+    setEnteredBy(record?.entered_by ?? userName);
     setData(initData(type.field_schema, record));
     setMsg(null);
   };
@@ -512,6 +549,53 @@ export default function Compliance() {
     openForm(caType, enriched, undefined, { required: !caComplete(ca) });
   };
 
+  // Open a corrective action for mandatory completion (used by cooling fail/discard).
+  const openRequiredCA = (ca: ComplianceRecord, affected?: string) => {
+    const caType = typeByCode['corrective_action'];
+    if (!caType) return;
+    const enriched: ComplianceRecord = { ...ca, data: { ...ca.data, affected: (ca.data.affected as string) || affected || '' } };
+    setPendingCA({ type: caType, record: enriched });
+    openForm(caType, enriched, undefined, { required: true });
+  };
+
+  const startCoolingBatch = async () => {
+    if (!coolingProduct.trim()) { setMsg({ text: 'What is cooling?', tone: 'error' }); return; }
+    setBusy(true);
+    try {
+      await startCooling(getAccessToken()!, { product: coolingProduct.trim(), started_by: userName || 'Staff' });
+      setCoolingProduct(''); setShowCoolingStart(false);
+      await load();
+    } catch (e) { setMsg({ text: e instanceof Error ? e.message : String(e), tone: 'error' }); }
+    finally { setBusy(false); }
+  };
+
+  const reachStage = async (batch: CoolingBatch) => {
+    const { stage } = coolingStage(batch);
+    setBusy(true);
+    try {
+      const res = await reachCoolingStage(getAccessToken()!, batch.id, stage);
+      await load();
+      if (stage === 'stage2' && res.corrective_action) {
+        openRequiredCA(res.corrective_action, batch.product);
+        setMsg({ text: `${batch.product} exceeded the cooling limit — record the corrective action.`, tone: 'error' });
+      } else if (stage === 'stage2') {
+        setMsg({ text: `${batch.product} cooled within limits.`, tone: 'success' });
+      }
+    } catch (e) { setMsg({ text: e instanceof Error ? e.message : String(e), tone: 'error' }); }
+    finally { setBusy(false); }
+  };
+
+  const discardBatch = async (batch: CoolingBatch) => {
+    setBusy(true);
+    try {
+      const res = await discardCooling(getAccessToken()!, batch.id, { entered_by: userName });
+      await load();
+      openRequiredCA(res.corrective_action, batch.product);
+      setMsg({ text: `Cooling problem with ${batch.product} — record the corrective action.`, tone: 'error' });
+    } catch (e) { setMsg({ text: e instanceof Error ? e.message : String(e), tone: 'error' }); }
+    finally { setBusy(false); }
+  };
+
   const entriesToday = records.filter((r) => isToday(r.datetime)).length;
   // Open issues = failed checks whose corrective action isn't resolved yet.
   const issuesOpen = records.filter((r) => r.result === 'fail' && !caComplete(caById[r.corrective_action_id ?? ''])).length;
@@ -553,8 +637,8 @@ export default function Compliance() {
         )}
 
         <View style={s.fieldGroup}>
-          <Text variant="label" muted>Your name / initials *</Text>
-          <TextInput value={enteredBy} onChangeText={setEnteredBy} placeholder="e.g. RJ" placeholderTextColor={t.color.textMuted} style={s.input} />
+          <Text variant="label" muted>Name *</Text>
+          <TextInput value={enteredBy} onChangeText={setEnteredBy} placeholder="Who did this check?" placeholderTextColor={t.color.textMuted} style={s.input} />
         </View>
 
         {type.field_schema.map((f) => (
@@ -585,6 +669,45 @@ export default function Compliance() {
           <View style={s.stat}><Text style={[s.statNum, { color: issuesOpen ? t.color.danger : t.color.success }]}>{issuesOpen}</Text><Text variant="small" muted>Issues open</Text></View>
         </View>
       </Card>
+
+      {(cooling.length > 0 || showCoolingStart) && (
+        <>
+          <Text variant="heading" style={{ marginTop: t.space.md }}>Cooling in progress</Text>
+          {showCoolingStart && (
+            <Card>
+              <View style={s.fieldGroup}>
+                <Text variant="label" muted>What’s cooling? *</Text>
+                <TextInput value={coolingProduct} onChangeText={setCoolingProduct} placeholder="e.g. Beef curry" placeholderTextColor={t.color.textMuted} style={s.input} />
+              </View>
+              <View style={s.rowWrap}>
+                <Button label="Start cooling clock" onPress={startCoolingBatch} loading={busy} style={{ flexGrow: 1 }} />
+                <Button label="Cancel" variant="ghost" onPress={() => { setShowCoolingStart(false); setCoolingProduct(''); }} style={{ flexGrow: 1 }} />
+              </View>
+            </Card>
+          )}
+          {cooling.map((b) => {
+            const st = coolingStage(b);
+            const remaining = st.deadline - now;
+            const over = remaining < 0;
+            return (
+              <Card key={b.id} style={over ? { borderWidth: 1, borderColor: t.color.danger } : undefined}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
+                  <IconChip code="cooling" size={40} />
+                  <View style={{ flex: 1 }}>
+                    <Text variant="label">{b.product}</Text>
+                    <Text variant="small" muted>{st.label} · started {new Date(b.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                  </View>
+                  <Text variant="label" color={over ? t.color.danger : t.color.success}>{over ? `Overdue ${humanDur(remaining)}` : `${humanDur(remaining)} left`}</Text>
+                </View>
+                <View style={s.rowWrap}>
+                  <Button label={st.stage === 'stage1' ? 'Reached 21 °C' : 'Reached 5 °C — done'} onPress={() => reachStage(b)} loading={busy} style={{ flexGrow: 1 }} />
+                  <Button label="Report a problem" variant="danger" onPress={() => discardBatch(b)} loading={busy} style={{ flexGrow: 1 }} />
+                </View>
+              </Card>
+            );
+          })}
+        </>
+      )}
 
       <View style={s.sectionRow}>
         <Text variant="heading">Checks due today</Text>
@@ -620,8 +743,9 @@ export default function Compliance() {
       <Text variant="heading" style={{ marginTop: t.space.md }}>Quick add</Text>
       <View style={s.quickGrid}>
         {typeByCode['cooking_poultry_mince_liver'] && <View style={s.quickItem}><Button label="Log a cook" onPress={() => openByCode('cooking_poultry_mince_liver')} /></View>}
+        <View style={s.quickItem}><Button label="Start cooling" onPress={() => setShowCoolingStart(true)} /></View>
         {typeByCode['receiving'] && <View style={s.quickItem}><Button label="Log a delivery" onPress={() => openByCode('receiving')} /></View>}
-        {typeByCode['corrective_action'] && <View style={s.quickItem}><Button label="Something went wrong" variant="ghost" onPress={() => openByCode('corrective_action')} /></View>}
+        {typeByCode['corrective_action'] && <View style={s.quickItem}><Button label="Log an issue" onPress={() => openByCode('corrective_action')} /></View>}
         <View style={s.quickItem}><Button label="All records" variant="ghost" onPress={() => setTab('records')} /></View>
       </View>
     </>
@@ -699,7 +823,7 @@ export default function Compliance() {
   };
 
   return (
-    <Screen>
+    <Screen scrollRef={scrollRef} onScroll={(e) => { if (!overlay) scrollYRef.current = e.nativeEvent.contentOffset.y; }}>
       {msg && <Notice message={msg.text} tone={msg.tone} />}
 
       {pendingCA && !editing && (

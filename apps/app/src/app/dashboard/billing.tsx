@@ -23,7 +23,8 @@ async function goToCheckout(url: string) {
 }
 
 export default function Billing() {
-  const { features } = useAuth();
+  const { features, user } = useAuth();
+  const isAdmin = user?.role === 'admin' || user?.role === 'super';
   const params = useLocalSearchParams<{ billing?: string }>();
   const [subs, setSubs] = useState<ClientSubscription[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,6 +46,8 @@ export default function Billing() {
 
   // Payments must be enabled for this client.
   if (features && !features.stripe) return <Redirect href="/dashboard" />;
+  // Billing is admin-only — bounce a member who deep-links here.
+  if (!isAdmin) return <Redirect href="/dashboard" />;
 
   const active = subs.find((s) => ['active', 'trialing', 'past_due'].includes(s.status));
 

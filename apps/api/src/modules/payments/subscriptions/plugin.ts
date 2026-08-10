@@ -1,6 +1,9 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
-import { verifyBlnkAuth } from '../../../blnk/auth';
+import { verifyBlnkAuth, requireRole } from '../../../blnk/auth';
 import { createSubscriptionCheckout, listMySubscriptions, cancelMySubscription } from './service';
+
+// Billing is a tenant-admin concern — members never manage subscriptions.
+const admin = [verifyBlnkAuth, requireRole('admin', 'super')];
 
 function bearer(req: FastifyRequest): string {
   return (req.headers.authorization ?? '').slice(7);
@@ -9,7 +12,7 @@ function bearer(req: FastifyRequest): string {
 const subscriptionsPlugin: FastifyPluginAsync = async (fastify) => {
   // ── POST /payments/subscriptions/checkout ─────────────────────────────────
   fastify.post('/payments/subscriptions/checkout', {
-    preHandler: [verifyBlnkAuth],
+    preHandler: admin,
     schema: {
       body: {
         type: 'object',
@@ -32,13 +35,13 @@ const subscriptionsPlugin: FastifyPluginAsync = async (fastify) => {
   });
 
   // ── GET /payments/subscriptions ───────────────────────────────────────────
-  fastify.get('/payments/subscriptions', { preHandler: [verifyBlnkAuth] }, async (req, reply) => {
+  fastify.get('/payments/subscriptions', { preHandler: admin }, async (req, reply) => {
     return reply.status(200).send({ subscriptions: await listMySubscriptions(req.user!.userId) });
   });
 
   // ── PATCH /payments/subscriptions/:id/cancel ──────────────────────────────
   fastify.patch('/payments/subscriptions/:id/cancel', {
-    preHandler: [verifyBlnkAuth],
+    preHandler: admin,
     schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } },
   }, async (req, reply) => {
     const { id } = req.params as { id: string };

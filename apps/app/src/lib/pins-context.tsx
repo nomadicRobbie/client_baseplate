@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from './auth-context';
+import { useProfile } from './profile-context';
 import { availableModules, MAX_PINS, type NavItem } from './nav';
 import { getItem, setItem } from './storage';
 
@@ -37,8 +38,9 @@ const PinsContext = createContext<PinsState | null>(null);
 
 export function PinsProvider({ children }: { children: ReactNode }) {
   const { tenantSlug, features, user } = useAuth();
+  const { myModules } = useProfile();
   const isAdmin = user?.role === 'admin' || user?.role === 'super';
-  const modules = useMemo(() => availableModules(isAdmin, features), [isAdmin, features]);
+  const modules = useMemo(() => availableModules(isAdmin, features, myModules), [isAdmin, features, myModules]);
 
   const [stored, setStored] = useState<string[]>(() => load(tenantSlug));
 

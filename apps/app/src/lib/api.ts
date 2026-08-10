@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { TokenPair, ProfileResponse, TeamUser, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, Product } from '@blnk/shared';
 import { getAccessToken, getRefreshToken, setTokens, clearSession } from './session';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
@@ -71,19 +71,24 @@ async function req<T = unknown>(path: string, { method, body, token, _retried }:
   return json as T;
 }
 
+// blnk_auth validates `format: email` strictly — a stray leading/trailing space
+// (mobile keyboards + autofill add one) fails as `body/email must match format
+// "email"`. Normalize at the boundary so every auth call sends a clean address.
+const normEmail = (email: string) => email.trim();
+
 // ── OTP ─────────────────────────────────────────────────────────────────────
 export const otpSend = (email: string) =>
-  req('/auth/otp/send', { method: 'POST', body: { tenant_slug: TENANT, email } });
+  req('/auth/otp/send', { method: 'POST', body: { tenant_slug: TENANT, email: normEmail(email) } });
 
 export const otpVerify = (email: string, code: string) =>
-  req<TokenPair>('/auth/otp/verify', { method: 'POST', body: { tenant_slug: TENANT, email, code } });
+  req<TokenPair>('/auth/otp/verify', { method: 'POST', body: { tenant_slug: TENANT, email: normEmail(email), code } });
 
 // ── Passkey (ceremonies proxied to blnk_auth) ───────────────────────────────
 export const passkeyLoginBegin = (email: string) =>
-  req('/auth/passkey/login/begin', { method: 'POST', body: { tenant_slug: TENANT, email } });
+  req('/auth/passkey/login/begin', { method: 'POST', body: { tenant_slug: TENANT, email: normEmail(email) } });
 
 export const passkeyLoginComplete = (email: string, response: unknown) =>
-  req<TokenPair>('/auth/passkey/login/complete', { method: 'POST', body: { tenant_slug: TENANT, email, response } });
+  req<TokenPair>('/auth/passkey/login/complete', { method: 'POST', body: { tenant_slug: TENANT, email: normEmail(email), response } });
 
 export const passkeyRegisterBegin = (token: string) =>
   req('/auth/passkey/register/begin', { method: 'POST', token }); // no body
@@ -118,6 +123,31 @@ export const addTeamUser = (token: string, data: { email: string; role: 'admin' 
 
 export const setTeamUserActive = (token: string, id: string, active: boolean) =>
   req<{ user: TeamUser }>(`/team/${id}/active`, { method: 'PATCH', body: { active }, token });
+
+// ── People (canonical human directory — always on) ───────────────────────────
+export const listPeople = (token: string, opts?: { module?: string; active?: boolean }) => {
+  const q = new URLSearchParams();
+  if (opts?.module) q.set('module', opts.module);
+  if (opts?.active !== undefined) q.set('active', String(opts.active));
+  const qs = q.toString();
+  return req<{ people: Person[] }>(`/people${qs ? `?${qs}` : ''}`, { method: 'GET', token });
+};
+
+export const createPerson = (token: string, data: { name: string; email?: string | null; phone?: string | null; user_id?: string | null }) =>
+  req<{ person: Person }>('/people', { method: 'POST', body: data, token });
+
+export const updatePerson = (token: string, id: string, patch: { name?: string; email?: string | null; phone?: string | null; user_id?: string | null; active?: boolean }) =>
+  req<{ person: Person }>(`/people/${id}`, { method: 'PATCH', body: patch, token });
+
+// The signed-in user's own person row (null if they have none) — drives module gating.
+export const getMyPerson = (token: string) =>
+  req<{ person: Person | null }>('/people/me', { method: 'GET', token });
+
+export const setPersonModule = (token: string, id: string, module: string, role: string) =>
+  req<{ person: Person }>(`/people/${id}/modules/${module}`, { method: 'PUT', body: { role }, token });
+
+export const removePersonModule = (token: string, id: string, module: string) =>
+  req<void>(`/people/${id}/modules/${module}`, { method: 'DELETE', token });
 
 // ── Payments (client charges end users via Stripe Checkout) ──────────────────
 export const subscribeCheckout = (token: string, data: { price_id: string; success_url: string; cancel_url: string }) =>
@@ -204,3 +234,42 @@ export const updateSchedule = (token: string, id: string, body: Partial<NewSched
 
 export const deleteSchedule = (token: string, id: string) =>
   req<void>(`/compliance/schedules/${id}`, { method: 'DELETE', token });
+
+// ── Cooling batches (real-time) ──────────────────────────────────────────────
+export const startCooling = (token: string, body: { product: string; started_by: string; site_id?: string | null }) =>
+  req<{ batch: CoolingBatch }>('/compliance/cooling', { method: 'POST', body, token });
+
+export const getActiveCooling = (token: string) =>
+  req<{ batches: CoolingBatch[] }>('/compliance/cooling/active', { method: 'GET', token });
+
+export const reachCoolingStage = (token: string, id: string, stage: 'stage1' | 'stage2') =>
+  req<{ batch: CoolingBatch; record?: ComplianceRecord; corrective_action?: ComplianceRecord | null }>(
+    `/compliance/cooling/${id}/reach`, { method: 'POST', body: { stage }, token });
+
+export const discardCooling = (token: string, id: string, body: { reason?: string; entered_by?: string }) =>
+  req<{ batch: CoolingBatch; corrective_action: ComplianceRecord }>(
+    `/compliance/cooling/${id}/discard`, { method: 'POST', body, token });
+
+// ── Commerce admin (store) ────────────────────────────────────────────────────
+export const listAdminProducts = (token: string) =>
+  req<{ products: Product[] }>('/commerce/admin/products', { method: 'GET', token });
+
+export const createProduct = (token: string, data: Omit<Product, 'id' | 'created_at' | 'updated_at'>) =>
+  req<{ product: Product }>('/commerce/admin/products', { method: 'POST', body: data, token });
+
+export const updateProduct = (token: string, id: string, data: Partial<Product>) =>
+  req<{ product: Product }>(`/commerce/admin/products/${id}`, { method: 'PATCH', body: data, token });
+
+// multipart — bypasses req()'s JSON handling; hits /commerce/admin/upload directly.
+export const uploadProductImage = async (token: string, file: File): Promise<{ url: string }> => {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${API}/commerce/admin/upload`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
+  return json as { url: string };
+};

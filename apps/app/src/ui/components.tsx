@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import {
   View, Text as RNText, Pressable, TextInput, ScrollView, ActivityIndicator,
   type StyleProp, type ViewStyle, type TextStyle, type TextInput as RNTextInput,
+  type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
@@ -38,8 +39,14 @@ export function Text({
 // ── Screen ──────────────────────────────────────────────────────────────────
 // Caps content width and centres it so lines stay readable on wide desktop.
 export function Screen({
-  children, scroll = true, padded = true, maxWidth = 920,
-}: { children: ReactNode; scroll?: boolean; padded?: boolean; maxWidth?: number }) {
+  children, scroll = true, padded = true, maxWidth = 920, scrollRef, onScroll,
+}: {
+  children: ReactNode; scroll?: boolean; padded?: boolean; maxWidth?: number;
+  // Optional handles so a screen can preserve/restore scroll position across
+  // in-place overlays (e.g. opening then cancelling a record form).
+  scrollRef?: RefObject<ScrollView | null>;
+  onScroll?: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
+}) {
   const t = useTheme();
   const pad = padded ? t.space.xl : 0;
   const content = (
@@ -50,7 +57,7 @@ export function Screen({
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.color.bg }}>
       {scroll
-        ? <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }}>{content}</ScrollView>
+        ? <ScrollView ref={scrollRef} onScroll={onScroll} scrollEventThrottle={16} style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }}>{content}</ScrollView>
         : content}
     </SafeAreaView>
   );
@@ -112,11 +119,11 @@ export function Button({
 
 // ── TextField ──────────────────────────────────────────────────────────────────
 export function TextField({
-  label, value, onChangeText, placeholder, keyboardType, secureTextEntry, autoCapitalize, inputRef,
+  label, value, onChangeText, placeholder, keyboardType, secureTextEntry, autoCapitalize, autoComplete, inputRef,
 }: {
   label?: string; value: string; onChangeText: (v: string) => void; placeholder?: string;
   keyboardType?: 'default' | 'email-address' | 'number-pad'; secureTextEntry?: boolean;
-  autoCapitalize?: 'none' | 'sentences'; inputRef?: React.Ref<RNTextInput>;
+  autoCapitalize?: 'none' | 'sentences'; autoComplete?: 'email' | 'off'; inputRef?: React.Ref<RNTextInput>;
 }) {
   const t = useTheme();
   return (
@@ -131,6 +138,7 @@ export function TextField({
         keyboardType={keyboardType}
         secureTextEntry={secureTextEntry}
         autoCapitalize={autoCapitalize}
+        autoComplete={autoComplete}
         accessibilityLabel={label}
         style={{
           backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border,

@@ -24,12 +24,11 @@ VALUES
    {"key":"registration_number","label":"Registration number","type":"text"}]'::jsonb, NULL, 0),
 
 ('NZ','staff_training','Staff training','people','{FCP,NP1,NP2,NP3}','on_change',true,
- '[{"key":"staff_name","label":"Staff / visitor name","type":"text","required":true},
+ '[{"key":"staff_name","label":"Who was trained?","type":"text","required":true},
    {"key":"role","label":"Role","type":"text"},
    {"key":"topics","label":"Training topics","type":"multiselect","options":["High-risk foods","Safe sourcing/receiving","Hand-washing/hygiene","Allergen management","Keeping raw away from cooked","Cleaning & sanitising","What to do when something goes wrong","Food recalls"]},
    {"key":"date_trained","label":"Date trained","type":"date"},
-   {"key":"trained_by","label":"Trained by","type":"text"},
-   {"key":"competency_confirmed","label":"Competency confirmed","type":"bool"}]'::jsonb,
+   {"key":"competency_confirmed","label":"Competency confirmed?","type":"bool"}]'::jsonb,
  '{"field":"competency_confirmed","op":"is_true"}'::jsonb, 10),
 
 ('NZ','fridge_temp','Fridge / chilled temperature check','temperature','{FCP,NP1,NP2,NP3}','daily',true,
@@ -41,7 +40,7 @@ VALUES
 
 ('NZ','freezer_check','Freezer frozen-solid check','temperature','{FCP,NP1,NP2,NP3}','daily',true,
  '[{"key":"unit_id","label":"Freezer ID","type":"text","required":true},
-   {"key":"frozen_solid","label":"Food still frozen solid","type":"bool","required":true}]'::jsonb,
+   {"key":"frozen_solid","label":"Food still frozen solid?","type":"bool","required":true}]'::jsonb,
  '{"field":"frozen_solid","op":"is_true"}'::jsonb, 21),
 
 ('NZ','cooking_poultry_mince_liver','Cooking — poultry, mince, liver','cooking','{FCP,NP2,NP3}','per_batch',true,
@@ -59,9 +58,10 @@ VALUES
 
 ('NZ','cooling','Cooling freshly cooked food','cooling','{FCP,NP2,NP3}','per_batch',true,
  '[{"key":"food","label":"Food","type":"text","required":true},
-   {"key":"total_hours","label":"Total time to cool (60→5°C)","type":"number","unit":"hrs","required":true},
+   {"key":"stage1_hours","label":"Time from 60°C down to 21°C","type":"number","unit":"hrs","required":true},
+   {"key":"stage2_hours","label":"Time from 21°C down to 5°C","type":"number","unit":"hrs","required":true},
    {"key":"method","label":"Method","type":"multiselect","options":["Shallow containers","Ice bath","Smaller portions","Cooling racks","Blast chiller"]}]'::jsonb,
- '{"field":"total_hours","op":"lte","value":6}'::jsonb, 40),
+ '{"all":[{"field":"stage1_hours","op":"lte","value":2},{"field":"stage2_hours","op":"lte","value":4}]}'::jsonb, 40),
 
 ('NZ','reheating','Reheating food','temperature','{FCP}','per_batch',false,
  '[{"key":"food","label":"Food","type":"text","required":true},
@@ -78,9 +78,9 @@ VALUES
  '[{"key":"supplier","label":"Supplier","type":"text","required":true},
    {"key":"food","label":"Food type & quantity","type":"text"},
    {"key":"temp_c","label":"Temperature on receipt (if temp-controlled)","type":"number","unit":"°C"},
-   {"key":"use_by_ok","label":"Use-By checked / not expired","type":"bool"},
-   {"key":"packaging_ok","label":"Packaging intact / not contaminated","type":"bool"},
-   {"key":"rejected","label":"Rejected?","type":"bool"},
+   {"key":"use_by_ok","label":"All items within their Use-By date?","type":"bool"},
+   {"key":"packaging_ok","label":"Packaging intact and uncontaminated?","type":"bool"},
+   {"key":"rejected","label":"Any items rejected?","type":"bool"},
    {"key":"reject_reason","label":"Reason if rejected","type":"text"}]'::jsonb,
  '{"all":[{"field":"use_by_ok","op":"is_true"},{"field":"packaging_ok","op":"is_true"}]}'::jsonb, 50),
 
@@ -92,8 +92,8 @@ VALUES
 
 ('NZ','cleaning_close','Cleaning & sanitising / end-of-day close','cleaning','{FCP}','daily',false,
  '[{"key":"area","label":"Area / equipment","type":"text","required":true},
-   {"key":"cleaned_sanitised","label":"Cleaned & sanitised","type":"bool","required":true},
-   {"key":"stock_check_done","label":"End-of-day stock check (expired/contaminated removed)","type":"bool"},
+   {"key":"cleaned_sanitised","label":"Surfaces cleaned and sanitised?","type":"bool","required":true},
+   {"key":"stock_check_done","label":"Expired / contaminated stock removed?","type":"bool"},
    {"key":"done_by","label":"Done by","type":"text"}]'::jsonb,
  '{"field":"cleaned_sanitised","op":"is_true"}'::jsonb, 70),
 
@@ -101,15 +101,15 @@ VALUES
  '[{"key":"equipment","label":"Equipment / facility","type":"text","required":true},
    {"key":"date_checked","label":"Date checked / serviced","type":"date"},
    {"key":"issue_action","label":"Issue found / action","type":"text"},
-   {"key":"thermometer_calibrated","label":"Thermometer calibrated (accurate)","type":"bool"},
+   {"key":"thermometer_calibrated","label":"Thermometer calibrated and accurate?","type":"bool"},
    {"key":"calibration_result","label":"Calibration result","type":"number","unit":"°C"}]'::jsonb,
  '{"field":"thermometer_calibrated","op":"is_true"}'::jsonb, 80),
 
 ('NZ','staff_sickness','Staff health / sickness','people','{FCP,NP1,NP2,NP3}','per_incident',true,
- '[{"key":"staff_name","label":"Staff name","type":"text","required":true},
+ '[{"key":"staff_name","label":"Who is unwell?","type":"text","required":true},
    {"key":"date_reported","label":"Date reported sick","type":"date"},
    {"key":"symptom","label":"Symptom type","type":"enum","options":["Vomiting","Diarrhoea","Jaundice","Other"]},
-   {"key":"excluded","label":"Excluded from food handling","type":"bool"},
+   {"key":"excluded","label":"Excluded from food handling?","type":"bool"},
    {"key":"return_date","label":"Return-to-work date","type":"date"}]'::jsonb,
  '{"field":"excluded","op":"is_true"}'::jsonb, 90),
 
@@ -129,13 +129,13 @@ VALUES
  '[{"key":"food","label":"Food","type":"text","required":true},
    {"key":"temp_c","label":"Transport temperature","type":"number","unit":"°C","required":true},
    {"key":"equipment","label":"Equipment","type":"enum","options":["Insulated bags/boxes","Portable chillers","Hot-holding","Other"]},
-   {"key":"vehicle_cleaned","label":"Vehicle cleaned/sanitised (if RTE contact)","type":"bool"}]'::jsonb,
+   {"key":"vehicle_cleaned","label":"Vehicle cleaned and sanitised?","type":"bool"}]'::jsonb,
  '{"any":[{"field":"temp_c","op":"lte","value":5},{"field":"temp_c","op":"gt","value":60}]}'::jsonb, 120),
 
 ('NZ','display_selfservice','Displaying food / self-service','display','{FCP}','periodic',false,
  '[{"key":"item","label":"Item on display","type":"text","required":true},
-   {"key":"use_by_ok","label":"Use-By checked on display","type":"bool"},
-   {"key":"protection_ok","label":"Protected (sneeze guard / pre-wrap / dedicated utensils)","type":"bool"}]'::jsonb,
+   {"key":"use_by_ok","label":"All displayed items within Use-By date?","type":"bool"},
+   {"key":"protection_ok","label":"Food protected (guards / wrap / dedicated utensils)?","type":"bool"}]'::jsonb,
  '{"all":[{"field":"use_by_ok","op":"is_true"},{"field":"protection_ok","op":"is_true"}]}'::jsonb, 130),
 
 ('NZ','self_supply_water','Self-supply water test','water','{FCP,NP1,NP2,NP3}','on_change',false,
@@ -159,7 +159,7 @@ VALUES
    {"key":"reason","label":"Reason","type":"text"},
    {"key":"quantity","label":"Quantity affected / recovered","type":"number"},
    {"key":"notified_customers","label":"Customers/businesses notified","type":"text"},
-   {"key":"notified_mpi","label":"MPI / council notified","type":"bool"},
+   {"key":"notified_mpi","label":"MPI / council notified?","type":"bool"},
    {"key":"outcome","label":"Outcome & corrective action","type":"text"}]'::jsonb, NULL, 210),
 
 ('NZ','self_verification_check','Internal self-check (plan working well)','verification','{FCP}','periodic',true,
