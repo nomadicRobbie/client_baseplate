@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, Product } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, Product, VesselAsset, VesselAssetType, VesselFault, VesselMaintenanceLog, VesselMaintenanceSchedule, VesselUpcomingItem, VesselScheduleAlert } from '@blnk/shared';
 import { getAccessToken, getRefreshToken, setTokens, clearSession } from './session';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
@@ -148,6 +148,42 @@ export const setPersonModule = (token: string, id: string, module: string, role:
 
 export const removePersonModule = (token: string, id: string, module: string) =>
   req<void>(`/people/${id}/modules/${module}`, { method: 'DELETE', token });
+
+// ── Vessel / asset management (requires FEATURE_VESSEL) ──────────────────────
+export const listVesselAssetTypes = (token: string) =>
+  req<{ asset_types: VesselAssetType[] }>('/vessel/asset-types', { method: 'GET', token });
+export const createVesselAssetType = (token: string, body: { name: string }) =>
+  req<{ asset_type: VesselAssetType }>('/vessel/asset-types', { method: 'POST', body, token });
+
+export const listVesselAssets = (token: string) =>
+  req<{ assets: VesselAsset[] }>('/vessel/assets', { method: 'GET', token });
+export const createVesselAsset = (token: string, body: { asset_type_id: string; name: string; mnz_number?: string; location?: string; condition?: string; notes?: string }) =>
+  req<{ asset: VesselAsset }>('/vessel/assets', { method: 'POST', body, token });
+
+export const listVesselFaults = (token: string, opts?: { asset_id?: string; status?: string }) => {
+  const q = new URLSearchParams();
+  if (opts?.asset_id) q.set('asset_id', opts.asset_id);
+  if (opts?.status) q.set('status', opts.status);
+  const qs = q.toString();
+  return req<{ faults: VesselFault[] }>(`/vessel/faults${qs ? `?${qs}` : ''}`, { method: 'GET', token });
+};
+export const createVesselFault = (token: string, body: { asset_id: string; name: string; description?: string; urgency?: string; component_id?: string | null; idempotency_key?: string }) =>
+  req<{ fault: VesselFault }>('/vessel/faults', { method: 'POST', body, token });
+export const updateVesselFault = (token: string, id: string, patch: { status?: string; urgency?: string; assigned_to?: string | null; resolution_notes?: string }) =>
+  req<{ fault: VesselFault }>(`/vessel/faults/${id}`, { method: 'PATCH', body: patch, token });
+
+// Complete maintenance — resolving a fault closes it (server sets fault status).
+export const createVesselMaintenanceLog = (token: string, body: { asset_id: string; fault_id?: string; task_name?: string; notes?: string; resolves_fault?: boolean; completed_date?: string; idempotency_key?: string }) =>
+  req<{ log: VesselMaintenanceLog; fault_closed: boolean }>('/vessel/maintenance-logs', { method: 'POST', body, token });
+
+// Coming-up feed — due/overdue services derived from maintenance schedules.
+export const getVesselUpcoming = (token: string, assetId?: string) =>
+  req<{ items: VesselUpcomingItem[] }>(`/vessel/upcoming${assetId ? `?asset_id=${assetId}` : ''}`, { method: 'GET', token });
+
+export const listVesselSchedules = (token: string, assetId?: string) =>
+  req<{ schedules: VesselMaintenanceSchedule[] }>(`/vessel/maintenance-schedules${assetId ? `?asset_id=${assetId}` : ''}`, { method: 'GET', token });
+export const createVesselSchedule = (token: string, body: { asset_id: string; task_name: string; interval_type?: string; interval_value?: number; initial_due_date?: string; alert_days?: number; alerts?: VesselScheduleAlert[] }) =>
+  req<{ schedule: VesselMaintenanceSchedule }>('/vessel/maintenance-schedules', { method: 'POST', body, token });
 
 // ── Payments (client charges end users via Stripe Checkout) ──────────────────
 export const subscribeCheckout = (token: string, data: { price_id: string; success_url: string; cancel_url: string }) =>

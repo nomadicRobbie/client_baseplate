@@ -25,6 +25,7 @@ export const tokens = {
     primaryText: '#ffffff',
     accent: '#e8613a',
     danger: '#e8613a',
+    warning: '#c8922e',   // amber — "due soon" status (fits the parchment palette)
     success: '#2a7f62',
   },
   space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 },

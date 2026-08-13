@@ -11,6 +11,7 @@ export class AppError extends Error {
 }
 
 export const Errors = {
+  badRequest: (msg = 'bad request') => new AppError('BAD_REQUEST', msg, 400),
   unauthorized: (msg = 'unauthorized') => new AppError('UNAUTHORIZED', msg, 401),
   forbidden: (msg = 'forbidden') => new AppError('FORBIDDEN', msg, 403),
   notFound: (resource: string) => new AppError('NOT_FOUND', `${resource} not found`, 404),

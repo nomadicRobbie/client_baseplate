@@ -15,6 +15,7 @@ import commercePlugin from './modules/commerce'
 import analyticsPlugin from './modules/analytics'
 import locationsPlugin from './modules/locations/plugin'
 import compliancePlugin from './modules/compliance'
+import vesselPlugin from './modules/vessel'
 
 const server = Fastify({
   logger: {
@@ -97,6 +98,8 @@ export async function build(): Promise<typeof server> {
   if (config.features.locations) await server.register(locationsPlugin)
   // Compliance — food safety records (registry + validation engine).
   if (config.features.compliance) await server.register(compliancePlugin)
+  // Vessel / asset management (fleet, faults, maintenance) — TVM module.
+  if (config.features.vessel) await server.register(vesselPlugin)
 
   // ── Protected gate — must be provisioned for this app (admin or on the roster) ─
   server.get('/me', { preHandler: [verifyBlnkAuth, requireAppAccess] }, async (req) => ({

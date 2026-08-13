@@ -55,6 +55,7 @@ export interface FeatureFlags {
   analytics: boolean
   compliance: boolean
   locations: boolean
+  vessel: boolean
 }
 
 // ── Compliance (food safety records — requires FEATURE_COMPLIANCE) ───────────
@@ -374,6 +375,47 @@ export interface Person {
   modules: PersonModule[]   // per-module membership + role, populated on reads
   created_at: string
   updated_at: string
+}
+
+// ── Vessel / asset management (requires FEATURE_VESSEL) ─────────────────────
+export interface VesselAssetType { id: string; name: string; image_url: string | null }
+
+export interface VesselAsset {
+  id: string; asset_type_id: string; parent_asset_id: string | null; name: string
+  mnz_number: string | null; mmsi: string | null; call_sign: string | null
+  fuel_capacity: string | null; refuel_threshold: string | null
+  location: string | null; condition: string | null; supplier: string | null
+  date_purchased: string | null; image_url: string | null; notes: string | null; status: string
+}
+
+export interface VesselFault {
+  id: string; asset_id: string; component_id: string | null; name: string; description: string | null
+  image_urls: string[]; urgency: string | null; status: string
+  reported_by: string | null; reported_date: string; assigned_to: string | null
+  resolution_notes: string | null; signed_by: string | null; signed_at: string | null
+}
+
+export interface VesselMaintenanceLog {
+  id: string; schedule_id: string | null; fault_id: string | null; asset_id: string
+  task_name: string | null; completed_date: string | null; resolves_fault: boolean; status: string
+}
+
+export type VesselScheduleAlert = { value: number; unit: 'hours' | 'days' | 'weeks' };
+export interface VesselMaintenanceSchedule {
+  id: string; asset_id: string; component_id: string | null; task_name: string
+  interval_type: string | null; interval_value: string | null; initial_due_date: string | null
+  alert_days: number | null; alert_hours: string | null; alerts: VesselScheduleAlert[]; active: boolean
+}
+
+// A row in the "Coming up" feed — an upcoming/overdue service derived from a
+// maintenance schedule's next-due date.
+export interface VesselUpcomingItem {
+  kind: 'maintenance'
+  id: string            // schedule id
+  title: string         // task name
+  subtitle: string | null
+  due_date: string | null   // ISO date of next due
+  level: 'ok' | 'due' | 'over'
 }
 
 // ── Helpers (pure — safe everywhere) ────────────────────────────────────────

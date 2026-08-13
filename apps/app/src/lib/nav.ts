@@ -16,7 +16,7 @@ export type NavGroup = 'home' | 'module' | 'account' | 'admin';
 export type NavHref =
   | '/dashboard' | '/dashboard/account' | '/dashboard/billing' | '/dashboard/people'
   | '/dashboard/settings' | '/dashboard/analytics' | '/dashboard/locations' | '/dashboard/compliance'
-  | '/dashboard/commerce';
+  | '/dashboard/commerce' | '/dashboard/vessel';
 
 export type NavItem = {
   label: string;
@@ -33,6 +33,7 @@ export const NAV: NavItem[] = [
   { label: 'Analytics', href: '/dashboard/analytics', icon: 'bar-chart-outline', group: 'module', adminOnly: true, feature: 'analytics' },
   { label: 'Locations', href: '/dashboard/locations', icon: 'location-outline', group: 'module', adminOnly: true, feature: 'locations' },
   { label: 'Food compliance', href: '/dashboard/compliance', icon: 'clipboard-outline', group: 'module', feature: 'compliance' },
+  { label: 'Asset Manager', href: '/dashboard/vessel', icon: 'cube-outline', group: 'module', feature: 'vessel' },
   { label: 'Billing', href: '/dashboard/billing', icon: 'card-outline', group: 'account', adminOnly: true, feature: 'stripe' },
   { label: 'Account', href: '/dashboard/account', icon: 'person-outline', group: 'account' },
   { label: 'People', href: '/dashboard/people', icon: 'people-outline', group: 'admin', adminOnly: true },
