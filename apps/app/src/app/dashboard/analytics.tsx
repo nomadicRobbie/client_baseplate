@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
 import type { WebTrafficOverview } from '@blnk/shared';
 import { useProfile } from '@/lib/profile-context';
@@ -7,6 +7,26 @@ import { getAccessToken } from '@/lib/session';
 import { getAnalyticsOverview } from '@/lib/api';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Notice } from '@/ui/components';
+
+type ThemeT = ReturnType<typeof useTheme>;
+
+const makeStyles = (t: ThemeT) => ({
+  chartContainer: { gap: t.space.sm },
+  chartLabels: { flexDirection: 'row' as const, justifyContent: 'space-between' as const },
+  chartBars: { flexDirection: 'row' as const, alignItems: 'flex-end' as const, height: 132 },
+  chartBar: { flex: 1, alignItems: 'center' as const, justifyContent: 'flex-end' as const, height: '100%' as const, gap: 3 },
+  chartValue: { fontSize: 11 },
+  chartDateRow: { flexDirection: 'row' as const },
+  chartDateLabel: { flex: 1, fontSize: 10, textAlign: 'center' as const },
+  chartDateRange: { flexDirection: 'row' as const, justifyContent: 'space-between' as const },
+  chartDateText: { fontSize: 10 },
+  statCard: { flex: 1, minWidth: 140 },
+  header: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
+  headerButtons: { flexDirection: 'row' as const, gap: t.space.xs },
+  statsGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.lg },
+  listRow: { flexDirection: 'row' as const, gap: t.space.md, paddingVertical: t.space.xs },
+  listRowText: { flex: 1 },
+});
 
 const RANGES = [
   { label: '7d', days: 7 },
@@ -25,6 +45,7 @@ function shortDay(iso: string): string {
 
 function BarChart({ data }: { data: { date: string; value: number }[] }) {
   const t = useTheme();
+  const s = makeStyles(t);
   if (data.length === 0) return <Text muted>No data in this period.</Text>;
 
   const max = Math.max(1, ...data.map((d) => d.value));
@@ -35,16 +56,16 @@ function BarChart({ data }: { data: { date: string; value: number }[] }) {
   const gap = data.length > 30 ? 1 : data.length > 10 ? 3 : 6;
 
   return (
-    <View style={{ gap: t.space.sm }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+    <View style={s.chartContainer}>
+      <View style={s.chartLabels}>
         <Text variant="small" muted>peak {max}/day</Text>
         <Text variant="small" muted>{total.toLocaleString()} total</Text>
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap, height: 132 }}>
+      <View style={[s.chartBars, { gap }]}>
         {data.map((d, i) => (
-          <View key={`${d.date}-${i}`} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: '100%', gap: 3 }}>
-            {sparse && <Text variant="small" muted style={{ fontSize: 11 }}>{d.value}</Text>}
+          <View key={`${d.date}-${i}`} style={s.chartBar}>
+            {sparse && <Text variant="small" muted style={s.chartValue}>{d.value}</Text>}
             <View
               accessibilityLabel={`${d.date}: ${d.value}`}
               style={{
@@ -59,17 +80,17 @@ function BarChart({ data }: { data: { date: string; value: number }[] }) {
       </View>
 
       {sparse ? (
-        <View style={{ flexDirection: 'row', gap }}>
+        <View style={[s.chartDateRow, { gap }]}>
           {data.map((d, i) => (
-            <Text key={`${d.date}-l-${i}`} variant="small" muted numberOfLines={1} style={{ flex: 1, fontSize: 10, textAlign: 'center' }}>
+            <Text key={`${d.date}-l-${i}`} variant="small" muted numberOfLines={1} style={s.chartDateLabel}>
               {shortDay(d.date)}
             </Text>
           ))}
         </View>
       ) : (
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Text variant="small" muted style={{ fontSize: 10 }}>{shortDay(data[0].date)}</Text>
-          <Text variant="small" muted style={{ fontSize: 10 }}>{shortDay(data[data.length - 1].date)}</Text>
+        <View style={s.chartDateRange}>
+          <Text variant="small" muted style={s.chartDateText}>{shortDay(data[0].date)}</Text>
+          <Text variant="small" muted style={s.chartDateText}>{shortDay(data[data.length - 1].date)}</Text>
         </View>
       )}
     </View>
@@ -78,8 +99,9 @@ function BarChart({ data }: { data: { date: string; value: number }[] }) {
 
 function Stat({ label, value }: { label: string; value: number }) {
   const t = useTheme();
+  const s = makeStyles(t);
   return (
-    <Card style={{ flex: 1, minWidth: 140 }}>
+    <Card style={s.statCard}>
       <Text variant="small" muted>{label}</Text>
       <Text variant="title">{value.toLocaleString()}</Text>
     </Card>
@@ -88,6 +110,7 @@ function Stat({ label, value }: { label: string; value: number }) {
 
 export default function Analytics() {
   const t = useTheme();
+  const s = makeStyles(t);
   const { data } = useProfile();
   const isAdmin = data?.me.role === 'admin' || data?.me.role === 'super';
 
@@ -113,9 +136,9 @@ export default function Analytics() {
 
   return (
     <Screen>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: t.space.sm }}>
+      <View style={s.header}>
         <Text variant="title">Analytics</Text>
-        <View style={{ flexDirection: 'row', gap: t.space.xs }}>
+        <View style={s.headerButtons}>
           {RANGES.map((r) => {
             const sel = r.days === days;
             return (
@@ -143,7 +166,7 @@ export default function Analytics() {
 
       {overview && !loading && (
         <>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.lg }}>
+          <View style={s.statsGrid}>
             <Stat label="PAGE VIEWS" value={overview.page_views} />
             <Stat label="UNIQUE VISITORS" value={overview.unique_visitors} />
             <Stat label="SESSIONS" value={overview.sessions} />
@@ -159,8 +182,8 @@ export default function Analytics() {
             {overview.top_pages.length === 0
               ? <Text muted>No page views yet.</Text>
               : overview.top_pages.map((p, i) => (
-                <View key={`${p.url}-${i}`} style={{ flexDirection: 'row', gap: t.space.md, paddingVertical: t.space.xs, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.color.border }}>
-                  <Text style={{ flex: 1 }} numberOfLines={1}>{p.url}</Text>
+                <View key={`${p.url}-${i}`} style={[s.listRow, { borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.color.border }]}>
+                  <Text style={s.listRowText} numberOfLines={1}>{p.url}</Text>
                   <Text variant="mono" muted>{p.views}</Text>
                 </View>
               ))}
@@ -171,8 +194,8 @@ export default function Analytics() {
             {overview.top_referrers.length === 0
               ? <Text muted>No referrers yet.</Text>
               : overview.top_referrers.map((r, i) => (
-                <View key={`${r.referrer}-${i}`} style={{ flexDirection: 'row', gap: t.space.md, paddingVertical: t.space.xs, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.color.border }}>
-                  <Text style={{ flex: 1 }} numberOfLines={1}>{r.referrer}</Text>
+                <View key={`${r.referrer}-${i}`} style={[s.listRow, { borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.color.border }]}>
+                  <Text style={s.listRowText} numberOfLines={1}>{r.referrer}</Text>
                   <Text variant="mono" muted>{r.count}</Text>
                 </View>
               ))}

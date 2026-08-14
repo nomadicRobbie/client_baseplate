@@ -1,22 +1,24 @@
-# Per-client Postgres. Port offset again (+2 from blnk_api) so all stacks coexist.
-# Each client clone gets its own isolated database container.
+# Per-client Postgres. DB name/user/password all derive from TENANT_SLUG so
+# running multiple clients locally never produces an ambiguous "client" database.
+# Docker compose reads .env automatically — set TENANT_SLUG and PG_PORT there before `up`.
+name: ${TENANT_SLUG}
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: client_postgres
+    container_name: ${TENANT_SLUG}_postgres
     environment:
-      POSTGRES_USER: client
-      POSTGRES_PASSWORD: client
-      POSTGRES_DB: client
+      POSTGRES_USER: ${TENANT_SLUG}
+      POSTGRES_PASSWORD: ${TENANT_SLUG}
+      POSTGRES_DB: ${TENANT_SLUG}
     ports:
-      - "5435:5432"
+      - "${PG_PORT}:5432"
     volumes:
-      - client_postgres_data:/var/lib/postgresql/data
+      - pg:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U client -d client"]
+      test: ["CMD-SHELL", "pg_isready -U ${TENANT_SLUG} -d ${TENANT_SLUG}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
 volumes:
-  client_postgres_data:
+  pg:

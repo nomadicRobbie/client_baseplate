@@ -26,11 +26,13 @@ export interface Component {
 
 export interface Assignment { id: string; person_id: string; asset_id: string; role: string | null; created_at: string }
 
+export interface FaultStep { id: string; note: string; kind: string; created_by: string | null; created_at: string }
 export interface Fault {
   id: string; asset_id: string; component_id: string | null; name: string; description: string | null
   image_urls: string[]; urgency: string | null; status: string
   reported_by: string | null; reported_date: string; assigned_to: string | null
   resolution_notes: string | null; signed_by: string | null; signed_at: string | null
+  steps: FaultStep[]
   created_by: string | null; created_at: string; updated_by: string | null; updated_at: string
 }
 
@@ -115,14 +117,40 @@ export const deleteAssignment = async (id: string): Promise<boolean> =>
   (await query<{ id: string }>(`DELETE FROM vessel_asset_assignments WHERE id = $1 RETURNING id`, [id])).length > 0
 
 // ── Faults ──────────────────────────────────────────────────────────────────
+// Reads embed the resolution timeline (fault.steps) so the whole fault is one row.
+const FAULT_SELECT = `
+  SELECT f.*, COALESCE(
+    (SELECT json_agg(json_build_object('id', s.id, 'note', s.note, 'kind', s.kind, 'created_by', s.created_by, 'created_at', s.created_at) ORDER BY s.created_at)
+       FROM vessel_fault_steps s WHERE s.fault_id = f.id),
+    '[]'::json) AS steps
+  FROM vessel_faults f`
 export const listFaults = (f: { asset_id?: string; status?: string }) =>
   query<Fault>(
-    `SELECT * FROM vessel_faults
-     WHERE ($1::uuid IS NULL OR asset_id = $1) AND ($2::text IS NULL OR status = $2)
-     ORDER BY reported_date DESC LIMIT 500`,
+    `${FAULT_SELECT}
+     WHERE ($1::uuid IS NULL OR f.asset_id = $1) AND ($2::text IS NULL OR f.status = $2)
+     ORDER BY f.reported_date DESC LIMIT 500`,
     [f.asset_id ?? null, f.status ?? null],
   )
-export const getFault = (id: string) => one<Fault>(`SELECT * FROM vessel_faults WHERE id = $1`, [id])
+export const getFault = (id: string) => one<Fault>(`${FAULT_SELECT} WHERE f.id = $1`, [id])
+
+// Append a resolution step (idempotent on the outbox key). kind: 'step' | 'close'.
+export const addFaultStep = (d: { fault_id: string; note: string; kind?: string; idempotency_key?: string }, createdBy: string | null) =>
+  one<FaultStep>(
+    `INSERT INTO vessel_fault_steps (fault_id, note, kind, created_by, idempotency_key)
+     VALUES ($1,$2,COALESCE($3,'step'),$4,$5)
+     ON CONFLICT (idempotency_key) DO UPDATE SET note = vessel_fault_steps.note
+     RETURNING *`,
+    [d.fault_id, d.note, d.kind ?? null, createdBy, d.idempotency_key ?? null],
+  )
+
+// Close a fault with a resolution note (no maintenance record required). Idempotent:
+// closing an already-closed fault just re-sets the same values.
+export const closeFault = (id: string, resolutionNotes: string, updatedBy: string | null) =>
+  one<Fault>(
+    `UPDATE vessel_faults SET status = 'closed', resolution_notes = $2, updated_by = $3, updated_at = now()
+     WHERE id = $1 RETURNING *`,
+    [id, resolutionNotes, updatedBy],
+  )
 // Idempotent on idempotency_key: replaying a queued LogFault returns the existing
 // fault instead of duplicating it (ON CONFLICT no-op update + RETURNING). NULL key
 // (online request) never conflicts.
@@ -136,11 +164,6 @@ export const createFault = (d: Record<string, unknown>, createdBy: string | null
   )
 const FAULT_COLS = ['component_id', 'name', 'description', 'image_urls', 'urgency', 'status', 'assigned_to', 'resolution_notes', 'signed_by', 'signed_at'] as const
 export const updateFault = (id: string, body: object, updatedBy: string | null) => patch<Fault>('vessel_faults', id, FAULT_COLS, body as never, updatedBy)
-export const setFaultStatus = (id: string, status: string, updatedBy: string | null) =>
-  patch<Fault>('vessel_faults', id, ['status'], { status }, updatedBy)
-// Closure evidence: does this fault have at least one linked maintenance log?
-export const faultHasMaintenance = async (faultId: string): Promise<boolean> =>
-  (await query<{ id: string }>(`SELECT id FROM vessel_maintenance_logs WHERE fault_id = $1 LIMIT 1`, [faultId])).length > 0
 
 // ── Maintenance schedules ───────────────────────────────────────────────────
 export const listSchedules = (assetId?: string) =>

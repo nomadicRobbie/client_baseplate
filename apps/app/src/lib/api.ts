@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, Product, VesselAsset, VesselAssetType, VesselFault, VesselMaintenanceLog, VesselMaintenanceSchedule, VesselUpcomingItem, VesselScheduleAlert } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, Product, VesselAsset, VesselAssetType, VesselFault, VesselFaultStep, VesselMaintenanceLog, VesselMaintenanceSchedule, VesselUpcomingItem, VesselScheduleAlert } from '@blnk/shared';
 import { getAccessToken, getRefreshToken, setTokens, clearSession } from './session';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
@@ -169,8 +169,15 @@ export const listVesselFaults = (token: string, opts?: { asset_id?: string; stat
 };
 export const createVesselFault = (token: string, body: { asset_id: string; name: string; description?: string; urgency?: string; component_id?: string | null; idempotency_key?: string }) =>
   req<{ fault: VesselFault }>('/vessel/faults', { method: 'POST', body, token });
-export const updateVesselFault = (token: string, id: string, patch: { status?: string; urgency?: string; assigned_to?: string | null; resolution_notes?: string }) =>
+export const updateVesselFault = (token: string, id: string, patch: { urgency?: string; assigned_to?: string | null }) =>
   req<{ fault: VesselFault }>(`/vessel/faults/${id}`, { method: 'PATCH', body: patch, token });
+
+// Add a progress step to a fault (stays open).
+export const addVesselFaultStep = (token: string, id: string, body: { note: string; idempotency_key?: string }) =>
+  req<{ step: VesselFaultStep }>(`/vessel/faults/${id}/steps`, { method: 'POST', body, token });
+// Close a fault with a resolution note (no maintenance record required).
+export const closeVesselFault = (token: string, id: string, body: { resolution_notes: string; idempotency_key?: string }) =>
+  req<{ fault: VesselFault }>(`/vessel/faults/${id}/close`, { method: 'POST', body, token });
 
 // Complete maintenance — resolving a fault closes it (server sets fault status).
 export const createVesselMaintenanceLog = (token: string, body: { asset_id: string; fault_id?: string; task_name?: string; notes?: string; resolves_fault?: boolean; completed_date?: string; idempotency_key?: string }) =>

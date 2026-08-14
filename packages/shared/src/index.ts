@@ -388,11 +388,13 @@ export interface VesselAsset {
   date_purchased: string | null; image_url: string | null; notes: string | null; status: string
 }
 
+export interface VesselFaultStep { id: string; note: string; kind: 'step' | 'close'; created_by: string | null; created_at: string }
 export interface VesselFault {
   id: string; asset_id: string; component_id: string | null; name: string; description: string | null
   image_urls: string[]; urgency: string | null; status: string
   reported_by: string | null; reported_date: string; assigned_to: string | null
   resolution_notes: string | null; signed_by: string | null; signed_at: string | null
+  steps: VesselFaultStep[]
 }
 
 export interface VesselMaintenanceLog {

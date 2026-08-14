@@ -2,7 +2,7 @@ import type { VesselAsset } from '@blnk/shared';
 import { flush, type OutboxCommand } from './outbox';
 import { getAccessToken } from './session';
 import { readThrough } from './mirror';
-import { listVesselAssets, createVesselFault, createVesselMaintenanceLog } from './api';
+import { listVesselAssets, createVesselFault, createVesselMaintenanceLog, addVesselFaultStep, closeVesselFault } from './api';
 
 const tok = () => getAccessToken()!;
 
@@ -23,6 +23,12 @@ async function sendCommand(c: OutboxCommand): Promise<void> {
   } else if (c.kind === 'CompleteMaintenance') {
     const p = c.payload as { asset_id: string; fault_id?: string; task_name?: string; resolves_fault?: boolean; completed_date?: string };
     await createVesselMaintenanceLog(tok(), { ...p, idempotency_key: c.key });
+  } else if (c.kind === 'AddFaultStep') {
+    const p = c.payload as { fault_id: string; note: string };
+    await addVesselFaultStep(tok(), p.fault_id, { note: p.note, idempotency_key: c.key });
+  } else if (c.kind === 'CloseFault') {
+    const p = c.payload as { fault_id: string; resolution_notes: string };
+    await closeVesselFault(tok(), p.fault_id, { resolution_notes: p.resolution_notes, idempotency_key: c.key });
   }
 }
 

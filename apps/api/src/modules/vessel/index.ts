@@ -112,16 +112,48 @@ const vesselPlugin: FastifyPluginAsync = async (fastify) => {
     if (body.reported_by === undefined) body.reported_by = await myPersonId(req)  // default: logged by me
     return reply.status(201).send({ fault: await q.createFault(body as never, uid(req)) })
   })
-  // Triage / assign / close. Closing REQUIRES linked maintenance evidence (PDF §7).
+  // Triage only (assign / urgency). Closing is a deliberate action — use /close
+  // (with a note) or a maintenance record; you can't just flip status to closed.
   fastify.patch('/vessel/faults/:id', { preHandler: member }, async (req, reply) => {
     const { id } = req.params as { id: string }
     const body = req.body as { status?: string }
-    if (body.status === 'closed' && !(await q.faultHasMaintenance(id))) {
-      throw Errors.badRequest('cannot close a fault without a linked maintenance log')
+    if (body.status === 'closed') {
+      throw Errors.badRequest('close a fault with a note (POST /close) or a maintenance record')
     }
     const fault = await q.updateFault(id, body, uid(req))
     if (!fault) throw Errors.notFound('fault')
     return reply.send({ fault })
+  })
+
+  // Add a resolution step — a progress note (e.g. "part ordered"). Fault stays open.
+  fastify.post('/vessel/faults/:id/steps', {
+    preHandler: member,
+    schema: { body: { type: 'object', required: ['note'], properties: {
+      note: { type: 'string', minLength: 1 }, idempotency_key: { type: 'string' },
+    } } },
+  }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const b = req.body as { note: string; idempotency_key?: string };
+    if (!(await q.getFault(id))) throw Errors.notFound('fault');
+    const step = await q.addFaultStep({ fault_id: id, note: b.note, kind: 'step', idempotency_key: b.idempotency_key }, uid(req));
+    return reply.status(201).send({ step });
+  })
+
+  // Close a fault WITH A NOTE — no maintenance record required. Records a 'close'
+  // step. (Closing with a maintenance record still goes via POST /maintenance-logs;
+  // an incident-based close lands when the incidents module ships.)
+  fastify.post('/vessel/faults/:id/close', {
+    preHandler: member,
+    schema: { body: { type: 'object', required: ['resolution_notes'], properties: {
+      resolution_notes: { type: 'string', minLength: 1 }, idempotency_key: { type: 'string' },
+    } } },
+  }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const b = req.body as { resolution_notes: string; idempotency_key?: string };
+    if (!(await q.getFault(id))) throw Errors.notFound('fault');
+    await q.addFaultStep({ fault_id: id, note: b.resolution_notes, kind: 'close', idempotency_key: b.idempotency_key }, uid(req));
+    const fault = await q.closeFault(id, b.resolution_notes, uid(req));
+    return reply.send({ fault });
   })
 
   // ── Coming up — derived due/overdue services for the dashboard ─────────────
@@ -169,7 +201,11 @@ const vesselPlugin: FastifyPluginAsync = async (fastify) => {
     if (!log) throw Errors.internal('could not create maintenance log')
     let fault_closed = false
     if (log.resolves_fault && log.fault_id) {
-      await q.setFaultStatus(log.fault_id, 'closed', uid(req))
+      // Close with the maintenance as the resolution — record it on the fault timeline too.
+      const ik = body.idempotency_key as string | undefined
+      const note = `Resolved via maintenance${log.task_name ? `: ${log.task_name}` : ''}`
+      await q.addFaultStep({ fault_id: log.fault_id, note, kind: 'close', idempotency_key: ik ? ik + ':step' : undefined }, uid(req))
+      await q.closeFault(log.fault_id, note, uid(req))
       fault_closed = true
     }
     return reply.status(201).send({ log, fault_closed })

@@ -151,6 +151,17 @@ function makeStyles(t: ThemeT) {
     fieldGroup: { gap: t.space.xs },
     rowWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm },
     back: { paddingVertical: t.space.sm, alignSelf: 'flex-start' },
+    scheduleItemMeta: { flex: 1 },
+    scheduleItemActions: { flexDirection: 'row', gap: t.space.xs },
+    categoryGroup: { gap: t.space.sm, marginBottom: t.space.md },
+    categoryLabel: { textTransform: 'capitalize' },
+    coolingContainer: { flexDirection: 'row', alignItems: 'center', gap: t.space.md },
+    coolingInfo: { flex: 1 },
+    historyLogRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: t.space.md },
+    historyLogInfo: { flex: 1, gap: 2 },
+    historyLogActions: { flexDirection: 'row', alignItems: 'center', gap: t.space.sm },
+    pendingCAContainer: { flexDirection: 'row', alignItems: 'center', gap: t.space.sm },
+    pendingCAAlert: { borderWidth: 1, borderColor: t.color.danger },
   }) };
 }
 function useStyles() { return makeStyles(useTheme()); }
@@ -366,12 +377,12 @@ function SchedulesManager({ types, typeByCode, isAdmin, onBack }: {
           {schedules.length === 0 ? <Text muted>No schedules yet. Add one below.</Text> : schedules.map((sc) => (
             <View key={sc.id} style={s.logItem}>
               <IconChip code={sc.record_type} category={typeByCode[sc.record_type]?.category} size={34} />
-              <View style={{ flex: 1 }}>
+              <View style={s.scheduleItemMeta}>
                 <Text variant="label">{sc.label}</Text>
                 <Text variant="small" muted>{typeByCode[sc.record_type]?.label ?? sc.record_type} · {cadenceText(sc)}</Text>
               </View>
               {isAdmin && (
-                <View style={{ flexDirection: 'row', gap: t.space.xs }}>
+                <View style={s.scheduleItemActions}>
                   <Pressable onPress={() => setForm({ edit: sc })} accessibilityLabel="Edit"><Ionicons name="pencil" size={18} color={t.color.textMuted} /></Pressable>
                   <Pressable onPress={() => remove(sc.id)} accessibilityLabel="Delete"><Ionicons name="trash-outline" size={18} color={t.color.danger} /></Pressable>
                 </View>
@@ -691,9 +702,9 @@ export default function Compliance() {
             const over = remaining < 0;
             return (
               <Card key={b.id} style={over ? { borderWidth: 1, borderColor: t.color.danger } : undefined}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
+                <View style={s.coolingContainer}>
                   <IconChip code="cooling" size={40} />
-                  <View style={{ flex: 1 }}>
+                  <View style={s.coolingInfo}>
                     <Text variant="label">{b.product}</Text>
                     <Text variant="small" muted>{st.label} · started {new Date(b.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
                   </View>
@@ -755,8 +766,8 @@ export default function Compliance() {
     loading ? <Text muted>Loading…</Text> : (
       <>
         {Object.entries(grouped).map(([cat, list]) => (
-          <View key={cat} style={{ gap: t.space.sm, marginBottom: t.space.md }}>
-            <Text variant="small" muted style={{ textTransform: 'capitalize' }}>{cat}</Text>
+          <View key={cat} style={s.categoryGroup}>
+            <Text variant="small" muted style={s.categoryLabel}>{cat}</Text>
             {list.map((ty) => <TypeTile key={ty.code} type={ty} onPress={() => openForm(ty)} />)}
           </View>
         ))}
@@ -789,14 +800,14 @@ export default function Compliance() {
                 // action button are SIBLING pressables (nested <button> is invalid on web).
                 <View key={r.id} style={s.logItem}>
                   <Pressable onPress={() => ty && openForm(ty, r)} accessibilityRole="button"
-                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
+                    style={s.historyLogRow}>
                     <IconChip code={r.record_type} category={ty?.category} size={34} />
-                    <View style={{ flex: 1, gap: 2 }}>
+                    <View style={s.historyLogInfo}>
                       <Text variant="label">{ty?.label ?? r.record_type}</Text>
                       <Text variant="small" muted>{r.entered_by} · {formatDate(r.datetime)}</Text>
                     </View>
                   </Pressable>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}>
+                  <View style={s.historyLogActions}>
                     <ResultPill result={r.result} />
                     {hasCa && (
                       <Pressable
@@ -827,8 +838,8 @@ export default function Compliance() {
       {msg && <Notice message={msg.text} tone={msg.tone} />}
 
       {pendingCA && !editing && (
-        <Card style={{ borderWidth: 1, borderColor: t.color.danger }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}>
+        <Card style={s.pendingCAAlert}>
+          <View style={s.pendingCAContainer}>
             <Ionicons name="alert-circle" size={22} color={t.color.danger} />
             <Text variant="label" color={t.color.danger} style={{ flex: 1 }}>A check failed — a corrective action is waiting.</Text>
           </View>
