@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Slot, Redirect, usePathname, useRouter } from 'expo-router';
-import { View, Pressable, useWindowDimensions, ActivityIndicator, Platform } from 'react-native';
+import { View, Pressable, useWindowDimensions, ActivityIndicator, Platform, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { FeatureFlags } from '@blnk/shared';
@@ -12,6 +12,19 @@ import { ThemeProvider, useTheme } from '@/theme';
 import { Text } from '@/ui/components';
 import { Onboarding } from '@/components/onboarding';
 
+type ThemeT = ReturnType<typeof useTheme>;
+const makeStyles = (t: ThemeT) => ({
+  spinner: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const },
+  sidebarContainer: { gap: t.space.xs },
+  mobileBar: { flexDirection: 'row' as const, justifyContent: 'space-around' as const, borderTopWidth: 1, borderTopColor: t.color.border },
+  mobileTab: (active: boolean) => ({ flex: 1, flexDirection: 'column' as const, alignItems: 'center' as const, gap: 2, paddingTop: t.space.sm, paddingBottom: t.space.xs, minHeight: 52, backgroundColor: active ? t.color.surfaceAlt : 'transparent' }),
+  brand: { gap: 2 },
+  wideLayout: { flex: 1, flexDirection: 'row' as const },
+  sidebar: { width: 248, borderRightWidth: 1, borderRightColor: t.color.border, padding: t.space.lg, justifyContent: 'space-between' as const },
+  sidebarTop: { gap: t.space.lg },
+  content: { flex: 1 },
+});
+
 function greeting(): string {
   const h = new Date().getHours();
   if (h < 12) return 'Good morning';
@@ -21,8 +34,9 @@ function greeting(): string {
 
 function Spinner() {
   const t = useTheme();
+  const s = makeStyles(t);
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: t.color.bg }}>
+    <View style={[s.spinner, { backgroundColor: t.color.bg }]}>
       <ActivityIndicator color={t.color.primary} />
     </View>
   );
@@ -31,13 +45,14 @@ function Spinner() {
 // Desktop sidebar — the full set of destinations, stacked vertically.
 function Sidebar({ isAdmin, features, myModules }: { isAdmin: boolean; features: FeatureFlags | null; myModules: string[] }) {
   const t = useTheme();
+  const s = makeStyles(t);
   const router = useRouter();
   const pathname = usePathname();
   // Admin destinations (People, Settings) live under Account → Manage, not the
   // sidebar — keeps the desktop nav to Library · modules · Billing · Account.
   const items = visibleNav(isAdmin, features, myModules).filter((i) => i.group !== 'admin');
   return (
-    <View style={{ gap: t.space.xs }}>
+    <View style={s.sidebarContainer}>
       {items.map((item) => {
         const active = pathname === item.href;
         return (
@@ -69,6 +84,7 @@ function Sidebar({ isAdmin, features, myModules }: { isAdmin: boolean; features:
 // Mobile bottom bar — curated: Library · Account · two pinned modules.
 function MobileTabBar() {
   const t = useTheme();
+  const s = makeStyles(t);
   const router = useRouter();
   const pathname = usePathname();
   const { pinned } = usePins();
@@ -80,7 +96,7 @@ function MobileTabBar() {
   ];
 
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-around', borderTopWidth: 1, borderTopColor: t.color.border, backgroundColor: t.color.surface }}>
+    <View style={[s.mobileBar, { backgroundColor: t.color.surface }]}>
       {tabs.map((tab) => {
         const active = pathname === tab.href;
         return (
@@ -90,14 +106,7 @@ function MobileTabBar() {
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
             accessibilityLabel={tab.label}
-            style={(state) => {
-              const { pressed } = state as { pressed: boolean };
-              return {
-                flex: 1, flexDirection: 'column', alignItems: 'center', gap: 2,
-                paddingTop: t.space.sm, paddingBottom: t.space.xs, minHeight: 52,
-                backgroundColor: active || pressed ? t.color.surfaceAlt : 'transparent',
-              };
-            }}
+            style={s.mobileTab(active)}
           >
             <Ionicons name={tab.icon} size={22} color={active ? t.color.primary : t.color.textMuted} />
             <Text variant="small" color={active ? t.color.text : t.color.textMuted} numberOfLines={1}>{tab.label}</Text>
@@ -110,6 +119,7 @@ function MobileTabBar() {
 
 function Shell() {
   const t = useTheme();
+  const s = makeStyles(t);
   const { width } = useWindowDimensions();
   const { tenantSlug, signOut, features, user } = useAuth();
   const { data, myModules } = useProfile();
@@ -125,7 +135,7 @@ function Shell() {
   const isAdmin = user?.role === 'admin' || user?.role === 'super';
 
   const Brand = (
-    <View style={{ gap: 2 }}>
+    <View style={s.brand}>
       <Text variant="heading">{orgName}</Text>
       {!!firstName && <Text variant="small" muted>{greeting()}, {firstName}</Text>}
     </View>
@@ -133,9 +143,9 @@ function Shell() {
 
   if (wide) {
     return (
-      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: t.color.bg }}>
-        <View style={{ width: 248, backgroundColor: t.color.surface, borderRightWidth: 1, borderRightColor: t.color.border, padding: t.space.lg, justifyContent: 'space-between' }}>
-          <View style={{ gap: t.space.lg }}>
+      <View style={[s.wideLayout, { backgroundColor: t.color.bg }]}>
+        <View style={[s.sidebar, { backgroundColor: t.color.surface }]}>
+          <View style={s.sidebarTop}>
             {Brand}
             <Sidebar isAdmin={isAdmin} features={features} myModules={myModules} />
           </View>
@@ -143,14 +153,14 @@ function Shell() {
             <Text variant="label" color={t.color.accent}>Log out</Text>
           </Pressable>
         </View>
-        <View style={{ flex: 1 }}><Slot /></View>
+        <View style={s.content}><Slot /></View>
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.color.bg }} edges={['bottom']}>
-      <View style={{ flex: 1 }}><Slot /></View>
+    <SafeAreaView style={[s.content, { backgroundColor: t.color.bg }]} edges={['bottom']}>
+      <View style={s.content}><Slot /></View>
       <MobileTabBar />
     </SafeAreaView>
   );
