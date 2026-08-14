@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Redirect, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { VesselAsset, VesselFault, VesselUpcomingItem } from '@blnk/shared';
@@ -15,6 +15,17 @@ import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, Row } from '@/ui/components';
 import { StatusBadge, OfflineBanner, PendingSyncBanner, type StatusLevel } from '@/ui/status';
 
+type ThemeT = ReturnType<typeof useTheme>;
+const makeStyles = (t: ThemeT) => ({
+  stat: { flex: 1, alignItems: 'center' as const, gap: 2 },
+  statNum: { fontSize: 26, fontWeight: '800' as const },
+  backBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
+  statsRow: { flexDirection: 'row' as const },
+  upcomingItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.md, paddingVertical: t.space.sm },
+  upcomingInfo: { flex: 1 },
+  sectionRow: { flex: 1 },
+});
+
 const tok = () => getAccessToken()!;
 
 // Vessel home — an at-a-glance dashboard for one boat: status stats, a "Coming up"
@@ -22,6 +33,7 @@ const tok = () => getAccessToken()!;
 // "Today" layout so the two modules feel the same.
 export default function VesselHome() {
   const t = useTheme();
+  const s = makeStyles(t);
   const router = useRouter();
   const { assetId } = useLocalSearchParams<{ assetId: string }>();
   const { features } = useAuth();
@@ -60,15 +72,15 @@ export default function VesselHome() {
   const goMaint = () => router.push({ pathname: '/dashboard/vessel/[assetId]/maintenance', params: { assetId } });
 
   const Stat = ({ n, label, danger }: { n: number; label: string; danger?: boolean }) => (
-    <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
-      <Text style={{ fontSize: 26, fontWeight: '800', color: danger && n > 0 ? t.color.danger : t.color.primary }}>{n}</Text>
+    <View style={s.stat}>
+      <Text style={[s.statNum, { color: danger && n > 0 ? t.color.danger : t.color.primary }]}>{n}</Text>
       <Text variant="small" muted>{label}</Text>
     </View>
   );
 
   return (
     <Screen>
-      <Pressable onPress={() => router.push('/dashboard/vessel')} accessibilityRole="button" style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <Pressable onPress={() => router.push('/dashboard/vessel')} accessibilityRole="button" style={s.backBtn}>
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
         <Text variant="label" color={t.color.primary}>Fleet</Text>
       </Pressable>
@@ -82,7 +94,7 @@ export default function VesselHome() {
 
       {/* Status at a glance */}
       <Card>
-        <View style={{ flexDirection: 'row' }}>
+        <View style={s.statsRow}>
           <Stat n={openFaults} label="Open faults" danger />
           <Stat n={dueSoon} label="Due soon" />
           <Stat n={overdue} label="Overdue" danger />
@@ -103,9 +115,9 @@ export default function VesselHome() {
               const level: StatusLevel = u.level === 'over' ? 'over' : u.level === 'due' ? 'due' : 'ok';
               return (
                 <Pressable key={u.id} onPress={goMaint} accessibilityRole="button"
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md, paddingVertical: t.space.sm }}>
+                  style={s.upcomingItem}>
                   <Ionicons name="construct-outline" size={20} color={t.color.textMuted} />
-                  <View style={{ flex: 1 }}>
+                  <View style={s.upcomingInfo}>
                     <Text>{u.title}</Text>
                     {!!u.due_date && <Text variant="small" muted>Due {formatDMY(u.due_date)}</Text>}
                   </View>
@@ -121,7 +133,7 @@ export default function VesselHome() {
       <Card>
         <Row onPress={goFaults}>
           <Ionicons name="alert-circle-outline" size={22} color={t.color.text} />
-          <View style={{ flex: 1 }}>
+          <View style={s.sectionRow}>
             <Text>Faults</Text>
             <Text variant="small" muted>{openFaults ? `${openFaults} open` : 'Log and resolve defects'}</Text>
           </View>
@@ -129,7 +141,7 @@ export default function VesselHome() {
         </Row>
         <Row onPress={goMaint}>
           <Ionicons name="construct-outline" size={22} color={t.color.text} />
-          <View style={{ flex: 1 }}>
+          <View style={s.sectionRow}>
             <Text>Maintenance</Text>
             <Text variant="small" muted>{overdue + dueSoon ? `${overdue + dueSoon} due` : 'Scheduled work and history'}</Text>
           </View>

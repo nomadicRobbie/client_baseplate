@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
 import type { Person, TeamUser } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
@@ -11,13 +11,29 @@ import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, TextField, Badge, Notice } from '@/ui/components';
 
 type Msg = { text: string; tone: 'success' | 'error' };
+type ThemeT = ReturnType<typeof useTheme>;
 const ROLES: ('member' | 'admin')[] = ['member', 'admin'];
+
+const makeStyles = (t: ThemeT) => ({
+  checkbox: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm, paddingVertical: t.space.xs },
+  checkboxBox: (checked: boolean) => ({ width: 20, height: 20, borderRadius: t.radius.sm, borderWidth: 1, borderColor: checked ? t.color.primary : t.color.border, backgroundColor: checked ? t.color.primary : 'transparent', alignItems: 'center' as const, justifyContent: 'center' as const }),
+  roleSection: { gap: 6 },
+  roleRow: { flexDirection: 'row' as const, gap: t.space.sm },
+  roleBtn: (sel: boolean, disabled: boolean) => ({ opacity: disabled ? 0.4 : 1, paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }),
+  personItem: { paddingVertical: t.space.sm, borderTopWidth: 1, borderTopColor: t.color.border, gap: t.space.sm },
+  personHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.md },
+  personInfo: { flex: 1, gap: 2 },
+  moduleRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.xs, alignItems: 'center' as const },
+  moduleBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingVertical: 4, paddingHorizontal: t.space.sm, borderRadius: t.radius.pill, backgroundColor: t.color.surfaceAlt },
+  moduleAdd: { paddingVertical: 4, paddingHorizontal: t.space.sm, borderRadius: t.radius.pill, borderWidth: 1, borderStyle: 'dashed' as const, borderColor: t.color.border },
+});
 
 // People — the canonical roster. A person may be "roster only" (no login) or have
 // app access (a blnk_auth login, created here and linked via person.user_id). This
 // screen replaces the old Team surface: inviting a user is now "give app access".
 export default function People() {
   const t = useTheme();
+  const s = makeStyles(t);
   const { features } = useAuth();
   const { data } = useProfile();
   // Operational modules are the ones you assign to members. Admin-only modules
@@ -131,23 +147,23 @@ export default function People() {
         <TextField label="Phone" value={phone} onChangeText={setPhone} placeholder="Optional" />
 
         <Pressable onPress={() => setGiveAccess((v) => !v)} accessibilityRole="checkbox" accessibilityState={{ checked: giveAccess }}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm, paddingVertical: t.space.xs }}>
-          <View style={{ width: 20, height: 20, borderRadius: t.radius.sm, borderWidth: 1, borderColor: giveAccess ? t.color.primary : t.color.border, backgroundColor: giveAccess ? t.color.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+          style={s.checkbox}>
+          <View style={s.checkboxBox(giveAccess)}>
             {giveAccess && <Text variant="small" color={t.color.primaryText}>✓</Text>}
           </View>
           <Text variant="label">Give app access (creates a sign-in)</Text>
         </Pressable>
 
         {giveAccess && (
-          <View style={{ gap: 6 }}>
+          <View style={s.roleSection}>
             <Text variant="label" muted>Role</Text>
-            <View style={{ flexDirection: 'row', gap: t.space.sm }}>
+            <View style={s.roleRow}>
               {ROLES.map((r) => {
                 const disabled = r === 'admin' && !isSuper;
                 const sel = role === r;
                 return (
                   <Pressable key={r} onPress={() => !disabled && setRole(r)} accessibilityRole="button" disabled={disabled}
-                    style={{ opacity: disabled ? 0.4 : 1, paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }}>
+                    style={s.roleBtn(sel, disabled)}>
                     <Text variant="label" color={sel ? t.color.primaryText : t.color.text}>{r}</Text>
                   </Pressable>
                 );
@@ -167,9 +183,9 @@ export default function People() {
           const isSelf = !!p.user_id && p.user_id === meId;
           const unassigned = assignableModules.filter((em) => !p.modules.some((m) => m.module === em.feature));
           return (
-            <View key={p.id} style={{ paddingVertical: t.space.sm, borderTopWidth: 1, borderTopColor: t.color.border, gap: t.space.sm }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
-                <View style={{ flex: 1, gap: 2 }}>
+            <View key={p.id} style={s.personItem}>
+              <View style={s.personHeader}>
+                <View style={s.personInfo}>
                   <Text>{p.name}</Text>
                   {!!(p.email || p.phone) && <Text variant="small" muted>{[p.email, p.phone].filter(Boolean).join(' · ')}</Text>}
                 </View>
@@ -199,17 +215,17 @@ export default function People() {
               {p.user_id && (login?.role === 'admin' || login?.role === 'super') ? (
                 <Text variant="small" muted>Full access — admins see every module.</Text>
               ) : p.user_id ? (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.xs, alignItems: 'center' }}>
+                <View style={s.moduleRow}>
                   {p.modules.map((m) => (
                     <Pressable key={m.module} onPress={() => unassign(p, m.module)} accessibilityRole="button" accessibilityLabel={`Remove ${moduleLabel(m.module)}`}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: t.space.sm, borderRadius: t.radius.pill, backgroundColor: t.color.surfaceAlt }}>
+                      style={s.moduleBadge}>
                       <Text variant="small">{moduleLabel(m.module)}</Text>
                       <Text variant="small" muted>✕</Text>
                     </Pressable>
                   ))}
                   {unassigned.map((em) => (
                     <Pressable key={em.feature} onPress={() => assign(p, em.feature as string)} accessibilityRole="button" accessibilityLabel={`Assign ${em.label}`}
-                      style={{ paddingVertical: 4, paddingHorizontal: t.space.sm, borderRadius: t.radius.pill, borderWidth: 1, borderStyle: 'dashed', borderColor: t.color.border }}>
+                      style={[s.moduleAdd, { borderColor: t.color.border }]}>
                       <Text variant="small" muted>+ {em.label}</Text>
                     </Pressable>
                   ))}

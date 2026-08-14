@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Redirect, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { VesselAsset, VesselFault } from '@blnk/shared';
@@ -14,6 +14,24 @@ import { formatDMY } from '@/lib/format';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, TextField, Badge, Notice } from '@/ui/components';
 import { StatusBadge, urgencyLevel, OfflineBanner, PendingSyncBanner } from '@/ui/status';
+
+type ThemeT = ReturnType<typeof useTheme>;
+const makeStyles = (t: ThemeT) => ({
+  backBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
+  urgencyGroup: { gap: 6 },
+  urgencyRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
+  urgencyBtn: (sel: boolean) => ({ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }),
+  pendingItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm, paddingVertical: t.space.sm, borderTopWidth: 1, borderTopColor: t.color.border },
+  pendingInfo: { flex: 1, gap: 2 },
+  faultItem: { paddingVertical: t.space.sm, borderTopWidth: 1, borderTopColor: t.color.border, gap: t.space.sm },
+  faultHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
+  faultInfo: { flex: 1, gap: 2 },
+  stepsList: { gap: 2, paddingLeft: t.space.sm },
+  closingBadge: { flexDirection: 'row' as const },
+  actions: { gap: t.space.sm },
+  actionRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
+  closedItem: { paddingVertical: t.space.sm, borderTopWidth: 1, borderTopColor: t.color.border, gap: 2 },
+});
 
 type Msg = { text: string; tone: 'success' | 'error' | 'info' };
 const URGENCIES = ['Low', 'Medium', 'High', 'Critical'];
@@ -111,9 +129,11 @@ export default function VesselFaults() {
     (pendingStepsByFault[p.fault_id] ??= []).push(p.note);
   }
 
+  const s = makeStyles(t);
+
   return (
     <Screen>
-      <Pressable onPress={() => router.push({ pathname: '/dashboard/vessel/[assetId]', params: { assetId } })} accessibilityRole="button" style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <Pressable onPress={() => router.push({ pathname: '/dashboard/vessel/[assetId]', params: { assetId } })} accessibilityRole="button" style={s.backBtn}>
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
         <Text variant="label" color={t.color.primary}>{asset?.name ?? 'Vessel'}</Text>
       </Pressable>
@@ -127,14 +147,14 @@ export default function VesselFaults() {
         <Text variant="heading">Log a fault</Text>
         <TextField label="Fault" value={fName} onChangeText={setFName} placeholder="e.g. Navigation light corrosion" autoCapitalize="sentences" />
         <TextField label="Description" value={fDesc} onChangeText={setFDesc} placeholder="Optional" autoCapitalize="sentences" />
-        <View style={{ gap: 6 }}>
+        <View style={s.urgencyGroup}>
           <Text variant="label" muted>Urgency</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
+          <View style={s.urgencyRow}>
             {URGENCIES.map((u) => {
               const sel = fUrgency === u;
               return (
                 <Pressable key={u} onPress={() => setFUrgency(u)} accessibilityRole="button"
-                  style={{ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }}>
+                  style={s.urgencyBtn(sel)}>
                   <Text variant="label" color={sel ? t.color.primaryText : t.color.text}>{u}</Text>
                 </Pressable>
               );
@@ -148,8 +168,8 @@ export default function VesselFaults() {
       <Card>
         <Text variant="heading">Open faults {open.length ? `(${open.length})` : ''}</Text>
         {pendingLogged.map((p) => (
-          <View key={p.key} style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm, paddingVertical: t.space.sm, borderTopWidth: 1, borderTopColor: t.color.border }}>
-            <View style={{ flex: 1, gap: 2 }}>
+          <View key={p.key} style={s.pendingItem}>
+            <View style={s.pendingInfo}>
               <Text>{p.name}</Text>
               {!!p.description && <Text variant="small" muted>{p.description}</Text>}
             </View>
@@ -162,9 +182,9 @@ export default function VesselFaults() {
           const closing = pendingCloseIds.has(f.id);
           const pSteps = pendingStepsByFault[f.id] ?? [];
           return (
-            <View key={f.id} style={{ paddingVertical: t.space.sm, borderTopWidth: 1, borderTopColor: t.color.border, gap: t.space.sm }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}>
-                <View style={{ flex: 1, gap: 2 }}>
+            <View key={f.id} style={s.faultItem}>
+              <View style={s.faultHeader}>
+                <View style={s.faultInfo}>
                   <Text>{f.name}</Text>
                   {!!f.description && <Text variant="small" muted>{f.description}</Text>}
                 </View>
@@ -173,20 +193,20 @@ export default function VesselFaults() {
 
               {/* Resolution timeline */}
               {(f.steps?.length > 0 || pSteps.length > 0) && (
-                <View style={{ gap: 2, paddingLeft: t.space.sm }}>
-                  {f.steps.map((s) => (
-                    <Text key={s.id} variant="small" muted>• {s.note}{s.kind === 'close' ? ' (closed)' : ''} · {formatDMY(s.created_at)}</Text>
+                <View style={s.stepsList}>
+                  {f.steps.map((st) => (
+                    <Text key={st.id} variant="small" muted>• {st.note}{st.kind === 'close' ? ' (closed)' : ''} · {formatDMY(st.created_at)}</Text>
                   ))}
                   {pSteps.map((n, i) => <Text key={`p${i}`} variant="small" muted>• {n} · pending sync</Text>)}
                 </View>
               )}
 
               {closing ? (
-                <View style={{ flexDirection: 'row' }}><Badge label="closing — pending sync" tone="accent" /></View>
+                <View style={s.closingBadge}><Badge label="closing — pending sync" tone="accent" /></View>
               ) : expanded ? (
-                <View style={{ gap: t.space.sm }}>
+                <View style={s.actions}>
                   <TextField label="Note (what was done, or the next step)" value={note} onChangeText={setNote} placeholder="e.g. Ordered replacement connector" autoCapitalize="sentences" />
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
+                  <View style={s.actionRow}>
                     <Button label="Add step" variant="secondary" onPress={() => addStep(f)} loading={busy} />
                     <Button label="Close with note" onPress={() => closeWithNote(f)} loading={busy} />
                     <Button label="Log maintenance & close" onPress={() => closeWithMaintenance(f)} loading={busy} />
@@ -208,8 +228,8 @@ export default function VesselFaults() {
         <Card>
           <Text variant="heading">Closed ({closed.length})</Text>
           {closed.map((f) => (
-            <View key={f.id} style={{ paddingVertical: t.space.sm, borderTopWidth: 1, borderTopColor: t.color.border, gap: 2 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}>
+            <View key={f.id} style={s.closedItem}>
+              <View style={s.faultHeader}>
                 <Text style={{ flex: 1 }} muted>{f.name}</Text>
                 <StatusBadge level="closed" label="closed" />
               </View>
