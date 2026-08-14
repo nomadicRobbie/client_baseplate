@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import type { PreferredContact } from '@blnk/shared';
 import { useProfile } from '@/lib/profile-context';
 import { getAccessToken } from '@/lib/session';
@@ -7,6 +7,7 @@ import { updateMyProfile, updateOrg } from '@/lib/api';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, TextField, Notice } from '@/ui/components';
 
+type ThemeT = ReturnType<typeof useTheme>;
 const CONTACT_OPTS: { key: PreferredContact; label: string }[] = [
   { key: 'email', label: 'Email' }, { key: 'phone', label: 'Phone' },
   { key: 'sms', label: 'SMS' }, { key: 'in_app', label: 'In-app' },
@@ -14,16 +15,27 @@ const CONTACT_OPTS: { key: PreferredContact; label: string }[] = [
 
 const SWATCHES = ['#2a7f62', '#e8613a', '#1d4ed8', '#7c3aed', '#db2777', '#0e0e0e'];
 
+const makeChipsStyles = (t: ThemeT) => ({
+  container: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
+  chip: (sel: boolean) => ({ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }),
+});
+
+const makeSwatchesStyles = (t: ThemeT) => ({
+  container: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.md },
+  swatch: (selected: boolean) => ({ width: 40, height: 40, borderRadius: t.radius.md, backgroundColor: 'transparent', borderWidth: 3, borderColor: selected ? t.color.ink : 'transparent' }),
+});
+
 // Chip selector
 function Chips({ options, value, onChange }: { options: { key: string; label: string }[]; value: string | null; onChange: (v: string) => void }) {
   const t = useTheme();
+  const s = makeChipsStyles(t);
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
+    <View style={s.container}>
       {options.map((o) => {
         const sel = value === o.key;
         return (
           <Pressable key={o.key} onPress={() => onChange(o.key)} accessibilityRole="button"
-            style={{ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }}>
+            style={s.chip(sel)}>
             <Text variant="label" color={sel ? t.color.primaryText : t.color.text}>{o.label}</Text>
           </Pressable>
         );
@@ -34,11 +46,12 @@ function Chips({ options, value, onChange }: { options: { key: string; label: st
 
 function Swatches({ value, onChange }: { value: string | null; onChange: (v: string) => void }) {
   const t = useTheme();
+  const s = makeSwatchesStyles(t);
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.md }}>
+    <View style={s.container}>
       {SWATCHES.map((c) => (
         <Pressable key={c} onPress={() => onChange(c)} accessibilityRole="button" accessibilityLabel={`Brand colour ${c}`}
-          style={{ width: 40, height: 40, borderRadius: t.radius.md, backgroundColor: c, borderWidth: 3, borderColor: value === c ? t.color.ink : 'transparent' }} />
+          style={[s.swatch(value === c), { backgroundColor: c }]} />
       ))}
     </View>
   );
