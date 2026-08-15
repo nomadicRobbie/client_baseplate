@@ -95,6 +95,7 @@ export default function Locations() {
     row: { flexDirection: 'row', gap: 10 },
     half: { flex: 1 },
     itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+    itemDetail: { flex: 1, gap: 2 },
   });
 
   return (
@@ -150,7 +151,7 @@ export default function Locations() {
         ) : (
           locations.map((l) => (
             <View key={l.id} style={s.itemRow}>
-              <View style={{ flex: 1, gap: 2 }}>
+              <View style={s.itemDetail}>
                 <Text variant="label">{l.location}</Text>
                 <Text variant="small" muted>{formatDate(l.starts_at)}</Text>
                 {l.note ? <Text variant="small" muted>{l.note}</Text> : null}
