@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { otpSend, otpVerify, passkeyLoginBegin, passkeyLoginComplete, TENANT } from '@/lib/api';
 import { setTokens } from '@/lib/session';
@@ -9,6 +9,12 @@ import { getItem, setItem } from '@/lib/storage';
 import { Screen, Text, Card, Button, TextField, Notice } from '@/ui/components';
 
 type Msg = { text: string; tone: 'info' | 'success' | 'error' };
+type ThemeT = ReturnType<typeof useTheme>;
+const makeStyles = (t: ThemeT) => ({
+  center: { flex: 1, justifyContent: 'center' as const, alignItems: 'center' as const, padding: t.space.xl },
+  box: { width: '100%' as const, maxWidth: 380, gap: t.space.lg },
+  header: { gap: t.space.xs },
+});
 
 // Last address that signed in — prefilled so returning users don't retype it.
 // Kept out of session.ts on purpose: it must survive logout (clearSession).
@@ -16,6 +22,7 @@ const LAST_EMAIL = 'blnk_last_email';
 
 export default function Login() {
   const t = useTheme();
+  const s = makeStyles(t);
   const router = useRouter();
   const [email, setEmail] = useState(() => getItem(LAST_EMAIL) ?? '');
   const [code, setCode] = useState('');
@@ -51,9 +58,9 @@ export default function Login() {
 
   return (
     <Screen scroll={false} padded={false}>
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: t.space.xl }}>
-        <View style={{ width: '100%', maxWidth: 380, gap: t.space.lg }}>
-          <View style={{ gap: t.space.xs }}>
+      <View style={s.center}>
+        <View style={s.box}>
+          <View style={s.header}>
             <Text variant="title">blnk</Text>
             <Text muted>sign in · {TENANT}</Text>
           </View>
