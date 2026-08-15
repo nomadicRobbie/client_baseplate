@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { VesselAsset, VesselAssetType } from '@blnk/shared';
@@ -15,11 +15,20 @@ import { Screen, Text, Card, Button, TextField, Notice, Row } from '@/ui/compone
 import { OfflineBanner, PendingSyncBanner } from '@/ui/status';
 
 type Msg = { text: string; tone: 'success' | 'error' | 'info' };
+type ThemeT = ReturnType<typeof useTheme>;
 const tok = () => getAccessToken()!;
+
+const makeStyles = (t: ThemeT) => ({
+  typeGroup: { gap: 6 },
+  typeRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
+  typeBtn: (sel: boolean) => ({ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }),
+  assetInfo: { flex: 1 },
+});
 
 // Fleet — the vessel module home. Pick a vessel to work inside it (asset-first).
 export default function VesselFleet() {
   const t = useTheme();
+  const s = makeStyles(t);
   const router = useRouter();
   const { features, user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'super';
@@ -98,14 +107,14 @@ export default function VesselFleet() {
           ) : (
             <>
               <TextField label="Asset name" value={newVessel} onChangeText={setNewVessel} placeholder="e.g. Aorere Star" autoCapitalize="sentences" />
-              <View style={{ gap: 6 }}>
+              <View style={s.typeGroup}>
                 <Text variant="label" muted>Type</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.sm }}>
+                <View style={s.typeRow}>
                   {types.map((ty) => {
                     const sel = newTypeId === ty.id;
                     return (
                       <Pressable key={ty.id} onPress={() => setNewTypeId(ty.id)} accessibilityRole="button"
-                        style={{ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }}>
+                        style={s.typeBtn(sel)}>
                         <Text variant="label" color={sel ? t.color.primaryText : t.color.text}>{ty.name}</Text>
                       </Pressable>
                     );
@@ -123,7 +132,7 @@ export default function VesselFleet() {
         {loading ? <Text muted>Loading…</Text> : assets.length === 0 ? <Text muted>No vessels yet.</Text> : assets.map((a) => (
           <Row key={a.id} onPress={() => openAsset(a.id)}>
             <Ionicons name="boat-outline" size={20} color={t.color.text} />
-            <View style={{ flex: 1 }}>
+            <View style={s.assetInfo}>
               <Text>{a.name}</Text>
               {!!(a.mnz_number || a.location) && <Text variant="small" muted>{[a.mnz_number && `MNZ ${a.mnz_number}`, a.location].filter(Boolean).join(' · ')}</Text>}
             </View>
