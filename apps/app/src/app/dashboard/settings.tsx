@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useProfile } from '@/lib/profile-context';
 import { getAccessToken } from '@/lib/session';
@@ -7,11 +7,18 @@ import { updateOrg } from '@/lib/api';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, TextField, Notice } from '@/ui/components';
 
+type ThemeT = ReturnType<typeof useTheme>;
 const SWATCHES = ['#2a7f62', '#e8613a', '#1d4ed8', '#7c3aed', '#db2777', '#0e0e0e'];
+
+const makeStyles = (t: ThemeT) => ({
+  swatchRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.md, marginTop: t.space.xs },
+  swatch: (selected: boolean) => ({ width: 40, height: 40, borderRadius: t.radius.md, backgroundColor: 'transparent', borderWidth: 3, borderColor: selected ? t.color.ink : 'transparent' }),
+});
 
 // Org + brand settings. Admin-only; brand colour applies to everyone.
 export default function Settings() {
   const t = useTheme();
+  const s = makeStyles(t);
   const { data, refresh } = useProfile();
   const isAdmin = data?.me.role === 'admin' || data?.me.role === 'super';
 
@@ -50,10 +57,10 @@ export default function Settings() {
       <Card>
         <Text variant="heading">Brand</Text>
         <Text variant="small" muted>Sets the app's accent colour for all users.</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.md, marginTop: t.space.xs }}>
+        <View style={s.swatchRow}>
           {SWATCHES.map((c) => (
             <Pressable key={c} onPress={() => setBrand(c)} accessibilityRole="button" accessibilityLabel={`Brand colour ${c}`}
-              style={{ width: 40, height: 40, borderRadius: t.radius.md, backgroundColor: c, borderWidth: 3, borderColor: brand === c ? t.color.ink : 'transparent' }} />
+              style={[s.swatch(brand === c), { backgroundColor: c }]} />
           ))}
         </View>
         {!!brand && <Button label="Clear brand colour" variant="ghost" onPress={() => setBrand(null)} />}
