@@ -6,7 +6,7 @@ import type { PreferredContact } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { useProfile } from '@/lib/profile-context';
 import { visibleNav } from '@/lib/nav';
-import { useTheme } from '@/theme';
+import { useTheme, useColorSchemePref, type SchemePref } from '@/theme';
 import { Screen, Text, Card, Row, Button, TextField, Notice } from '@/ui/components';
 import { passkeyRegisterBegin, passkeyRegisterComplete, updateMyProfile } from '@/lib/api';
 import { getAccessToken } from '@/lib/session';
@@ -29,6 +29,7 @@ const makeStyles = (t: ThemeT) => ({
 export default function Account() {
   const t = useTheme();
   const s = makeStyles(t);
+  const { pref, setPref } = useColorSchemePref();
   const router = useRouter();
   const { signOut, features, user } = useAuth();
   const { data, refresh } = useProfile();
@@ -93,6 +94,22 @@ export default function Account() {
           </View>
         </View>
         <Button label="Save profile" onPress={saveProfile} loading={busy} />
+      </Card>
+
+      <Card>
+        <Text variant="heading">Appearance</Text>
+        <View style={s.contactRow}>
+          {(['light', 'os', 'dark'] as SchemePref[]).map((opt) => {
+            const labels: Record<SchemePref, string> = { light: 'Light', os: 'System', dark: 'Dark' };
+            const sel = pref === opt;
+            return (
+              <Pressable key={opt} onPress={() => setPref(opt)} accessibilityRole="button"
+                style={s.contactBtn(sel)}>
+                <Text variant="label" color={sel ? t.color.primaryText : t.color.text}>{labels[opt]}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </Card>
 
       <Card>

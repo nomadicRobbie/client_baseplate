@@ -169,7 +169,7 @@ function EditSheet({ product, onSaved, onClose }: {
       {msg && <Notice message={msg.text} tone={msg.tone} />}
 
       <View style={s.buttonRow}>
-        <Button label="Save changes" onPress={save} loading={busy} disabled={!dirty} style={{ flex: 1 }} />
+        <Button label="Save changes" onPress={save} loading={busy} disabled={!dirty} style={s.flex1} />
         <Button label="Discard" variant="ghost" onPress={() => { setDraft(product); setMsg(null); }} disabled={!dirty || busy} />
       </View>
     </Card>
@@ -278,6 +278,8 @@ const makeStyles = (t: ReturnType<typeof useTheme>) => ({
   headerButtons: { flexDirection: 'row' as const, gap: t.space.sm },
   productsContainer: { gap: t.space.md },
   productRow: { flexDirection: 'row' as const, gap: t.space.md },
+  flex1: { flex: 1 },
+  spacer: { flex: 1 },
 });
 
 // ── Add product form ──────────────────────────────────────────────────────────
@@ -388,7 +390,7 @@ function AddProductForm({ onAdded, onCancel }: { onAdded: (p: Product) => void; 
       {err && <Notice message={err} tone="error" />}
 
       <View style={s.buttonRow}>
-        <Button label="Add product" onPress={submit} loading={busy} style={{ flex: 1 }} />
+        <Button label="Add product" onPress={submit} loading={busy} style={s.flex1} />
         <Button label="Cancel" variant="ghost" onPress={onCancel} disabled={busy} />
       </View>
     </Card>
@@ -491,7 +493,7 @@ export default function Commerce() {
                     onToggleActive={() => handleToggleActive(product)}
                   />
                 ))}
-                {row.items.length < COLS && <View style={{ flex: 1 }} />}
+                {row.items.length < COLS && <View style={s.spacer} />}
               </View>
             )
           )}

@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable } from 'react-native';
 import type { PreferredContact } from '@blnk/shared';
 import { useProfile } from '@/lib/profile-context';
 import { getAccessToken } from '@/lib/session';
 import { updateMyProfile, updateOrg } from '@/lib/api';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Button, TextField, Notice } from '@/ui/components';
+import { Screen, Text, Card, Button, TextField, Notice, ColorPicker } from '@/ui/components';
 
 type ThemeT = ReturnType<typeof useTheme>;
 const CONTACT_OPTS: { key: PreferredContact; label: string }[] = [
@@ -13,16 +13,11 @@ const CONTACT_OPTS: { key: PreferredContact; label: string }[] = [
   { key: 'sms', label: 'SMS' }, { key: 'in_app', label: 'In-app' },
 ];
 
-const SWATCHES = ['#2a7f62', '#e8613a', '#1d4ed8', '#7c3aed', '#db2777', '#0e0e0e'];
+const s = { headerGroup: { gap: 4 }, fieldGroup: { gap: 6 } };
 
 const makeChipsStyles = (t: ThemeT) => ({
   container: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
   chip: (sel: boolean) => ({ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }),
-});
-
-const makeSwatchesStyles = (t: ThemeT) => ({
-  container: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.md },
-  swatch: (selected: boolean) => ({ width: 40, height: 40, borderRadius: t.radius.md, backgroundColor: 'transparent', borderWidth: 3, borderColor: selected ? t.color.ink : 'transparent' }),
 });
 
 // Chip selector
@@ -44,18 +39,6 @@ function Chips({ options, value, onChange }: { options: { key: string; label: st
   );
 }
 
-function Swatches({ value, onChange }: { value: string | null; onChange: (v: string) => void }) {
-  const t = useTheme();
-  const s = makeSwatchesStyles(t);
-  return (
-    <View style={s.container}>
-      {SWATCHES.map((c) => (
-        <Pressable key={c} onPress={() => onChange(c)} accessibilityRole="button" accessibilityLabel={`Brand colour ${c}`}
-          style={[s.swatch(value === c), { backgroundColor: c }]} />
-      ))}
-    </View>
-  );
-}
 
 export function Onboarding({ onDone }: { onDone: () => Promise<void> | void }) {
   const { data } = useProfile();
@@ -125,7 +108,7 @@ export function Onboarding({ onDone }: { onDone: () => Promise<void> | void }) {
 
   return (
     <Screen>
-      <View style={{ gap: 4 }}>
+      <View style={s.headerGroup}>
         <Text variant="small" muted>Step {stepNo} of {total}</Text>
         <Text variant="title">{step === 'personal' ? 'Welcome — tell us about you' : step === 'org' ? 'Set up your organisation' : 'Where should replies go?'}</Text>
       </View>
@@ -135,7 +118,7 @@ export function Onboarding({ onDone }: { onDone: () => Promise<void> | void }) {
           <TextField label="Your name" value={name} onChangeText={setName} placeholder="Full name" autoCapitalize="sentences" />
           <TextField label="Contact email" value={contactEmail} onChangeText={setContactEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" />
           <TextField label="Phone" value={phone} onChangeText={setPhone} placeholder="Optional" />
-          <View style={{ gap: 6 }}>
+          <View style={s.fieldGroup}>
             <Text variant="label" muted>Best way to reach you</Text>
             <Chips options={CONTACT_OPTS} value={preferred} onChange={setPreferred} />
           </View>
@@ -144,10 +127,10 @@ export function Onboarding({ onDone }: { onDone: () => Promise<void> | void }) {
       ) : step === 'org' ? (
         <Card>
           <TextField label="Organisation name" value={orgName} onChangeText={setOrgName} placeholder="e.g. ting test studios" autoCapitalize="sentences" />
-          <View style={{ gap: 6 }}>
+          <View style={s.fieldGroup}>
             <Text variant="label" muted>Brand colour (optional)</Text>
             <Text variant="small" muted>Sets the app's accent for everyone. You can change or set this later in Settings.</Text>
-            <Swatches value={brand} onChange={setBrand} />
+            <ColorPicker value={brand} onChange={(v) => setBrand(v)} nullable />
           </View>
           <Button label={idx + 1 < total ? 'Continue' : 'Finish'} onPress={submitOrg} loading={busy} />
           {!!brand && <Button label="Skip colour for now" variant="ghost" onPress={() => setBrand(null)} />}

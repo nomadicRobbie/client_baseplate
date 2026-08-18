@@ -300,6 +300,7 @@ export interface ClientOrg {
   logo_url: string | null
   brand_color: string | null
   accent_color: string | null
+  custom_colors: Record<string, string>
   support_email: string | null
   timezone: string | null
   locale: string | null
@@ -378,14 +379,19 @@ export interface Person {
 }
 
 // ── Vessel / asset management (requires FEATURE_VESSEL) ─────────────────────
-export interface VesselAssetType { id: string; name: string; image_url: string | null }
+export interface VesselFieldDef {
+  key: string; label: string; type: 'text' | 'number' | 'date' | 'select'
+  required?: boolean; placeholder?: string; unit?: string; options?: string[]
+}
+export interface VesselAssetType { id: string; name: string; image_url: string | null; roles: string[]; fields: VesselFieldDef[] }
 
 export interface VesselAsset {
-  id: string; asset_type_id: string; parent_asset_id: string | null; name: string
+  id: string; asset_type_id: string | null; parent_asset_id: string | null; name: string
   mnz_number: string | null; mmsi: string | null; call_sign: string | null
   fuel_capacity: string | null; refuel_threshold: string | null
   location: string | null; condition: string | null; supplier: string | null
   date_purchased: string | null; image_url: string | null; notes: string | null; status: string
+  particulars: Record<string, string | null>
 }
 
 export interface VesselFaultStep { id: string; note: string; kind: 'step' | 'close'; created_by: string | null; created_at: string }
@@ -397,9 +403,17 @@ export interface VesselFault {
   steps: VesselFaultStep[]
 }
 
+export type FormFieldType = 'boolean' | 'checkbox' | 'text' | 'number' | 'date' | 'photo';
+export interface FormField {
+  id: string; type: FormFieldType; label: string; required: boolean;
+}
+export interface FormSchema { fields: FormField[] }
+export type FormResponseData = Record<string, string | number | boolean | null>;
+
 export interface VesselMaintenanceLog {
   id: string; schedule_id: string | null; fault_id: string | null; asset_id: string
   task_name: string | null; completed_date: string | null; resolves_fault: boolean; status: string
+  form_data: FormResponseData | null; attachments: string[]
 }
 
 export type VesselScheduleAlert = { value: number; unit: 'hours' | 'days' | 'weeks' };
@@ -407,6 +421,18 @@ export interface VesselMaintenanceSchedule {
   id: string; asset_id: string; component_id: string | null; task_name: string
   interval_type: string | null; interval_value: string | null; initial_due_date: string | null
   alert_days: number | null; alert_hours: string | null; alerts: VesselScheduleAlert[]; active: boolean
+  task_notes: string | null; document_urls: string[]; form_schema: FormSchema | null
+}
+
+export interface VesselComponent {
+  id: string; asset_id: string; parent_component_id: string | null; name: string
+  category: string | null; quantity: string | null; serial_number: string | null
+  model: string | null; manufacturer: string | null; install_date: string | null
+  critical_component: boolean; notes: string | null; status: string
+}
+
+export interface VesselAssetAssignment {
+  id: string; person_id: string; asset_id: string; role: string | null; created_at: string
 }
 
 // A row in the "Coming up" feed — an upcoming/overdue service derived from a
@@ -414,10 +440,65 @@ export interface VesselMaintenanceSchedule {
 export interface VesselUpcomingItem {
   kind: 'maintenance'
   id: string            // schedule id
+  asset_id: string
   title: string         // task name
   subtitle: string | null
   due_date: string | null   // ISO date of next due
   level: 'ok' | 'due' | 'over'
+}
+
+// ── News Feed ────────────────────────────────────────────────────────────────
+export interface FeedPostComment {
+  id: string
+  post_id: string
+  created_by: string
+  author_name: string
+  body: string
+  created_at: string
+}
+
+export interface FeedPost {
+  id: string
+  created_by: string      // blnk user_id
+  author_name: string
+  body: string
+  modules: string[]       // [] = all staff; otherwise module keys the post is scoped to
+  image_urls: string[]    // reserved for future photo support
+  comment_count: number
+  latest_comment: { author_name: string; body: string; created_at: string } | null
+  created_at: string
+}
+
+export interface FeedFaultData {
+  id: string; asset_id: string; asset_name: string
+  fault_name: string; urgency: string | null; status: string
+  step_count: number
+  latest_step: { note: string; created_at: string } | null
+}
+
+export interface FeedMaintenanceData {
+  id: string; asset_id: string; asset_name: string
+  task_name: string; due_date: string | null; level: 'ok' | 'due' | 'over'
+}
+
+export interface FeedComplianceData {
+  schedule_id: string
+  label: string
+  record_type: string
+  jurisdiction: string
+  done_count: number
+  remaining: number
+  times_per_day: number
+  due_date: string   // YYYY-MM-DD
+}
+
+export type FeedItemKind = 'fault' | 'maintenance' | 'post' | 'compliance'
+
+export interface FeedItem {
+  kind: FeedItemKind
+  module: string | null   // source module ('vessel', etc.); null for org-wide posts
+  created_at: string
+  data: FeedFaultData | FeedMaintenanceData | FeedPost | FeedComplianceData
 }
 
 // ── Helpers (pure — safe everywhere) ────────────────────────────────────────

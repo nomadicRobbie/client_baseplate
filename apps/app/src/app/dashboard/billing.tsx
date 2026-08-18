@@ -13,6 +13,10 @@ import { Redirect } from 'expo-router';
 // to a price_id from their Stripe catalogue.
 const PRICE_ID = process.env.EXPO_PUBLIC_SUBSCRIPTION_PRICE_ID ?? '';
 
+const s = {
+  badgeRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+};
+
 function origin(): string {
   return Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : 'https://example.com';
 }
@@ -90,7 +94,7 @@ export default function Billing() {
         <Text variant="heading">Subscription</Text>
         {loading ? <Text muted>Loading…</Text> : active ? (
           <>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={s.badgeRow}>
               <Badge label={active.status} tone="success" />
               {active.cancel_at_period_end && <Badge label="cancels at period end" />}
             </View>

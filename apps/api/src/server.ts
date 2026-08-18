@@ -16,6 +16,7 @@ import analyticsPlugin from './modules/analytics'
 import locationsPlugin from './modules/locations/plugin'
 import compliancePlugin from './modules/compliance'
 import vesselPlugin from './modules/vessel'
+import feedPlugin from './modules/feed'
 
 const server = Fastify({
   logger: {
@@ -56,19 +57,21 @@ export async function build(): Promise<typeof server> {
     credentials: true,
   })
 
-  // In-memory rate limiting (no Redis dependency in the baseplate v1).
-  await server.register(rateLimit, {
-    max: 100,
-    timeWindow: 15 * 60 * 1000,
-    errorResponseBuilder: (_req, ctx) => ({
-      error: {
-        code: 'RATE_LIMIT_EXCEEDED',
-        message: `Too many requests — retry after ${ctx.after}`,
-        status: 429,
-        request_id: _req.id,
-      },
-    }),
-  })
+  // In-memory rate limiting — skipped in dev so rapid hot-reloads don't trip it.
+  if (config.env === 'production') {
+    await server.register(rateLimit, {
+      max: 100,
+      timeWindow: 15 * 60 * 1000,
+      errorResponseBuilder: (_req, ctx) => ({
+        error: {
+          code: 'RATE_LIMIT_EXCEEDED',
+          message: `Too many requests — retry after ${ctx.after}`,
+          status: 429,
+          request_id: _req.id,
+        },
+      }),
+    })
+  }
 
   await server.register(authDecorators)
 
@@ -100,6 +103,8 @@ export async function build(): Promise<typeof server> {
   if (config.features.compliance) await server.register(compliancePlugin)
   // Vessel / asset management (fleet, faults, maintenance) — TVM module.
   if (config.features.vessel) await server.register(vesselPlugin)
+  // Feed — always on; item visibility is gated server-side by module membership.
+  await server.register(feedPlugin)
 
   // ── Protected gate — must be provisioned for this app (admin or on the roster) ─
   server.get('/me', { preHandler: [verifyBlnkAuth, requireAppAccess] }, async (req) => ({

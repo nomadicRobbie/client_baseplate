@@ -5,14 +5,19 @@ import { query } from '../pool'
 // partial updates, no generic column injection.
 
 // ── Types (mirror the vessel_* tables) ──────────────────────────────────────
-export interface AssetType { id: string; name: string; image_url: string | null; created_at: string; updated_at: string }
+export interface FieldDef {
+  key: string; label: string; type: 'text' | 'number' | 'date' | 'select'
+  required?: boolean; placeholder?: string; unit?: string; options?: string[]
+}
+export interface AssetType { id: string; name: string; image_url: string | null; roles: string[]; fields: FieldDef[]; created_at: string; updated_at: string }
 
 export interface Asset {
-  id: string; asset_type_id: string; parent_asset_id: string | null; name: string
+  id: string; asset_type_id: string | null; parent_asset_id: string | null; name: string
   mnz_number: string | null; mmsi: string | null; call_sign: string | null
   fuel_capacity: string | null; refuel_threshold: string | null
   location: string | null; condition: string | null; supplier: string | null
   date_purchased: string | null; image_url: string | null; notes: string | null; status: string
+  particulars: Record<string, string | null>
   created_by: string | null; created_at: string; updated_by: string | null; updated_at: string
 }
 
@@ -71,21 +76,27 @@ const one = async <T>(sql: string, params: unknown[]): Promise<T | null> => (awa
 
 // ── Asset types ─────────────────────────────────────────────────────────────
 export const listAssetTypes = () => query<AssetType>(`SELECT * FROM vessel_asset_types ORDER BY name`)
-export const createAssetType = (d: { name: string; image_url?: string | null }) =>
-  one<AssetType>(`INSERT INTO vessel_asset_types (name, image_url) VALUES ($1,$2) RETURNING *`, [d.name, d.image_url ?? null])
-export const updateAssetType = (id: string, body: object) => patch<AssetType>('vessel_asset_types', id, ['name', 'image_url'], body as never)
+export const createAssetType = (d: { name: string; image_url?: string | null; roles?: string[]; fields?: FieldDef[] }) =>
+  one<AssetType>(`INSERT INTO vessel_asset_types (name, image_url, roles, fields) VALUES ($1,$2,$3,$4) RETURNING *`, [d.name, d.image_url ?? null, d.roles ?? [], JSON.stringify(d.fields ?? [])])
+export const updateAssetType = (id: string, body: object) => patch<AssetType>('vessel_asset_types', id, ['name', 'image_url', 'roles', 'fields'], body as never)
+export const assetTypeInUse = async (id: string): Promise<boolean> =>
+  (await query<{ n: string }>(`SELECT COUNT(*) n FROM vessel_assets WHERE asset_type_id = $1 AND status <> 'deleted'`, [id]))[0]?.n !== '0'
+export const deleteAssetType = (id: string) =>
+  query(`DELETE FROM vessel_asset_types WHERE id = $1`, [id])
 
 // ── Assets ──────────────────────────────────────────────────────────────────
 export const listAssets = () => query<Asset>(`SELECT * FROM vessel_assets WHERE status <> 'deleted' ORDER BY name`)
 export const getAsset = (id: string) => one<Asset>(`SELECT * FROM vessel_assets WHERE id = $1`, [id])
-const ASSET_COLS = ['asset_type_id', 'parent_asset_id', 'name', 'mnz_number', 'mmsi', 'call_sign', 'fuel_capacity', 'refuel_threshold', 'location', 'condition', 'supplier', 'date_purchased', 'image_url', 'notes', 'status'] as const
+const ASSET_COLS = ['asset_type_id', 'parent_asset_id', 'name', 'mnz_number', 'mmsi', 'call_sign', 'fuel_capacity', 'refuel_threshold', 'location', 'condition', 'supplier', 'date_purchased', 'image_url', 'notes', 'status', 'particulars'] as const
 export const createAsset = (d: Record<string, unknown>, createdBy: string | null) =>
   one<Asset>(
-    `INSERT INTO vessel_assets (asset_type_id, name, parent_asset_id, mnz_number, mmsi, call_sign, fuel_capacity, refuel_threshold, location, condition, supplier, date_purchased, image_url, notes, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
-    [d.asset_type_id, d.name, d.parent_asset_id ?? null, d.mnz_number ?? null, d.mmsi ?? null, d.call_sign ?? null, d.fuel_capacity ?? null, d.refuel_threshold ?? null, d.location ?? null, d.condition ?? null, d.supplier ?? null, d.date_purchased ?? null, d.image_url ?? null, d.notes ?? null, createdBy],
+    `INSERT INTO vessel_assets (asset_type_id, name, parent_asset_id, mnz_number, mmsi, call_sign, fuel_capacity, refuel_threshold, location, condition, supplier, date_purchased, image_url, notes, particulars, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+    [d.asset_type_id, d.name, d.parent_asset_id ?? null, d.mnz_number ?? null, d.mmsi ?? null, d.call_sign ?? null, d.fuel_capacity ?? null, d.refuel_threshold ?? null, d.location ?? null, d.condition ?? null, d.supplier ?? null, d.date_purchased ?? null, d.image_url ?? null, d.notes ?? null, JSON.stringify(d.particulars ?? {}), createdBy],
   )
 export const updateAsset = (id: string, body: object, updatedBy: string | null) => patch<Asset>('vessel_assets', id, ASSET_COLS, body as never, updatedBy)
+export const softDeleteAsset = (id: string, updatedBy: string | null) =>
+  query(`UPDATE vessel_assets SET status = 'deleted', updated_by = $2, updated_at = now() WHERE id = $1`, [id, updatedBy])
 
 // ── Components ──────────────────────────────────────────────────────────────
 export const listComponents = (assetId?: string) =>
@@ -183,11 +194,11 @@ export const schedulesWithLastCompleted = (assetId?: string) =>
 
 export const createSchedule = (d: Record<string, unknown>, createdBy: string | null) =>
   one<MaintenanceSchedule>(
-    `INSERT INTO vessel_maintenance_schedules (asset_id, component_id, task_name, interval_type, interval_value, initial_due_date, alert_days, alert_hours, alerts, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-    [d.asset_id, d.component_id ?? null, d.task_name, d.interval_type ?? null, d.interval_value ?? null, d.initial_due_date ?? null, d.alert_days ?? null, d.alert_hours ?? null, JSON.stringify(d.alerts ?? []), createdBy],
+    `INSERT INTO vessel_maintenance_schedules (asset_id, component_id, task_name, interval_type, interval_value, initial_due_date, alert_days, alert_hours, alerts, task_notes, document_urls, form_schema, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+    [d.asset_id, d.component_id ?? null, d.task_name, d.interval_type ?? null, d.interval_value ?? null, d.initial_due_date ?? null, d.alert_days ?? null, d.alert_hours ?? null, JSON.stringify(d.alerts ?? []), d.task_notes ?? null, JSON.stringify(d.document_urls ?? []), d.form_schema ? JSON.stringify(d.form_schema) : null, createdBy],
   )
-const SCHED_COLS = ['component_id', 'task_name', 'interval_type', 'interval_value', 'initial_due_date', 'alert_days', 'alert_hours', 'active'] as const
+const SCHED_COLS = ['component_id', 'task_name', 'interval_type', 'interval_value', 'initial_due_date', 'alert_days', 'alert_hours', 'active', 'task_notes', 'document_urls', 'form_schema'] as const
 export const updateSchedule = (id: string, body: object, updatedBy: string | null) => patch<MaintenanceSchedule>('vessel_maintenance_schedules', id, SCHED_COLS, body as never, updatedBy)
 
 // ── Maintenance logs (append-only evidence) ─────────────────────────────────
@@ -203,9 +214,9 @@ export const listLogs = (f: { asset_id?: string; fault_id?: string }) =>
 // is itself idempotent).
 export const createLog = (d: Record<string, unknown>, createdBy: string | null) =>
   one<MaintenanceLog>(
-    `INSERT INTO vessel_maintenance_logs (schedule_id, fault_id, asset_id, component_id, task_name, maintenance_type, completed_date, usage_at_service, supplier, image_urls, resolves_fault, resolution_notes, notes, completed_by, created_by, idempotency_key)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10::text[],'{}'),COALESCE($11,false),$12,$13,$14,$15,$16)
+    `INSERT INTO vessel_maintenance_logs (schedule_id, fault_id, asset_id, component_id, task_name, maintenance_type, completed_date, usage_at_service, supplier, image_urls, resolves_fault, resolution_notes, notes, form_data, attachments, completed_by, created_by, idempotency_key)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10::text[],'{}'),COALESCE($11,false),$12,$13,$14,COALESCE($15::jsonb,'[]'),$16,$17,$18)
      ON CONFLICT (idempotency_key) DO UPDATE SET updated_at = vessel_maintenance_logs.updated_at
      RETURNING *`,
-    [d.schedule_id ?? null, d.fault_id ?? null, d.asset_id, d.component_id ?? null, d.task_name ?? null, d.maintenance_type ?? null, d.completed_date ?? null, d.usage_at_service ?? null, d.supplier ?? null, d.image_urls ?? null, d.resolves_fault ?? null, d.resolution_notes ?? null, d.notes ?? null, d.completed_by ?? null, createdBy, d.idempotency_key ?? null],
+    [d.schedule_id ?? null, d.fault_id ?? null, d.asset_id, d.component_id ?? null, d.task_name ?? null, d.maintenance_type ?? null, d.completed_date ?? null, d.usage_at_service ?? null, d.supplier ?? null, d.image_urls ?? null, d.resolves_fault ?? null, d.resolution_notes ?? null, d.notes ?? null, d.form_data ? JSON.stringify(d.form_data) : null, d.attachments ? JSON.stringify(d.attachments) : null, d.completed_by ?? null, createdBy, d.idempotency_key ?? null],
   )

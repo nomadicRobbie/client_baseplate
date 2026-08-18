@@ -93,6 +93,7 @@ const profilePlugin: FastifyPluginAsync = async (fastify) => {
           logo_url: { type: 'string', maxLength: 500 },
           brand_color: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' },
           accent_color: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' },
+          custom_colors: { type: 'object', additionalProperties: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' } },
           support_email: { type: 'string', format: 'email' },
           timezone: { type: 'string', maxLength: 64 },
           locale: { type: 'string', maxLength: 16 },

@@ -18,6 +18,9 @@ import { StatusBadge, urgencyLevel, OfflineBanner, PendingSyncBanner } from '@/u
 type ThemeT = ReturnType<typeof useTheme>;
 const makeStyles = (t: ThemeT) => ({
   backBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
+  sectionHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
+  flex1: { flex: 1 },
+  resolveIndent: { paddingLeft: t.space.sm },
   urgencyGroup: { gap: 6 },
   urgencyRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
   urgencyBtn: (sel: boolean) => ({ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }),
@@ -26,8 +29,8 @@ const makeStyles = (t: ThemeT) => ({
   faultItem: { paddingVertical: t.space.sm, borderTopWidth: 1, borderTopColor: t.color.border, gap: t.space.sm },
   faultHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
   faultInfo: { flex: 1, gap: 2 },
+  faultFooter: { alignItems: 'flex-end' as const },
   stepsList: { gap: 2, paddingLeft: t.space.sm },
-  closingBadge: { flexDirection: 'row' as const },
   actions: { gap: t.space.sm },
   actionRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
   closedItem: { paddingVertical: t.space.sm, borderTopWidth: 1, borderTopColor: t.color.border, gap: 2 },
@@ -166,7 +169,10 @@ export default function VesselFaults() {
 
       {/* Open faults */}
       <Card>
-        <Text variant="heading">Open faults {open.length ? `(${open.length})` : ''}</Text>
+        <View style={s.sectionHeader}>
+          <Text variant="heading">Open faults</Text>
+          {open.length > 0 && <Text variant="small" muted>{open.length}</Text>}
+        </View>
         {pendingLogged.map((p) => (
           <View key={p.key} style={s.pendingItem}>
             <View style={s.pendingInfo}>
@@ -191,7 +197,6 @@ export default function VesselFaults() {
                 {!!f.urgency && <StatusBadge level={urgencyLevel(f.urgency)} label={f.urgency} />}
               </View>
 
-              {/* Resolution timeline */}
               {(f.steps?.length > 0 || pSteps.length > 0) && (
                 <View style={s.stepsList}>
                   {f.steps.map((st) => (
@@ -201,9 +206,7 @@ export default function VesselFaults() {
                 </View>
               )}
 
-              {closing ? (
-                <View style={s.closingBadge}><Badge label="closing — pending sync" tone="accent" /></View>
-              ) : expanded ? (
+              {expanded ? (
                 <View style={s.actions}>
                   <TextField label="Note (what was done, or the next step)" value={note} onChangeText={setNote} placeholder="e.g. Ordered replacement connector" autoCapitalize="sentences" />
                   <View style={s.actionRow}>
@@ -214,9 +217,11 @@ export default function VesselFaults() {
                   </View>
                 </View>
               ) : (
-                <Pressable onPress={() => { setActiveId(f.id); setNote(''); }} accessibilityRole="button">
-                  <Text variant="small" color={t.color.primary}>Resolve</Text>
-                </Pressable>
+                <View style={s.faultFooter}>
+                  {closing
+                    ? <Badge label="closing — pending sync" tone="accent" />
+                    : <Button label="Update" variant="secondary" onPress={() => { setActiveId(f.id); setNote(''); }} />}
+                </View>
               )}
             </View>
           );
@@ -226,14 +231,17 @@ export default function VesselFaults() {
       {/* Closed history */}
       {closed.length > 0 && (
         <Card>
-          <Text variant="heading">Closed ({closed.length})</Text>
+          <View style={s.sectionHeader}>
+            <Text variant="heading">Closed</Text>
+            <Text variant="small" muted>{closed.length}</Text>
+          </View>
           {closed.map((f) => (
             <View key={f.id} style={s.closedItem}>
               <View style={s.faultHeader}>
-                <Text style={{ flex: 1 }} muted>{f.name}</Text>
+                <Text style={s.flex1} muted>{f.name}</Text>
                 <StatusBadge level="closed" label="closed" />
               </View>
-              {!!f.resolution_notes && <Text variant="small" muted style={{ paddingLeft: t.space.sm }}>{f.resolution_notes}</Text>}
+              {!!f.resolution_notes && <Text variant="small" muted style={s.resolveIndent}>{f.resolution_notes}</Text>}
             </View>
           ))}
         </Card>

@@ -1,30 +1,24 @@
 import { useState } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useProfile } from '@/lib/profile-context';
 import { getAccessToken } from '@/lib/session';
 import { updateOrg } from '@/lib/api';
-import { useTheme } from '@/theme';
-import { Screen, Text, Card, Button, TextField, Notice } from '@/ui/components';
+import { Screen, Text, Card, Button, TextField, Notice, ColorPicker } from '@/ui/components';
 
-type ThemeT = ReturnType<typeof useTheme>;
-const SWATCHES = ['#2a7f62', '#e8613a', '#1d4ed8', '#7c3aed', '#db2777', '#0e0e0e'];
+const s = { colorRow: { gap: 4 } };
 
-const makeStyles = (t: ThemeT) => ({
-  swatchRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.md, marginTop: t.space.xs },
-  swatch: (selected: boolean) => ({ width: 40, height: 40, borderRadius: t.radius.md, backgroundColor: 'transparent', borderWidth: 3, borderColor: selected ? t.color.ink : 'transparent' }),
-});
-
-// Org + brand settings. Admin-only; brand colour applies to everyone.
+// Org + brand settings. Admin-only; brand colours apply to everyone.
 export default function Settings() {
-  const t = useTheme();
-  const s = makeStyles(t);
   const { data, refresh } = useProfile();
   const isAdmin = data?.me.role === 'admin' || data?.me.role === 'super';
 
   const [orgName, setOrgName] = useState(data?.org?.org_name ?? '');
   const [supportEmail, setSupportEmail] = useState(data?.org?.support_email ?? '');
   const [brand, setBrand] = useState<string | null>(data?.org?.brand_color ?? null);
+  const [accent, setAccent] = useState<string | null>(data?.org?.accent_color ?? null);
+  const [bgColor, setBgColor] = useState<string | null>(data?.org?.custom_colors?.bg ?? null);
+  const [surfaceColor, setSurfaceColor] = useState<string | null>(data?.org?.custom_colors?.surface ?? null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
 
@@ -34,13 +28,18 @@ export default function Settings() {
     if (!orgName.trim()) { setMsg({ text: 'Organisation name is required.', tone: 'error' }); return; }
     setBusy(true); setMsg(null);
     try {
+      const custom_colors: Record<string, string> = {};
+      if (bgColor) custom_colors.bg = bgColor;
+      if (surfaceColor) custom_colors.surface = surfaceColor;
       await updateOrg(getAccessToken()!, {
         org_name: orgName.trim(),
         support_email: supportEmail || undefined,
         brand_color: brand ?? undefined,
+        accent_color: accent ?? undefined,
+        custom_colors,
       });
       await refresh();
-      setMsg({ text: 'Saved — brand applies to everyone.', tone: 'success' });
+      setMsg({ text: 'Saved — colours apply to all users.', tone: 'success' });
     } catch (e) { setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' }); } finally { setBusy(false); }
   };
 
@@ -55,15 +54,34 @@ export default function Settings() {
       </Card>
 
       <Card>
-        <Text variant="heading">Brand</Text>
-        <Text variant="small" muted>Sets the app's accent colour for all users.</Text>
-        <View style={s.swatchRow}>
-          {SWATCHES.map((c) => (
-            <Pressable key={c} onPress={() => setBrand(c)} accessibilityRole="button" accessibilityLabel={`Brand colour ${c}`}
-              style={[s.swatch(brand === c), { backgroundColor: c }]} />
-          ))}
+        <Text variant="heading">Brand colours</Text>
+        <Text variant="small" muted>Colour changes apply to everyone. Pick a swatch or enter a hex code.</Text>
+
+        <View style={s.colorRow}>
+          <Text variant="label" muted>Brand (primary)</Text>
+          <ColorPicker value={brand} onChange={setBrand} nullable />
         </View>
-        {!!brand && <Button label="Clear brand colour" variant="ghost" onPress={() => setBrand(null)} />}
+
+        <View style={s.colorRow}>
+          <Text variant="label" muted>Accent</Text>
+          <ColorPicker value={accent} onChange={setAccent} nullable />
+        </View>
+
+        <View style={s.colorRow}>
+          <Text variant="label" muted>Background</Text>
+          <ColorPicker value={bgColor} onChange={setBgColor} nullable />
+        </View>
+
+        <View style={s.colorRow}>
+          <Text variant="label" muted>Surface (cards)</Text>
+          <ColorPicker value={surfaceColor} onChange={setSurfaceColor} nullable />
+        </View>
+
+        <Button
+          label="Reset to defaults"
+          variant="ghost"
+          onPress={() => { setBrand(null); setAccent(null); setBgColor(null); setSurfaceColor(null); }}
+        />
       </Card>
 
       <Button label="Save changes" onPress={save} loading={busy} />

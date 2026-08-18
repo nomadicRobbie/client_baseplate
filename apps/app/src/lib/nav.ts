@@ -14,7 +14,7 @@ export type FeatureKey = keyof FeatureFlags;
 export type NavGroup = 'home' | 'module' | 'account' | 'admin';
 
 export type NavHref =
-  | '/dashboard' | '/dashboard/account' | '/dashboard/billing' | '/dashboard/people'
+  | '/dashboard' | '/dashboard/feed' | '/dashboard/account' | '/dashboard/billing' | '/dashboard/people'
   | '/dashboard/settings' | '/dashboard/analytics' | '/dashboard/locations' | '/dashboard/compliance'
   | '/dashboard/commerce' | '/dashboard/vessel';
 
@@ -29,14 +29,15 @@ export type NavItem = {
 
 export const NAV: NavItem[] = [
   { label: 'Library', href: '/dashboard', icon: 'library-outline', group: 'home' },
+  { label: 'News Feed', href: '/dashboard/feed', icon: 'newspaper-outline', group: 'home' },
   { label: 'Store', href: '/dashboard/commerce', icon: 'storefront-outline', group: 'module', adminOnly: true, feature: 'commerce' },
   { label: 'Analytics', href: '/dashboard/analytics', icon: 'bar-chart-outline', group: 'module', adminOnly: true, feature: 'analytics' },
   { label: 'Locations', href: '/dashboard/locations', icon: 'location-outline', group: 'module', adminOnly: true, feature: 'locations' },
   { label: 'Food compliance', href: '/dashboard/compliance', icon: 'clipboard-outline', group: 'module', feature: 'compliance' },
   { label: 'Asset Manager', href: '/dashboard/vessel', icon: 'cube-outline', group: 'module', feature: 'vessel' },
-  { label: 'Billing', href: '/dashboard/billing', icon: 'card-outline', group: 'account', adminOnly: true, feature: 'stripe' },
+  { label: 'Billing', href: '/dashboard/billing', icon: 'card-outline', group: 'admin', adminOnly: true, feature: 'stripe' },
   { label: 'Account', href: '/dashboard/account', icon: 'person-outline', group: 'account' },
-  { label: 'People', href: '/dashboard/people', icon: 'people-outline', group: 'admin', adminOnly: true },
+  { label: 'People', href: '/dashboard/people', icon: 'people-outline', group: 'account', adminOnly: true },
   { label: 'Settings', href: '/dashboard/settings', icon: 'settings-outline', group: 'admin', adminOnly: true },
 ];
 

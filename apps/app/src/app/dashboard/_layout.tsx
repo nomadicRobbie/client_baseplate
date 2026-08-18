@@ -172,9 +172,11 @@ function Themed() {
 
   if (loading) return <Spinner />;
 
-  const colorOverride: Record<string, string> = {};
-  if (data?.org?.brand_color) colorOverride.primary = data.org.brand_color;
-  if (data?.org?.accent_color) colorOverride.accent = data.org.accent_color;
+  const colorOverride: Record<string, string> = {
+    ...data?.org?.custom_colors,
+    ...(data?.org?.brand_color ? { primary: data.org.brand_color } : {}),
+    ...(data?.org?.accent_color ? { accent: data.org.accent_color } : {}),
+  };
   const theme = Object.keys(colorOverride).length ? { color: colorOverride } : undefined;
 
   const needsOnboarding = data?.onboarding.needs_org_setup || data?.onboarding.needs_personal;

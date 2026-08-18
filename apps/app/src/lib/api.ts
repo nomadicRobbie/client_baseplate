@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, Product, VesselAsset, VesselAssetType, VesselFault, VesselFaultStep, VesselMaintenanceLog, VesselMaintenanceSchedule, VesselUpcomingItem, VesselScheduleAlert } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, Product, VesselAsset, VesselAssetType, VesselFieldDef, VesselFault, VesselFaultStep, VesselMaintenanceLog, VesselMaintenanceSchedule, VesselUpcomingItem, VesselScheduleAlert, VesselComponent, VesselAssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData } from '@blnk/shared';
 import { getAccessToken, getRefreshToken, setTokens, clearSession } from './session';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
@@ -109,6 +109,7 @@ export const updateMyProfile = (token: string, data: {
 
 export const updateOrg = (token: string, data: {
   org_name?: string; logo_url?: string; brand_color?: string; accent_color?: string;
+  custom_colors?: Record<string, string>;
   support_email?: string; timezone?: string; locale?: string; currency?: string;
   // Forwarded by client_api to blnk_api (inbound forwarding recipients).
   notification_email?: string; backup_email?: string | null;
@@ -152,13 +153,19 @@ export const removePersonModule = (token: string, id: string, module: string) =>
 // ── Vessel / asset management (requires FEATURE_VESSEL) ──────────────────────
 export const listVesselAssetTypes = (token: string) =>
   req<{ asset_types: VesselAssetType[] }>('/vessel/asset-types', { method: 'GET', token });
-export const createVesselAssetType = (token: string, body: { name: string }) =>
+export const createVesselAssetType = (token: string, body: { name: string; roles?: string[]; fields?: VesselFieldDef[] }) =>
   req<{ asset_type: VesselAssetType }>('/vessel/asset-types', { method: 'POST', body, token });
+export const deleteVesselAssetType = (token: string, id: string) =>
+  req<void>(`/vessel/asset-types/${id}`, { method: 'DELETE', token });
 
 export const listVesselAssets = (token: string) =>
   req<{ assets: VesselAsset[] }>('/vessel/assets', { method: 'GET', token });
-export const createVesselAsset = (token: string, body: { asset_type_id: string; name: string; mnz_number?: string; location?: string; condition?: string; notes?: string }) =>
+export const createVesselAsset = (token: string, body: { asset_type_id: string; name: string; location?: string; condition?: string; notes?: string; particulars?: Record<string, string> }) =>
   req<{ asset: VesselAsset }>('/vessel/assets', { method: 'POST', body, token });
+export const updateVesselAsset = (token: string, id: string, patch: { name?: string; particulars?: Record<string, string>; location?: string; condition?: string; notes?: string }) =>
+  req<{ asset: VesselAsset }>(`/vessel/assets/${id}`, { method: 'PATCH', body: patch, token });
+export const deleteVesselAsset = (token: string, id: string) =>
+  req<void>(`/vessel/assets/${id}`, { method: 'DELETE', token });
 
 export const listVesselFaults = (token: string, opts?: { asset_id?: string; status?: string }) => {
   const q = new URLSearchParams();
@@ -180,7 +187,7 @@ export const closeVesselFault = (token: string, id: string, body: { resolution_n
   req<{ fault: VesselFault }>(`/vessel/faults/${id}/close`, { method: 'POST', body, token });
 
 // Complete maintenance — resolving a fault closes it (server sets fault status).
-export const createVesselMaintenanceLog = (token: string, body: { asset_id: string; fault_id?: string; task_name?: string; notes?: string; resolves_fault?: boolean; completed_date?: string; idempotency_key?: string }) =>
+export const createVesselMaintenanceLog = (token: string, body: { asset_id: string; schedule_id?: string; fault_id?: string; task_name?: string; notes?: string; resolves_fault?: boolean; completed_date?: string; form_data?: FormResponseData; attachments?: string[]; idempotency_key?: string }) =>
   req<{ log: VesselMaintenanceLog; fault_closed: boolean }>('/vessel/maintenance-logs', { method: 'POST', body, token });
 
 // Coming-up feed — due/overdue services derived from maintenance schedules.
@@ -189,8 +196,35 @@ export const getVesselUpcoming = (token: string, assetId?: string) =>
 
 export const listVesselSchedules = (token: string, assetId?: string) =>
   req<{ schedules: VesselMaintenanceSchedule[] }>(`/vessel/maintenance-schedules${assetId ? `?asset_id=${assetId}` : ''}`, { method: 'GET', token });
-export const createVesselSchedule = (token: string, body: { asset_id: string; task_name: string; interval_type?: string; interval_value?: number; initial_due_date?: string; alert_days?: number; alerts?: VesselScheduleAlert[] }) =>
+export const createVesselSchedule = (token: string, body: { asset_id: string; task_name: string; interval_type?: string; interval_value?: number; initial_due_date?: string; alert_days?: number; alerts?: VesselScheduleAlert[]; task_notes?: string; document_urls?: string[]; form_schema?: FormSchema }) =>
   req<{ schedule: VesselMaintenanceSchedule }>('/vessel/maintenance-schedules', { method: 'POST', body, token });
+export const updateVesselSchedule = (token: string, id: string, body: { task_notes?: string | null; document_urls?: string[]; form_schema?: FormSchema | null; active?: boolean }) =>
+  req<{ schedule: VesselMaintenanceSchedule }>(`/vessel/maintenance-schedules/${id}`, { method: 'PATCH', body, token });
+
+export const uploadVesselDocument = async (token: string, file: File): Promise<{ url: string }> => {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${API}/vessel/documents/upload`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
+  return json as { url: string };
+};
+
+export const listVesselComponents = (token: string, assetId: string) =>
+  req<{ components: VesselComponent[] }>(`/vessel/components?asset_id=${assetId}`, { method: 'GET', token });
+export const createVesselComponent = (token: string, body: { asset_id: string; name: string; category?: string; critical_component?: boolean; notes?: string }) =>
+  req<{ component: VesselComponent }>('/vessel/components', { method: 'POST', body, token });
+
+export const listVesselAssignments = (token: string, assetId: string) =>
+  req<{ assignments: VesselAssetAssignment[] }>(`/vessel/assignments?asset_id=${assetId}`, { method: 'GET', token });
+export const upsertVesselAssignment = (token: string, body: { person_id: string; asset_id: string; role?: string | null }) =>
+  req<{ assignment: VesselAssetAssignment }>('/vessel/assignments', { method: 'PUT', body, token });
+export const deleteVesselAssignment = (token: string, id: string) =>
+  req<void>(`/vessel/assignments/${id}`, { method: 'DELETE', token });
 
 // ── Payments (client charges end users via Stripe Checkout) ──────────────────
 export const subscribeCheckout = (token: string, data: { price_id: string; success_url: string; cancel_url: string }) =>
@@ -316,3 +350,19 @@ export const uploadProductImage = async (token: string, file: File): Promise<{ u
   if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
   return json as { url: string };
 };
+
+// ── News Feed ─────────────────────────────────────────────────────────────────
+export const getFeed = (token: string) =>
+  req<{ items: FeedItem[]; my_modules: string[] }>('/feed', { method: 'GET', token });
+
+export const createFeedPost = (token: string, body: string, modules: string[]) =>
+  req<{ post: FeedPost }>('/feed/posts', { method: 'POST', body: { body, modules }, token });
+
+export const deleteFeedPost = (token: string, id: string) =>
+  req<void>(`/feed/posts/${id}`, { method: 'DELETE', token });
+
+export const listPostComments = (token: string, postId: string) =>
+  req<{ comments: FeedPostComment[] }>(`/feed/posts/${postId}/comments`, { method: 'GET', token });
+
+export const createPostComment = (token: string, postId: string, body: string) =>
+  req<{ comment: FeedPostComment }>(`/feed/posts/${postId}/comments`, { method: 'POST', body: { body }, token });

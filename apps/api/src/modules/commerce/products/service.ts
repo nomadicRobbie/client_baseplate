@@ -2,8 +2,8 @@ import { listProducts, getProduct, createProduct, updateProduct } from '../../..
 import type { Product } from '@blnk/shared'
 import { Errors } from '../../../utils/errors'
 
-export async function fetchProducts(): Promise<Product[]> {
-  return listProducts(true)
+export async function fetchProducts(activeOnly = true): Promise<Product[]> {
+  return listProducts(activeOnly)
 }
 
 export async function fetchProduct(id: string): Promise<Product> {

@@ -42,11 +42,16 @@ export default function Login() {
     setMsg({ text: 'Code sent — check the blnk_auth dev log', tone: 'success' });
   });
 
-  const verify = () => run(async () => {
-    const tokens = await otpVerify(email, code);
+  const verify = (c = code) => run(async () => {
+    const tokens = await otpVerify(email, c);
     setTokens(tokens.access_token, tokens.refresh_token);
     router.replace('/dashboard');
   });
+
+  const onCodeChange = (v: string) => {
+    setCode(v);
+    if (v.length === 6) verify(v);
+  };
 
   const loginPasskey = () => run(async () => {
     const options = await passkeyLoginBegin(email);
@@ -80,8 +85,8 @@ export default function Login() {
               <Button label="Send code" onPress={sendCode} loading={busy} />
             ) : (
               <>
-                <TextField label="Verification code" value={code} onChangeText={setCode} placeholder="6-digit code" keyboardType="number-pad" />
-                <Button label="Verify & sign in" onPress={verify} loading={busy} />
+                <TextField label="Verification code" value={code} onChangeText={onCodeChange} placeholder="6-digit code" keyboardType="number-pad" autoFocus />
+                <Button label="Verify & sign in" onPress={() => verify()} loading={busy} />
                 <Button label="Use a different email" variant="ghost" onPress={() => { setSent(false); setCode(''); setMsg(null); }} />
               </>
             )}

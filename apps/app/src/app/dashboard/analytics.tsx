@@ -12,6 +12,18 @@ type ThemeT = ReturnType<typeof useTheme>;
 
 const makeStyles = (t: ThemeT) => ({
   chartContainer: { gap: t.space.sm },
+  chartBarFill: (value: number, max: number) => ({
+    width: '100%' as const, maxWidth: 44,
+    height: `${Math.max(2, (value / max) * 100)}%` as const,
+    backgroundColor: value === 0 ? t.color.border : t.color.primary,
+    borderTopLeftRadius: 3, borderTopRightRadius: 3, minHeight: 3,
+  }),
+  rangePill: (sel: boolean) => ({
+    paddingVertical: t.space.xs, paddingHorizontal: t.space.md,
+    borderRadius: t.radius.pill, borderWidth: 1,
+    borderColor: sel ? t.color.primary : t.color.border,
+    backgroundColor: sel ? t.color.primary : 'transparent',
+  }),
   chartLabels: { flexDirection: 'row' as const, justifyContent: 'space-between' as const },
   chartBars: { flexDirection: 'row' as const, alignItems: 'flex-end' as const, height: 132 },
   chartBar: { flex: 1, alignItems: 'center' as const, justifyContent: 'flex-end' as const, height: '100%' as const, gap: 3 },
@@ -68,12 +80,7 @@ function BarChart({ data }: { data: { date: string; value: number }[] }) {
             {sparse && <Text variant="small" muted style={s.chartValue}>{d.value}</Text>}
             <View
               accessibilityLabel={`${d.date}: ${d.value}`}
-              style={{
-                width: '100%', maxWidth: 44,
-                height: `${Math.max(2, (d.value / max) * 100)}%`,
-                backgroundColor: d.value === 0 ? t.color.border : t.color.primary,
-                borderTopLeftRadius: 3, borderTopRightRadius: 3, minHeight: 3,
-              }}
+              style={s.chartBarFill(d.value, max)}
             />
           </View>
         ))}
@@ -147,12 +154,7 @@ export default function Analytics() {
                 onPress={() => setDays(r.days)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: sel }}
-                style={{
-                  paddingVertical: t.space.xs, paddingHorizontal: t.space.md,
-                  borderRadius: t.radius.pill, borderWidth: 1,
-                  borderColor: sel ? t.color.primary : t.color.border,
-                  backgroundColor: sel ? t.color.primary : 'transparent',
-                }}
+                style={s.rangePill(sel)}
               >
                 <Text variant="label" color={sel ? t.color.primaryText : t.color.text}>{r.label}</Text>
               </Pressable>

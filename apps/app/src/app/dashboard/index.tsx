@@ -1,4 +1,4 @@
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { usePins } from '@/lib/pins-context';
@@ -22,6 +22,8 @@ export default function Library() {
   const s = makeStyles(t);
   const router = useRouter();
   const { modules, isPinned, toggle } = usePins();
+  const { width } = useWindowDimensions();
+  const wide = width >= 900;
 
   return (
     <Screen>
@@ -41,7 +43,7 @@ export default function Library() {
                 <Row onPress={() => router.push(m.href)} style={s.moduleButton}>
                   <Ionicons name={m.icon} size={20} color={t.color.text} />
                   <Text variant="label" style={s.moduleLabel}>{m.label}</Text>
-                  {pinned && <Badge label="On bar" tone="success" />}
+                  {pinned && !wide && <Badge label="On bar" tone="success" />}
                 </Row>
                 <Pressable
                   onPress={() => toggle(m.href)}
@@ -59,10 +61,12 @@ export default function Library() {
         </Card>
       )}
 
-      <Card>
-        <Text variant="heading">Bottom bar</Text>
-        <Text muted>Star up to {MAX_PINS} modules to keep them one tap away on the bottom bar. Starring another replaces the oldest.</Text>
-      </Card>
+      {!wide && (
+        <Card>
+          <Text variant="heading">Bottom bar</Text>
+          <Text muted>Star up to {MAX_PINS} modules to keep them one tap away on the bottom bar. Starring another replaces the oldest.</Text>
+        </Card>
+      )}
     </Screen>
   );
 }

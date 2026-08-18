@@ -162,8 +162,13 @@ function makeStyles(t: ThemeT) {
     historyLogActions: { flexDirection: 'row', alignItems: 'center', gap: t.space.sm },
     pendingCAContainer: { flexDirection: 'row', alignItems: 'center', gap: t.space.sm },
     pendingCAAlert: { borderWidth: 1, borderColor: t.color.danger },
+    flex1: { flex: 1 },
+    flexGrow1: { flexGrow: 1 },
+    marginTopMd: { marginTop: t.space.md },
+    marginTopSm: { marginTop: t.space.sm },
   }) };
 }
+function chipSize(size: number) { return { width: size, height: size }; }
 function useStyles() { return makeStyles(useTheme()); }
 
 // ── Small components ─────────────────────────────────────────────────────────
@@ -177,7 +182,7 @@ function IconChip({ code, category, size = 44 }: { code: string; category?: stri
   const t = useTheme();
   const { s } = useStyles();
   return (
-    <View style={[s.chip, { width: size, height: size }]}>
+    <View style={[s.chip, chipSize(size)]}>
       <Ionicons name={recordIcon(code, category)} size={Math.round(size * 0.5)} color={t.color.primary} />
     </View>
   );
@@ -199,7 +204,7 @@ function TypeTile({ type, onPress }: { type: ComplianceRecordType; onPress: () =
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={type.label}
       style={({ pressed }) => [s.tile, pressed && s.tilePressed]}>
       <IconChip code={type.code} category={type.category} size={40} />
-      <Text variant="label" style={{ flex: 1 }}>{type.label}</Text>
+      <Text variant="label" style={s.flex1}>{type.label}</Text>
       <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
     </Pressable>
   );
@@ -332,8 +337,8 @@ function ScheduleEditor({ types, edit, onSaved, onCancel }: {
       </View>
 
       <View style={s.rowWrap}>
-        <Button label={edit ? 'Save changes' : 'Add schedule'} onPress={save} loading={busy} style={{ flexGrow: 1 }} />
-        <Button label="Cancel" variant="ghost" onPress={onCancel} style={{ flexGrow: 1 }} />
+        <Button label={edit ? 'Save changes' : 'Add schedule'} onPress={save} loading={busy} style={s.flexGrow1} />
+        <Button label="Cancel" variant="ghost" onPress={onCancel} style={s.flexGrow1} />
       </View>
     </Card>
   );
@@ -629,7 +634,7 @@ export default function Compliance() {
         <View style={s.formHeader}>
           <View style={s.formHeaderMain}>
             <IconChip code={type.code} category={type.category} size={36} />
-            <Text variant="heading" style={{ flex: 1 }}>
+            <Text variant="heading" style={s.flex1}>
               {record ? 'Edit' : 'New'}: {type.label}{schedule ? ` — ${schedule.label}` : ''}
             </Text>
           </View>
@@ -659,7 +664,7 @@ export default function Compliance() {
         {verdict !== 'na' && (
           <View style={[s.verdict, { backgroundColor: verdict === 'pass' ? soft.passBg : soft.failBg }]}>
             <Ionicons name={verdict === 'pass' ? 'checkmark-circle' : 'alert-circle'} size={20} color={verdict === 'pass' ? soft.passInk : soft.failInk} />
-            <Text variant="label" color={verdict === 'pass' ? soft.passInk : soft.failInk} style={{ flex: 1 }}>
+            <Text variant="label" color={verdict === 'pass' ? soft.passInk : soft.failInk} style={s.flex1}>
               {verdict === 'pass' ? 'Within limit' : 'Outside the limit — saving this will raise a corrective action.'}
             </Text>
           </View>
@@ -683,7 +688,7 @@ export default function Compliance() {
 
       {(cooling.length > 0 || showCoolingStart) && (
         <>
-          <Text variant="heading" style={{ marginTop: t.space.md }}>Cooling in progress</Text>
+          <Text variant="heading" style={s.marginTopMd}>Cooling in progress</Text>
           {showCoolingStart && (
             <Card>
               <View style={s.fieldGroup}>
@@ -691,8 +696,8 @@ export default function Compliance() {
                 <TextInput value={coolingProduct} onChangeText={setCoolingProduct} placeholder="e.g. Beef curry" placeholderTextColor={t.color.textMuted} style={s.input} />
               </View>
               <View style={s.rowWrap}>
-                <Button label="Start cooling clock" onPress={startCoolingBatch} loading={busy} style={{ flexGrow: 1 }} />
-                <Button label="Cancel" variant="ghost" onPress={() => { setShowCoolingStart(false); setCoolingProduct(''); }} style={{ flexGrow: 1 }} />
+                <Button label="Start cooling clock" onPress={startCoolingBatch} loading={busy} style={s.flexGrow1} />
+                <Button label="Cancel" variant="ghost" onPress={() => { setShowCoolingStart(false); setCoolingProduct(''); }} style={s.flexGrow1} />
               </View>
             </Card>
           )}
@@ -711,8 +716,8 @@ export default function Compliance() {
                   <Text variant="label" color={over ? t.color.danger : t.color.success}>{over ? `Overdue ${humanDur(remaining)}` : `${humanDur(remaining)} left`}</Text>
                 </View>
                 <View style={s.rowWrap}>
-                  <Button label={st.stage === 'stage1' ? 'Reached 21 °C' : 'Reached 5 °C — done'} onPress={() => reachStage(b)} loading={busy} style={{ flexGrow: 1 }} />
-                  <Button label="Report a problem" variant="danger" onPress={() => discardBatch(b)} loading={busy} style={{ flexGrow: 1 }} />
+                  <Button label={st.stage === 'stage1' ? 'Reached 21 °C' : 'Reached 5 °C — done'} onPress={() => reachStage(b)} loading={busy} style={s.flexGrow1} />
+                  <Button label="Report a problem" variant="danger" onPress={() => discardBatch(b)} loading={busy} style={s.flexGrow1} />
                 </View>
               </Card>
             );
@@ -733,7 +738,7 @@ export default function Compliance() {
         : due.length === 0 ? (
           <Card>
             <Text muted>Nothing scheduled for today.</Text>
-            {isAdmin && <Button label="Set up scheduled checks" variant="ghost" onPress={() => setManage(true)} style={{ marginTop: t.space.sm }} />}
+            {isAdmin && <Button label="Set up scheduled checks" variant="ghost" onPress={() => setManage(true)} style={s.marginTopSm} />}
           </Card>
         ) : due.map(({ schedule: sc, done_count, remaining }) => {
           const ty = typeByCode[sc.record_type];
@@ -742,7 +747,7 @@ export default function Compliance() {
             <Pressable key={sc.id} onPress={() => ty && openForm(ty, undefined, sc)} accessibilityRole="button"
               style={({ pressed }) => [s.tile, pressed && s.tilePressed]}>
               <IconChip code={sc.record_type} category={ty?.category} size={40} />
-              <View style={{ flex: 1 }}>
+              <View style={s.flex1}>
                 <Text variant="label">{sc.label}</Text>
                 <Text variant="small" muted>{ty?.label ?? sc.record_type}{sc.times_per_day > 1 ? ` · ${done_count}/${sc.times_per_day}` : ''}</Text>
               </View>
@@ -751,7 +756,7 @@ export default function Compliance() {
           );
         })}
 
-      <Text variant="heading" style={{ marginTop: t.space.md }}>Quick add</Text>
+      <Text variant="heading" style={s.marginTopMd}>Quick add</Text>
       <View style={s.quickGrid}>
         {typeByCode['cooking_poultry_mince_liver'] && <View style={s.quickItem}><Button label="Log a cook" onPress={() => openByCode('cooking_poultry_mince_liver')} /></View>}
         <View style={s.quickItem}><Button label="Start cooling" onPress={() => setShowCoolingStart(true)} /></View>
@@ -841,7 +846,7 @@ export default function Compliance() {
         <Card style={s.pendingCAAlert}>
           <View style={s.pendingCAContainer}>
             <Ionicons name="alert-circle" size={22} color={t.color.danger} />
-            <Text variant="label" color={t.color.danger} style={{ flex: 1 }}>A check failed — a corrective action is waiting.</Text>
+            <Text variant="label" color={t.color.danger} style={s.flex1}>A check failed — a corrective action is waiting.</Text>
           </View>
           <Button label="Complete corrective action →" onPress={() => openForm(pendingCA.type, pendingCA.record)} />
         </Card>

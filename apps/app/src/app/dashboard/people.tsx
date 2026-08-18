@@ -16,6 +16,7 @@ const ROLES: ('member' | 'admin')[] = ['member', 'admin'];
 
 const makeStyles = (t: ThemeT) => ({
   checkbox: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm, paddingVertical: t.space.xs },
+  sectionHeader: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const },
   checkboxBox: (checked: boolean) => ({ width: 20, height: 20, borderRadius: t.radius.sm, borderWidth: 1, borderColor: checked ? t.color.primary : t.color.border, backgroundColor: checked ? t.color.primary : 'transparent', alignItems: 'center' as const, justifyContent: 'center' as const }),
   roleSection: { gap: 6 },
   roleRow: { flexDirection: 'row' as const, gap: t.space.sm },
@@ -177,7 +178,10 @@ export default function People() {
 
       {/* Roster */}
       <Card>
-        <Text variant="heading">Roster {people.length ? `(${people.length})` : ''}</Text>
+        <View style={s.sectionHeader}>
+          <Text variant="heading">Roster</Text>
+          {people.length > 0 && <Text variant="small" muted>{people.length}</Text>}
+        </View>
         {loading ? <Text muted>Loading…</Text> : people.length === 0 ? <Text muted>No people yet.</Text> : people.map((p) => {
           const login = p.user_id ? teamUsers.find((u) => u.id === p.user_id) : undefined;
           const isSelf = !!p.user_id && p.user_id === meId;

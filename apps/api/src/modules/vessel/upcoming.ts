@@ -11,6 +11,7 @@ export type UpcomingLevel = 'ok' | 'due' | 'over'
 export interface UpcomingItem {
   kind: 'maintenance'
   id: string
+  asset_id: string
   title: string
   subtitle: string | null
   due_date: string | null
@@ -22,10 +23,10 @@ function addInterval(fromISO: string, type: string | null, value: string | null)
   if (isNaN(d.getTime())) return null
   const n = Number(value) || 0
   switch ((type ?? '').toLowerCase()) {
-    case 'days':   d.setDate(d.getDate() + n); return d
-    case 'weeks':  d.setDate(d.getDate() + n * 7); return d
-    case 'months': d.setMonth(d.getMonth() + n); return d
-    case 'years':  d.setFullYear(d.getFullYear() + n); return d
+    case 'days':   d.setUTCDate(d.getUTCDate() + n); return d
+    case 'weeks':  d.setUTCDate(d.getUTCDate() + n * 7); return d
+    case 'months': d.setUTCMonth(d.getUTCMonth() + n); return d
+    case 'years':  d.setUTCFullYear(d.getUTCFullYear() + n); return d
     default: return null   // hours/usage-based — not date-derivable yet
   }
 }
@@ -51,12 +52,11 @@ function windowDays(sc: ScheduleDueRow): number {
 }
 
 function levelFor(due: Date, windowInDays: number): UpcomingLevel {
-  const midnight = (x: Date) => { const d = new Date(x); d.setHours(0, 0, 0, 0); return d }
-  const now = midnight(new Date())
-  const d = midnight(due)
-  if (d < now) return 'over'
-  const soon = new Date(now); soon.setDate(soon.getDate() + windowInDays)
-  return d <= soon ? 'due' : 'ok'
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const dueStr = due.toISOString().slice(0, 10)
+  if (dueStr < todayStr) return 'over'
+  const soon = new Date(); soon.setUTCDate(soon.getUTCDate() + windowInDays)
+  return dueStr <= soon.toISOString().slice(0, 10) ? 'due' : 'ok'
 }
 
 // Returns upcoming maintenance sorted by due date (undated last). Every active
@@ -68,6 +68,7 @@ export async function buildUpcoming(assetId?: string): Promise<UpcomingItem[]> {
     return {
       kind: 'maintenance',
       id: sc.id,
+      asset_id: sc.asset_id,
       title: sc.task_name,
       subtitle: null,   // client formats due_date (dd/mm/yyyy)
       due_date: due ? due.toISOString().slice(0, 10) : null,

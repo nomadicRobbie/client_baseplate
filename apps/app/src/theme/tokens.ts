@@ -4,30 +4,64 @@ import { Platform } from 'react-native';
 // Default theme is blnk-branded. Clients override via <ThemeProvider theme={...}>.
 // Keep this the single source of truth — components never hardcode colours/spacing.
 
+type ColorTokens = {
+  ink: string; parchment: string; operator: string; signal: string;
+  bg: string; surface: string; surfaceAlt: string;
+  text: string; textMuted: string; textInverse: string;
+  border: string; primary: string; primaryText: string;
+  accent: string; danger: string; warning: string; success: string;
+};
+
+export const lightColor: ColorTokens = {
+  // brand
+  ink: '#0e0e0e',
+  parchment: '#f5f0e8',
+  operator: '#2a7f62',
+  signal: '#e8613a',
+  // semantic surfaces
+  bg: '#f5f0e8',
+  surface: '#ffffff',
+  surfaceAlt: '#efe8db',
+  // text
+  text: '#0e0e0e',
+  textMuted: '#6b675f',
+  textInverse: '#f5f0e8',
+  // lines / states
+  border: '#e3dccd',
+  primary: '#2a7f62',
+  primaryText: '#ffffff',
+  accent: '#e8613a',
+  danger: '#e8613a',
+  warning: '#c8922e',   // amber — "due soon" status (fits the parchment palette)
+  success: '#2a7f62',
+};
+
+export const darkColor: ColorTokens = {
+  // brand
+  ink: '#f5f0e8',
+  parchment: '#0e0e0e',
+  operator: '#3d9e7a',
+  signal: '#f07a56',
+  // semantic surfaces
+  bg: '#111111',
+  surface: '#1c1c1c',
+  surfaceAlt: '#272727',
+  // text
+  text: '#f0ede6',
+  textMuted: '#9a9590',
+  textInverse: '#0e0e0e',
+  // lines / states
+  border: '#303030',
+  primary: '#3d9e7a',
+  primaryText: '#ffffff',
+  accent: '#f07a56',
+  danger: '#f07a56',
+  warning: '#d4a44e',
+  success: '#3d9e7a',
+};
+
 export const tokens = {
-  color: {
-    // brand
-    ink: '#0e0e0e',
-    parchment: '#f5f0e8',
-    operator: '#2a7f62',
-    signal: '#e8613a',
-    // semantic surfaces
-    bg: '#f5f0e8',
-    surface: '#ffffff',
-    surfaceAlt: '#efe8db',
-    // text
-    text: '#0e0e0e',
-    textMuted: '#6b675f',
-    textInverse: '#f5f0e8',
-    // lines / states
-    border: '#e3dccd',
-    primary: '#2a7f62',
-    primaryText: '#ffffff',
-    accent: '#e8613a',
-    danger: '#e8613a',
-    warning: '#c8922e',   // amber — "due soon" status (fits the parchment palette)
-    success: '#2a7f62',
-  },
+  color: lightColor,
   space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 },
   radius: { sm: 6, md: 10, lg: 16, pill: 999 },
   font: {
