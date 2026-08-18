@@ -353,10 +353,10 @@ export const uploadProductImage = async (token: string, file: File): Promise<{ u
 
 // ── News Feed ─────────────────────────────────────────────────────────────────
 export const getFeed = (token: string) =>
-  req<{ items: FeedItem[]; my_modules: string[] }>('/feed', { method: 'GET', token });
+  req<{ items: FeedItem[]; my_modules: string[]; available_modules: string[] }>('/feed', { method: 'GET', token });
 
-export const createFeedPost = (token: string, body: string, modules: string[]) =>
-  req<{ post: FeedPost }>('/feed/posts', { method: 'POST', body: { body, modules }, token });
+export const createFeedPost = (token: string, body: string, modules: string[], mentions: string[] = []) =>
+  req<{ post: FeedPost }>('/feed/posts', { method: 'POST', body: { body, modules, mentions }, token });
 
 export const deleteFeedPost = (token: string, id: string) =>
   req<void>(`/feed/posts/${id}`, { method: 'DELETE', token });

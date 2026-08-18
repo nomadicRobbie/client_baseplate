@@ -18,13 +18,14 @@ export async function createFeedPost(
   authorName: string,
   body: string,
   modules: string[],
+  mentions: string[],
 ): Promise<FeedPost> {
   const rows = await query<FeedPost>(
-    `INSERT INTO feed_posts (created_by, author_name, body, modules)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id, created_by, author_name, body, modules, image_urls,
+    `INSERT INTO feed_posts (created_by, author_name, body, modules, mentions)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id, created_by, author_name, body, modules, mentions, image_urls,
                0::int AS comment_count, NULL AS latest_comment, created_at`,
-    [createdBy, authorName, body, modules],
+    [createdBy, authorName, body, modules, mentions],
   )
   return rows[0]
 }
@@ -187,7 +188,7 @@ export async function listFeedItems(opts: {
 
   // ── Posts (with comment count + latest comment preview) ───────────────────
   const posts = await query<FeedPost>(
-    `SELECT fp.id, fp.created_by, fp.author_name, fp.body, fp.modules, fp.image_urls,
+    `SELECT fp.id, fp.created_by, fp.author_name, fp.body, fp.modules, fp.mentions, fp.image_urls,
             fp.created_at::text AS created_at,
             COUNT(fc.id)::int AS comment_count,
             (SELECT row_to_json(c) FROM (

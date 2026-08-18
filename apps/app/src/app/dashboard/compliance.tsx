@@ -124,7 +124,7 @@ function humanDur(ms: number): string {
 
 // ── Styles (single source, theme-driven) ─────────────────────────────────────
 function makeStyles(t: ThemeT) {
-  const soft = { passBg: '#e6f4e7', passInk: t.color.success, failBg: '#fbe6e6', failInk: t.color.danger, limitBg: '#eef6ef', limitBorder: '#cfe6d1' };
+  const soft = { passBg: t.color.success + '22', passInk: t.color.success, failBg: t.color.danger + '22', failInk: t.color.danger, limitBg: t.color.success + '18', limitBorder: t.color.success + '44' };
   return { soft, s: StyleSheet.create({
     seg: { flexDirection: 'row', backgroundColor: t.color.surfaceAlt, borderRadius: t.radius.md, padding: 3, marginVertical: t.space.md },
     segBtn: { flex: 1, paddingVertical: t.space.sm, borderRadius: t.radius.sm, alignItems: 'center' },
@@ -384,7 +384,7 @@ function SchedulesManager({ types, typeByCode, isAdmin, onBack }: {
               <IconChip code={sc.record_type} category={typeByCode[sc.record_type]?.category} size={34} />
               <View style={s.scheduleItemMeta}>
                 <Text variant="label">{sc.label}</Text>
-                <Text variant="small" muted>{typeByCode[sc.record_type]?.label ?? sc.record_type} · {cadenceText(sc)}</Text>
+                <Text variant="small" muted>{typeByCode[sc.record_type]?.label ?? sc.record_type} · {cadenceText(sc)} · ID: {sc.unit_id}</Text>
               </View>
               {isAdmin && (
                 <View style={s.scheduleItemActions}>
@@ -475,7 +475,9 @@ export default function Compliance() {
   const openForm = (type: ComplianceRecordType, record?: ComplianceRecord, schedule?: ComplianceSchedule, opts?: { required?: boolean }) => {
     setEditing({ type, record, schedule, required: opts?.required });
     setEnteredBy(record?.entered_by ?? userName);
-    setData(initData(type.field_schema, record));
+    const base = initData(type.field_schema, record);
+    if (schedule?.unit_id && 'unit_id' in base) base['unit_id'] = schedule.unit_id;
+    setData(base);
     setMsg(null);
   };
   const openByCode = (code: string) => { const ty = typeByCode[code]; if (ty) openForm(ty); };
@@ -657,9 +659,21 @@ export default function Compliance() {
           <TextInput value={enteredBy} onChangeText={setEnteredBy} placeholder="Who did this check?" placeholderTextColor={t.color.textMuted} style={s.input} />
         </View>
 
-        {type.field_schema.map((f) => (
-          <Field key={f.key} spec={f} value={data[f.key]} onChange={(v) => setData((d) => ({ ...d, [f.key]: v }))} />
-        ))}
+        {type.field_schema.map((f) => {
+          if (f.key === 'unit_id' && schedule?.unit_id) {
+            return (
+              <View key={f.key} style={s.fieldGroup}>
+                <Text variant="label" muted>Unit ID</Text>
+                <View style={[s.input, { justifyContent: 'center' }]}>
+                  <Text variant="mono" color={t.color.textMuted}>{schedule.unit_id}</Text>
+                </View>
+              </View>
+            );
+          }
+          return (
+            <Field key={f.key} spec={f} value={data[f.key]} onChange={(v) => setData((d) => ({ ...d, [f.key]: v }))} />
+          );
+        })}
 
         {verdict !== 'na' && (
           <View style={[s.verdict, { backgroundColor: verdict === 'pass' ? soft.passBg : soft.failBg }]}>

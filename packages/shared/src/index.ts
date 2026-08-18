@@ -108,6 +108,7 @@ export interface ComplianceSchedule {
   jurisdiction: string
   record_type: string
   label: string                 // operator's name, e.g. "Main chiller"
+  unit_id: string               // auto-generated 6-char ID, pre-filled on check completion
   site_id: string | null
   cadence: ScheduleCadence
   weekdays: number[]            // weekly: 0=Sun … 6=Sat (one or more days)
@@ -463,6 +464,7 @@ export interface FeedPost {
   author_name: string
   body: string
   modules: string[]       // [] = all staff; otherwise module keys the post is scoped to
+  mentions: string[]      // person_ids tagged in the post
   image_urls: string[]    // reserved for future photo support
   comment_count: number
   latest_comment: { author_name: string; body: string; created_at: string } | null
