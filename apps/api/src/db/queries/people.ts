@@ -95,3 +95,39 @@ export async function removePersonModule(personId: string, module: string): Prom
   )
   return rows.length > 0
 }
+
+export async function setPushToken(personId: string, token: string | null): Promise<void> {
+  await query(
+    `UPDATE people SET push_token = $1, updated_at = now() WHERE id = $2`,
+    [token, personId],
+  )
+}
+
+// Push tokens for people assigned to one or more modules.
+// Pass an empty array to get tokens for all active app users (any user_id).
+export async function getPushTokensForModules(modules: string[]): Promise<string[]> {
+  if (modules.length === 0) {
+    const rows = await query<{ push_token: string }>(
+      `SELECT push_token FROM people WHERE user_id IS NOT NULL AND push_token IS NOT NULL AND active = true`,
+    )
+    return rows.map(r => r.push_token)
+  }
+  const rows = await query<{ push_token: string }>(
+    `SELECT DISTINCT p.push_token
+     FROM people p
+     JOIN person_module pm ON pm.person_id = p.id
+     WHERE pm.module = ANY($1) AND p.push_token IS NOT NULL AND p.active = true`,
+    [modules],
+  )
+  return rows.map(r => r.push_token)
+}
+
+// Push tokens for specific people (used for mention notifications).
+export async function getPushTokensForPeople(personIds: string[]): Promise<string[]> {
+  if (personIds.length === 0) return []
+  const rows = await query<{ push_token: string }>(
+    `SELECT push_token FROM people WHERE id = ANY($1) AND push_token IS NOT NULL`,
+    [personIds],
+  )
+  return rows.map(r => r.push_token)
+}

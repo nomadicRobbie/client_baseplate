@@ -1,16 +1,33 @@
 import { useEffect } from 'react';
 import { Slot, Redirect, usePathname, useRouter } from 'expo-router';
 import { View, Pressable, useWindowDimensions, ActivityIndicator, Platform, StyleSheet } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { FeatureFlags } from '@blnk/shared';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
+import { FeedBadgeProvider, useFeedBadge } from '@/lib/feed-badge-context';
+import { getAccessToken } from '@/lib/session';
+import { registerPushToken } from '@/lib/api';
 import { ProfileProvider, useProfile } from '@/lib/profile-context';
 import { PinsProvider, usePins } from '@/lib/pins-context';
 import { visibleNav, HOME_HREF, ACCOUNT_HREF, type IconName, type NavHref } from '@/lib/nav';
 import { ThemeProvider, useTheme } from '@/theme';
 import { Text } from '@/ui/components';
 import { Onboarding } from '@/components/onboarding';
+
+// Show alerts when the app is foregrounded.
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
 
 type ThemeT = ReturnType<typeof useTheme>;
 const makeStyles = (t: ThemeT) => ({
@@ -23,6 +40,7 @@ const makeStyles = (t: ThemeT) => ({
   sidebar: { width: 248, borderRightWidth: 1, borderRightColor: t.color.border, padding: t.space.lg, justifyContent: 'space-between' as const },
   sidebarTop: { gap: t.space.lg },
   content: { flex: 1 },
+  badgeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: t.color.danger ?? '#e53e3e', marginLeft: 4 },
 });
 
 function greeting(): string {
@@ -48,13 +66,13 @@ function Sidebar({ isAdmin, features, myModules }: { isAdmin: boolean; features:
   const s = makeStyles(t);
   const router = useRouter();
   const pathname = usePathname();
-  // Admin destinations (People, Settings) live under Account → Manage, not the
-  // sidebar — keeps the desktop nav to Library · modules · Billing · Account.
+  const { hasUnseen } = useFeedBadge();
   const items = visibleNav(isAdmin, features, myModules).filter((i) => i.group !== 'admin');
   return (
     <View style={s.sidebarContainer}>
       {items.map((item) => {
         const active = pathname === item.href;
+        const showBadge = item.href === '/dashboard/feed' && hasUnseen && !active;
         return (
           <Pressable
             key={item.href}
@@ -74,6 +92,7 @@ function Sidebar({ isAdmin, features, myModules }: { isAdmin: boolean; features:
           >
             <Ionicons name={item.icon} size={20} color={active ? t.color.primary : t.color.textMuted} />
             <Text variant="label" color={active ? t.color.text : t.color.textMuted}>{item.label}</Text>
+            {showBadge && <View style={s.badgeDot} />}
           </Pressable>
         );
       })}
@@ -88,6 +107,7 @@ function MobileTabBar() {
   const router = useRouter();
   const pathname = usePathname();
   const { pinned } = usePins();
+  const { hasUnseen } = useFeedBadge();
 
   const tabs: { label: string; href: NavHref; icon: IconName }[] = [
     { label: 'Library', href: HOME_HREF, icon: 'library-outline' },
@@ -108,7 +128,12 @@ function MobileTabBar() {
             accessibilityLabel={tab.label}
             style={s.mobileTab(active)}
           >
-            <Ionicons name={tab.icon} size={22} color={active ? t.color.primary : t.color.textMuted} />
+            <View>
+              <Ionicons name={tab.icon} size={22} color={active ? t.color.primary : t.color.textMuted} />
+              {tab.href === '/dashboard/feed' && hasUnseen && !active && (
+                <View style={[s.badgeDot, { position: 'absolute', top: 0, right: -2 }]} />
+              )}
+            </View>
             <Text variant="small" color={active ? t.color.text : t.color.textMuted} numberOfLines={1}>{tab.label}</Text>
           </Pressable>
         );
@@ -126,11 +151,36 @@ function Shell() {
   const wide = width >= 900;
 
   const orgName = data?.org?.org_name ?? tenantSlug ?? 'dashboard';
+  const router = useRouter();
 
   // Web browser-tab title follows the business name, not the raw URL.
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') document.title = orgName;
   }, [orgName]);
+
+  // Register for push notifications on native and handle taps that deep-link.
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    void (async () => {
+      try {
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status !== 'granted') return;
+        const projectId =
+          (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId ??
+          process.env.EXPO_PUBLIC_PUSH_PROJECT_ID;
+        if (!projectId) return;
+        const { data: pushToken } = await Notifications.getExpoPushTokenAsync({ projectId });
+        const tok = getAccessToken();
+        if (tok) await registerPushToken(tok, pushToken);
+      } catch { /* registration is best-effort */ }
+    })();
+
+    const sub = Notifications.addNotificationResponseReceivedListener((response: Notifications.NotificationResponse) => {
+      const route = response.notification.request.content.data?.route as string | undefined;
+      if (route) router.push(route as never);
+    });
+    return () => sub.remove();
+  }, []);
   const firstName = data?.me.name?.split(' ')[0];
   const isAdmin = user?.role === 'admin' || user?.role === 'super';
 
@@ -185,7 +235,7 @@ function Themed() {
     <ThemeProvider theme={theme}>
       {needsOnboarding
         ? <Onboarding onDone={refresh} />
-        : <PinsProvider><Shell /></PinsProvider>}
+        : <FeedBadgeProvider><PinsProvider><Shell /></PinsProvider></FeedBadgeProvider>}
     </ThemeProvider>
   );
 }

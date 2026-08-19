@@ -1,0 +1,1 @@
+ALTER TABLE feed_posts ADD COLUMN IF NOT EXISTS mentions text[] NOT NULL DEFAULT '{}';

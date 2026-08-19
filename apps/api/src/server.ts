@@ -17,6 +17,10 @@ import locationsPlugin from './modules/locations/plugin'
 import compliancePlugin from './modules/compliance'
 import vesselPlugin from './modules/vessel'
 import feedPlugin from './modules/feed'
+import { buildUpcoming } from './modules/vessel/upcoming'
+import { getPushTokensForModules } from './db/queries/people'
+import { sendPush } from './utils/push'
+import { query } from './db/pool'
 
 const server = Fastify({
   logger: {
@@ -145,6 +149,45 @@ export async function build(): Promise<typeof server> {
   return server
 }
 
+// Runs daily: notify vessel module members of maintenance due today and newly overdue.
+// "Due today" fires on the due date itself; "overdue" fires the day after (yesterday's due_date).
+// ponytail: no tracking table — the date comparison is the deduplication.
+async function runMaintenanceCron(): Promise<void> {
+  if (!config.features.vessel) return
+  try {
+    const tokens = await getPushTokensForModules(['vessel'])
+    if (tokens.length === 0) return
+
+    const today = new Date().toISOString().slice(0, 10)
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
+
+    const upcoming = await buildUpcoming()
+    const relevant = upcoming.filter(u => u.due_date === today || u.due_date === yesterday)
+    if (relevant.length === 0) return
+
+    const assetIds = [...new Set(relevant.map(u => u.asset_id))]
+    const names = await query<{ id: string; name: string }>(
+      'SELECT id, name FROM vessel_assets WHERE id = ANY($1)', [assetIds],
+    )
+    const nameMap = Object.fromEntries(names.map(a => [a.id, a.name]))
+
+    for (const item of relevant) {
+      const asset = nameMap[item.asset_id] ?? 'an asset'
+      if (item.due_date === today) {
+        sendPush(tokens, 'Maintenance reminder', `${item.title} is due today on ${asset}`, {
+          route: `/dashboard/vessel/${item.asset_id}/maintenance`,
+        })
+      } else {
+        sendPush(tokens, 'Maintenance overdue', `${asset} is overdue: ${item.title}`, {
+          route: `/dashboard/vessel/${item.asset_id}/maintenance`,
+        })
+      }
+    }
+  } catch (err) {
+    server.log.error({ err }, 'maintenance cron failed')
+  }
+}
+
 async function start(): Promise<void> {
   try {
     void config.env
@@ -153,6 +196,11 @@ async function start(): Promise<void> {
     const app = await build()
     await app.listen({ port: config.port, host: '0.0.0.0' })
     server.log.info(`client_api up for tenant '${config.tenantSlug}' — features: ${JSON.stringify(config.features)}`)
+    // Daily maintenance reminders — fire shortly after startup then every 24h.
+    setTimeout(() => {
+      void runMaintenanceCron()
+      setInterval(() => void runMaintenanceCron(), 24 * 60 * 60 * 1000)
+    }, 10_000)
   } catch (err) {
     server.log.error(err)
     process.exit(1)

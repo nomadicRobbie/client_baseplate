@@ -8,7 +8,8 @@
     "scheme": "app",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/blnk_icon.icon"
+      "icon": "./assets/blnk_icon.icon",
+      "bundleIdentifier": "com.exporobbie.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +18,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.exporobbie.app"
     },
     "web": {
       "output": "static",
@@ -25,6 +27,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-notifications",
       [
         "expo-splash-screen",
         {
@@ -41,6 +44,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0210289e-da81-4f10-bca7-711260ac9fff"
+      }
+    },
+    "owner": "exponomads"
   }
 }

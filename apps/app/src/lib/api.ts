@@ -366,3 +366,6 @@ export const listPostComments = (token: string, postId: string) =>
 
 export const createPostComment = (token: string, postId: string, body: string) =>
   req<{ comment: FeedPostComment }>(`/feed/posts/${postId}/comments`, { method: 'POST', body: { body }, token });
+
+export const registerPushToken = (token: string, pushToken: string | null) =>
+  req<void>('/profile/push-token', { method: 'PATCH', body: { token: pushToken }, token });

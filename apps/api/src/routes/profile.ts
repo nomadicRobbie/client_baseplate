@@ -4,6 +4,7 @@ import { getAuthMe, setAuthName, getEmailConfig, setEmailConfig } from '../blnk/
 import {
   getClientProfile, upsertClientProfile, getUserProfile, upsertUserProfile,
 } from '../db/queries/profile';
+import { getPersonByUserId, setPushToken } from '../db/queries/people';
 
 function bearer(req: FastifyRequest): string {
   return (req.headers.authorization ?? '').slice(7);
@@ -122,6 +123,24 @@ const profilePlugin: FastifyPluginAsync = async (fastify) => {
 
     return reply.status(200).send({ org, email });
   });
+  // ── PATCH /profile/push-token ─────────────────────────────────────────────
+  // Registers or clears the caller's Expo push token. Looks up their people row
+  // and writes the token there — no-op if they have no person row yet.
+  fastify.patch('/profile/push-token', {
+    preHandler: [verifyBlnkAuth],
+    schema: {
+      body: {
+        type: 'object',
+        required: ['token'],
+        properties: { token: { type: ['string', 'null'] } },
+      },
+    },
+  }, async (req, reply) => {
+    const { token } = req.body as { token: string | null }
+    const person = await getPersonByUserId(req.user!.userId)
+    if (person) await setPushToken(person.id, token)
+    return reply.status(204).send()
+  })
 };
 
 export default profilePlugin;

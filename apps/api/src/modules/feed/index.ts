@@ -1,7 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { verifyBlnkAuth, requireAppAccess } from '../../blnk/auth'
 import { getAuthMe } from '../../blnk/client'
-import { getPersonByUserId, listPeople } from '../../db/queries/people'
+import { getPersonByUserId, listPeople, getPushTokensForModules, getPushTokensForPeople } from '../../db/queries/people'
+import { sendPush } from '../../utils/push'
 import { config } from '../../config'
 import { createFeedPost, deleteFeedPost, listFeedItems, getVisiblePost, listPostComments, createPostComment } from '../../db/queries/feed'
 import { Errors } from '../../utils/errors'
@@ -77,6 +78,19 @@ const feedPlugin: FastifyPluginAsync = async (fastify) => {
 
     const authorName = await resolveAuthorName(u.userId, bearer(req))
     const post = await createFeedPost(u.userId, authorName, body, requestedModules, validMentions)
+
+    // Notify people in scope (fire-and-forget, never blocks the response).
+    const excerpt = body.length > 80 ? body.slice(0, 79) + '…' : body
+    const [scopeTokens, mentionTokens] = await Promise.all([
+      getPushTokensForModules(requestedModules),
+      getPushTokensForPeople(validMentions),
+    ])
+    sendPush(scopeTokens, `${authorName} posted`, excerpt, { route: '/dashboard/feed' })
+    // Mentioned people get a distinct message; de-duplicate against the scope tokens.
+    const scopeSet = new Set(scopeTokens)
+    const mentionOnly = mentionTokens.filter(t => !scopeSet.has(t))
+    sendPush(mentionOnly, 'You were mentioned in a post', `${authorName}: ${excerpt}`, { route: '/dashboard/feed' })
+
     return reply.status(201).send({ post })
   })
 

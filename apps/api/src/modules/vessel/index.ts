@@ -5,7 +5,8 @@ import { v2 as cloudinary } from 'cloudinary'
 import { verifyBlnkAuth, requireRole, requireModule } from '../../blnk/auth'
 import { Errors } from '../../utils/errors'
 import { config } from '../../config'
-import { getPersonByUserId } from '../../db/queries/people'
+import { getPersonByUserId, getPushTokensForModules } from '../../db/queries/people'
+import { sendPush } from '../../utils/push'
 import { buildUpcoming } from './upcoming'
 import * as q from '../../db/queries/vessel'
 
@@ -147,8 +148,22 @@ const vesselPlugin: FastifyPluginAsync = async (fastify) => {
     } } },
   }, async (req, reply) => {
     const body = req.body as Record<string, unknown>
-    if (body.reported_by === undefined) body.reported_by = await myPersonId(req)  // default: logged by me
-    return reply.status(201).send({ fault: await q.createFault(body as never, uid(req)) })
+    if (body.reported_by === undefined) body.reported_by = await myPersonId(req)
+    const fault = await q.createFault(body as never, uid(req))
+    if (fault) {
+      const [asset, reporter, tokens] = await Promise.all([
+        q.getAsset(fault.asset_id),
+        getPersonByUserId(req.user!.userId),
+        getPushTokensForModules(['vessel']),
+      ])
+      sendPush(
+        tokens,
+        'New fault logged',
+        `${reporter?.name ?? 'Someone'} logged "${fault.name}" on ${asset?.name ?? 'an asset'}`,
+        { route: `/dashboard/vessel/${fault.asset_id}/faults` },
+      )
+    }
+    return reply.status(201).send({ fault })
   })
   // Triage only (assign / urgency). Closing is a deliberate action — use /close
   // (with a note) or a maintenance record; you can't just flip status to closed.
@@ -239,18 +254,29 @@ const vesselPlugin: FastifyPluginAsync = async (fastify) => {
     } } },
   }, async (req, reply) => {
     const body = req.body as Record<string, unknown>
-    if (body.completed_by === undefined) body.completed_by = await myPersonId(req)  // default: done by me
+    if (body.completed_by === undefined) body.completed_by = await myPersonId(req)
     const log = await q.createLog(body as never, uid(req))
     if (!log) throw Errors.internal('could not create maintenance log')
     let fault_closed = false
     if (log.resolves_fault && log.fault_id) {
-      // Close with the maintenance as the resolution — record it on the fault timeline too.
       const ik = body.idempotency_key as string | undefined
       const note = `Resolved via maintenance${log.task_name ? `: ${log.task_name}` : ''}`
       await q.addFaultStep({ fault_id: log.fault_id, note, kind: 'close', idempotency_key: ik ? ik + ':step' : undefined }, uid(req))
       await q.closeFault(log.fault_id, note, uid(req))
       fault_closed = true
     }
+    // Notify vessel module members of the completed maintenance.
+    const [asset, completer, tokens] = await Promise.all([
+      q.getAsset(log.asset_id),
+      getPersonByUserId(req.user!.userId),
+      getPushTokensForModules(['vessel']),
+    ])
+    sendPush(
+      tokens,
+      'Maintenance completed',
+      `${completer?.name ?? 'Someone'} logged maintenance on ${asset?.name ?? 'an asset'}${log.task_name ? `: ${log.task_name}` : ''}`,
+      { route: `/dashboard/vessel/${log.asset_id}/maintenance` },
+    )
     return reply.status(201).send({ log, fault_closed })
   })
 }
