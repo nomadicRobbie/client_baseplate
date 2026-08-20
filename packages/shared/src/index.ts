@@ -55,7 +55,7 @@ export interface FeatureFlags {
   analytics: boolean
   compliance: boolean
   locations: boolean
-  vessel: boolean
+  asset: boolean
 }
 
 // ── Compliance (food safety records — requires FEATURE_COMPLIANCE) ───────────
@@ -378,8 +378,8 @@ export interface ProfileResponse {
 
 // ── People core (canonical human directory, shared across modules) ──────────
 export interface PersonModule {
-  module: string   // e.g. 'vessel', 'compliance'
-  role: string     // module-defined (vessel: 'admin' | 'manager' | 'user')
+  module: string   // e.g. 'asset', 'compliance'
+  role: string     // module-defined (asset: 'admin' | 'manager' | 'user')
 }
 
 export interface Person {
@@ -394,14 +394,14 @@ export interface Person {
   updated_at: string
 }
 
-// ── Vessel / asset management (requires FEATURE_VESSEL) ─────────────────────
-export interface VesselFieldDef {
+// ── Asset management (requires FEATURE_ASSET) ────────────────────────────────
+export interface AssetFieldDef {
   key: string; label: string; type: 'text' | 'number' | 'date' | 'select'
   required?: boolean; placeholder?: string; unit?: string; options?: string[]
 }
-export interface VesselAssetType { id: string; name: string; image_url: string | null; roles: string[]; fields: VesselFieldDef[] }
+export interface AssetType { id: string; name: string; image_url: string | null; roles: string[]; fields: AssetFieldDef[] }
 
-export interface VesselAsset {
+export interface Asset {
   id: string; asset_type_id: string | null; parent_asset_id: string | null; name: string
   mnz_number: string | null; mmsi: string | null; call_sign: string | null
   fuel_capacity: string | null; refuel_threshold: string | null
@@ -411,13 +411,13 @@ export interface VesselAsset {
   food_control_plan_id: string | null
 }
 
-export interface VesselFaultStep { id: string; note: string; kind: 'step' | 'close'; created_by: string | null; created_at: string }
-export interface VesselFault {
+export interface AssetFaultStep { id: string; note: string; kind: 'step' | 'close'; created_by: string | null; created_at: string }
+export interface AssetFault {
   id: string; asset_id: string; component_id: string | null; name: string; description: string | null
   image_urls: string[]; urgency: string | null; status: string
   reported_by: string | null; reported_date: string; assigned_to: string | null
   resolution_notes: string | null; signed_by: string | null; signed_at: string | null
-  steps: VesselFaultStep[]
+  steps: AssetFaultStep[]
 }
 
 export type FormFieldType = 'boolean' | 'checkbox' | 'text' | 'number' | 'date' | 'photo';
@@ -427,34 +427,34 @@ export interface FormField {
 export interface FormSchema { fields: FormField[] }
 export type FormResponseData = Record<string, string | number | boolean | null>;
 
-export interface VesselMaintenanceLog {
+export interface AssetMaintenanceLog {
   id: string; schedule_id: string | null; fault_id: string | null; asset_id: string
   task_name: string | null; completed_date: string | null; resolves_fault: boolean; status: string
   form_data: FormResponseData | null; attachments: string[]
 }
 
-export type VesselScheduleAlert = { value: number; unit: 'hours' | 'days' | 'weeks' };
-export interface VesselMaintenanceSchedule {
+export type AssetScheduleAlert = { value: number; unit: 'hours' | 'days' | 'weeks' };
+export interface AssetMaintenanceSchedule {
   id: string; asset_id: string; component_id: string | null; task_name: string
   interval_type: string | null; interval_value: string | null; initial_due_date: string | null
-  alert_days: number | null; alert_hours: string | null; alerts: VesselScheduleAlert[]; active: boolean
+  alert_days: number | null; alert_hours: string | null; alerts: AssetScheduleAlert[]; active: boolean
   task_notes: string | null; document_urls: string[]; form_schema: FormSchema | null
 }
 
-export interface VesselComponent {
+export interface AssetComponent {
   id: string; asset_id: string; parent_component_id: string | null; name: string
   category: string | null; quantity: string | null; serial_number: string | null
   model: string | null; manufacturer: string | null; install_date: string | null
   critical_component: boolean; notes: string | null; status: string
 }
 
-export interface VesselAssetAssignment {
+export interface AssetAssignment {
   id: string; person_id: string; asset_id: string; role: string | null; created_at: string
 }
 
 // A row in the "Coming up" feed — an upcoming/overdue service derived from a
 // maintenance schedule's next-due date.
-export interface VesselUpcomingItem {
+export interface AssetUpcomingItem {
   kind: 'maintenance'
   id: string            // schedule id
   asset_id: string
@@ -516,7 +516,7 @@ export type FeedItemKind = 'fault' | 'maintenance' | 'post' | 'compliance'
 
 export interface FeedItem {
   kind: FeedItemKind
-  module: string | null   // source module ('vessel', etc.); null for org-wide posts
+  module: string | null   // source module ('asset', 'compliance', etc.); null for org-wide posts
   created_at: string
   data: FeedFaultData | FeedMaintenanceData | FeedPost | FeedComplianceData
 }

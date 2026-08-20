@@ -2,9 +2,9 @@ import { getItem, setItem } from './storage';
 
 // Offline read mirror — a read-through cache over the durable KV (expo-sqlite on
 // native, localStorage on web). Online reads are cached; when a read fails
-// (offline) the last-known value is served instead, so a skipper out of coverage
-// can still open a vessel and see its fleet and faults. Keys are caller-supplied
-// (e.g. 'vessel:faults:<assetId>'); values are whole response payloads (JSON).
+// (offline) the last-known value is served instead, so a user out of coverage
+// can still open an asset and see its fleet and faults. Keys are caller-supplied
+// (e.g. 'asset:faults:<assetId>'); values are whole response payloads (JSON).
 //
 // The read-through logic is mirrored in scripts/mirror.check.mjs (kept in sync by
 // hand — this file imports ./storage → React Native → can't run under node).

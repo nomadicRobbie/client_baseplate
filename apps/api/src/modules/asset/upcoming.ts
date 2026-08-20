@@ -1,4 +1,4 @@
-import { schedulesWithLastCompleted, type ScheduleDueRow } from '../../db/queries/vessel'
+import { schedulesWithLastCompleted, type ScheduleDueRow } from '../../db/queries/asset'
 
 // "Coming up" feed — derives each active maintenance schedule's next-due date and
 // status (the PDF's "derived current state"). Next due = last completion + interval,

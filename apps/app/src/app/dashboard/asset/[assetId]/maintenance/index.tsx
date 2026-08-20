@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import { View, Pressable, StyleSheet, Platform } from 'react-native';
 import { Redirect, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { VesselAsset, VesselFault, VesselMaintenanceSchedule, VesselUpcomingItem, VesselScheduleAlert } from '@blnk/shared';
+import type { Asset, AssetFault, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { listVesselFaults, listVesselSchedules, createVesselSchedule, getVesselUpcoming, createVesselMaintenanceLog, uploadVesselDocument } from '@/lib/api';
+import { listAssetFaults, listAssetSchedules, createAssetSchedule, getAssetUpcoming, createAssetMaintenanceLog, uploadAssetDocument } from '@/lib/api';
 import type { FormSchema } from '@blnk/shared';
 import { readThrough } from '@/lib/mirror';
-import { loadAsset } from '@/lib/vessel-sync';
+import { loadAsset } from '@/lib/asset-sync';
 import { formatDMY } from '@/lib/format';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, TextField, Badge } from '@/ui/components';
@@ -18,7 +18,7 @@ import { StatusBadge, OfflineBanner } from '@/ui/status';
 type Msg = { text: string; tone: 'success' | 'error' | 'info' };
 type ThemeT = ReturnType<typeof useTheme>;
 const INTERVALS = ['Days', 'Weeks', 'Months', 'Years'];
-const UNITS: VesselScheduleAlert['unit'][] = ['hours', 'days', 'weeks'];
+const UNITS: AssetScheduleAlert['unit'][] = ['hours', 'days', 'weeks'];
 const tok = () => getAccessToken()!;
 
 const makePillStyles = (t: ThemeT) => ({
@@ -59,7 +59,7 @@ const makeStyles = (t: ThemeT) => ({
   editFormBtn: { alignSelf: 'flex-start' as const },
 });
 
-export default function VesselMaintenance() {
+export default function AssetMaintenance() {
   const t = useTheme();
   const s = makeStyles(t);
   const router = useRouter();
@@ -67,10 +67,10 @@ export default function VesselMaintenance() {
   const { features, user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'super';
 
-  const [asset, setAsset] = useState<VesselAsset | null>(null);
-  const [schedules, setSchedules] = useState<VesselMaintenanceSchedule[]>([]);
-  const [dueById, setDueById] = useState<Record<string, VesselUpcomingItem>>({});
-  const [openFaults, setOpenFaults] = useState<VesselFault[]>([]);
+  const [asset, setAsset] = useState<Asset | null>(null);
+  const [schedules, setSchedules] = useState<AssetMaintenanceSchedule[]>([]);
+  const [dueById, setDueById] = useState<Record<string, AssetUpcomingItem>>({});
+  const [openFaults, setOpenFaults] = useState<AssetFault[]>([]);
   const [offline, setOffline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -81,9 +81,9 @@ export default function VesselMaintenance() {
   const [intervalType, setIntervalType] = useState('Months');
   const [intervalValue, setIntervalValue] = useState('1');
   const [dueDate, setDueDate] = useState('');
-  const [alerts, setAlerts] = useState<VesselScheduleAlert[]>([{ value: 7, unit: 'days' }]);
+  const [alerts, setAlerts] = useState<AssetScheduleAlert[]>([{ value: 7, unit: 'days' }]);
   const [aVal, setAVal] = useState('1');
-  const [aUnit, setAUnit] = useState<VesselScheduleAlert['unit']>('days');
+  const [aUnit, setAUnit] = useState<AssetScheduleAlert['unit']>('days');
   const [docUrls, setDocUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
 
@@ -94,9 +94,9 @@ export default function VesselMaintenance() {
     try {
       const [{ asset }, sc, up, faultRes] = await Promise.all([
         loadAsset(assetId),
-        readThrough('vessel:schedules:' + assetId, () => listVesselSchedules(tok(), assetId)),
-        readThrough('vessel:upcoming:' + assetId, () => getVesselUpcoming(tok(), assetId)),
-        readThrough('vessel:faults:' + assetId, () => listVesselFaults(tok(), { asset_id: assetId })),
+        readThrough('asset:schedules:' + assetId, () => listAssetSchedules(tok(), assetId)),
+        readThrough('asset:upcoming:' + assetId, () => getAssetUpcoming(tok(), assetId)),
+        readThrough('asset:faults:' + assetId, () => listAssetFaults(tok(), { asset_id: assetId })),
       ]);
       setAsset(asset); setSchedules(sc.value.schedules);
       setDueById(Object.fromEntries(up.value.items.map((i) => [i.id, i])));
@@ -111,15 +111,15 @@ export default function VesselMaintenance() {
   };
   useEffect(() => { void load(); }, [assetId]);
 
-  if (features && !features.vessel) return <Redirect href="/dashboard" />;
+  if (features && !features.asset) return <Redirect href="/dashboard" />;
 
   const addAlert = () => { const v = Number(aVal); if (v > 0) setAlerts([...alerts, { value: v, unit: aUnit }]); };
   const removeAlert = (i: number) => setAlerts(alerts.filter((_, x) => x !== i));
 
-  const markDone = async (sc: VesselMaintenanceSchedule) => {
+  const markDone = async (sc: AssetMaintenanceSchedule) => {
     setMarkingId(sc.id); setMsg(null);
     try {
-      await createVesselMaintenanceLog(tok(), {
+      await createAssetMaintenanceLog(tok(), {
         asset_id: assetId, schedule_id: sc.id, task_name: sc.task_name,
         completed_date: new Date().toISOString().slice(0, 10),
       });
@@ -135,7 +135,7 @@ export default function VesselMaintenance() {
     input.onchange = async () => {
       const file = input.files?.[0]; if (!file) return;
       setUploading(true);
-      try { const { url } = await uploadVesselDocument(tok(), file); setDocUrls((prev) => [...prev, url]); }
+      try { const { url } = await uploadAssetDocument(tok(), file); setDocUrls((prev) => [...prev, url]); }
       catch (e) { err(e); } finally { setUploading(false); }
     };
     input.click();
@@ -145,7 +145,7 @@ export default function VesselMaintenance() {
     if (!task.trim()) { setMsg({ text: 'Task name is required.', tone: 'error' }); return null; }
     setBusy(true); setMsg(null);
     try {
-      const { schedule } = await createVesselSchedule(tok(), {
+      const { schedule } = await createAssetSchedule(tok(), {
         asset_id: assetId, task_name: task.trim(),
         interval_type: intervalType, interval_value: Number(intervalValue) || 1,
         initial_due_date: dueDate.trim() || undefined, alerts,
@@ -165,18 +165,18 @@ export default function VesselMaintenance() {
 
   const addScheduleAndBuildForm = async () => {
     const sc = await saveSchedule();
-    if (sc) router.push({ pathname: '/dashboard/vessel/[assetId]/maintenance/[scheduleId]/form-builder', params: { assetId, scheduleId: sc.id } });
+    if (sc) router.push({ pathname: '/dashboard/asset/[assetId]/maintenance/[scheduleId]/form-builder', params: { assetId, scheduleId: sc.id } });
   };
 
   return (
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
-      <Pressable onPress={() => router.push({ pathname: '/dashboard/vessel/[assetId]', params: { assetId } })} accessibilityRole="button" style={s.backBtn}>
+      <Pressable onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]', params: { assetId } })} accessibilityRole="button" style={s.backBtn}>
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
-        <Text variant="label" color={t.color.primary}>{asset?.name ?? 'Vessel'}</Text>
+        <Text variant="label" color={t.color.primary}>{asset?.name ?? 'Asset'}</Text>
       </Pressable>
       <Text variant="title">Maintenance</Text>
       {!loading && openFaults.length > 0 && (
-        <Pressable onPress={() => router.push({ pathname: '/dashboard/vessel/[assetId]/faults', params: { assetId } })} accessibilityRole="link" style={s.faultLink}>
+        <Pressable onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/faults', params: { assetId } })} accessibilityRole="link" style={s.faultLink}>
           <Ionicons name="warning-outline" size={14} color={t.color.danger} />
           <Text variant="small" color={t.color.danger}>
             {openFaults.length} open {openFaults.length === 1 ? 'fault' : 'faults'} — tap to view
@@ -227,7 +227,7 @@ export default function VesselMaintenance() {
                     <Button
                       label={sc.form_schema ? 'Edit form' : 'Build form'}
                       variant="secondary"
-                      onPress={() => router.push({ pathname: '/dashboard/vessel/[assetId]/maintenance/[scheduleId]/form-builder', params: { assetId, scheduleId: sc.id } })}
+                      onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/maintenance/[scheduleId]/form-builder', params: { assetId, scheduleId: sc.id } })}
                     />
                   )}
                   <Button
@@ -236,7 +236,7 @@ export default function VesselMaintenance() {
                     loading={markingId === sc.id}
                     onPress={() =>
                       sc.form_schema?.fields?.length
-                        ? router.push({ pathname: '/dashboard/vessel/[assetId]/maintenance/[scheduleId]/complete', params: { assetId, scheduleId: sc.id } })
+                        ? router.push({ pathname: '/dashboard/asset/[assetId]/maintenance/[scheduleId]/complete', params: { assetId, scheduleId: sc.id } })
                         : markDone(sc)
                     }
                   />

@@ -15,9 +15,9 @@ import commercePlugin from './modules/commerce'
 import analyticsPlugin from './modules/analytics'
 import locationsPlugin from './modules/locations/plugin'
 import compliancePlugin from './modules/compliance'
-import vesselPlugin from './modules/vessel'
+import assetPlugin from './modules/asset'
 import feedPlugin from './modules/feed'
-import { buildUpcoming } from './modules/vessel/upcoming'
+import { buildUpcoming } from './modules/asset/upcoming'
 import { getPushTokensForModules } from './db/queries/people'
 import { sendPush } from './utils/push'
 import { query } from './db/pool'
@@ -105,8 +105,8 @@ export async function build(): Promise<typeof server> {
   if (config.features.locations) await server.register(locationsPlugin)
   // Compliance — food safety records (registry + validation engine).
   if (config.features.compliance) await server.register(compliancePlugin)
-  // Vessel / asset management (fleet, faults, maintenance) — TVM module.
-  if (config.features.vessel) await server.register(vesselPlugin)
+  // Asset management (fleet, faults, maintenance).
+  if (config.features.asset) await server.register(assetPlugin)
   // Feed — always on; item visibility is gated server-side by module membership.
   await server.register(feedPlugin)
 
@@ -149,13 +149,13 @@ export async function build(): Promise<typeof server> {
   return server
 }
 
-// Runs daily: notify vessel module members of maintenance due today and newly overdue.
+// Runs daily: notify asset module members of maintenance due today and newly overdue.
 // "Due today" fires on the due date itself; "overdue" fires the day after (yesterday's due_date).
 // ponytail: no tracking table — the date comparison is the deduplication.
 async function runMaintenanceCron(): Promise<void> {
-  if (!config.features.vessel) return
+  if (!config.features.asset) return
   try {
-    const tokens = await getPushTokensForModules(['vessel'])
+    const tokens = await getPushTokensForModules(['asset'])
     if (tokens.length === 0) return
 
     const today = new Date().toISOString().slice(0, 10)
@@ -167,7 +167,7 @@ async function runMaintenanceCron(): Promise<void> {
 
     const assetIds = [...new Set(relevant.map(u => u.asset_id))]
     const names = await query<{ id: string; name: string }>(
-      'SELECT id, name FROM vessel_assets WHERE id = ANY($1)', [assetIds],
+      'SELECT id, name FROM assets WHERE id = ANY($1)', [assetIds],
     )
     const nameMap = Object.fromEntries(names.map(a => [a.id, a.name]))
 
@@ -175,11 +175,11 @@ async function runMaintenanceCron(): Promise<void> {
       const asset = nameMap[item.asset_id] ?? 'an asset'
       if (item.due_date === today) {
         sendPush(tokens, 'Maintenance reminder', `${item.title} is due today on ${asset}`, {
-          route: `/dashboard/vessel/${item.asset_id}/maintenance`,
+          route: `/dashboard/asset/${item.asset_id}/maintenance`,
         })
       } else {
         sendPush(tokens, 'Maintenance overdue', `${asset} is overdue: ${item.title}`, {
-          route: `/dashboard/vessel/${item.asset_id}/maintenance`,
+          route: `/dashboard/asset/${item.asset_id}/maintenance`,
         })
       }
     }

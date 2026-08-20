@@ -1,10 +1,10 @@
 import { query } from '../pool'
 
-// Vessel module queries (pilot slice — see migration 012_vessel.sql). Person refs
-// are people.id. Mirrors the compliance query style: explicit creates, allow-listed
-// partial updates, no generic column injection.
+// Asset module queries. Person refs are people.id.
+// Mirrors the compliance query style: explicit creates, allow-listed partial updates,
+// no generic column injection.
 
-// ── Types (mirror the vessel_* tables) ──────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────────────
 export interface FieldDef {
   key: string; label: string; type: 'text' | 'number' | 'date' | 'select'
   required?: boolean; placeholder?: string; unit?: string; options?: string[]
@@ -75,66 +75,66 @@ async function patch<T>(
 const one = async <T>(sql: string, params: unknown[]): Promise<T | null> => (await query<T & object>(sql, params))[0] as T ?? null
 
 // ── Asset types ─────────────────────────────────────────────────────────────
-export const listAssetTypes = () => query<AssetType>(`SELECT * FROM vessel_asset_types ORDER BY name`)
+export const listAssetTypes = () => query<AssetType>(`SELECT * FROM asset_types ORDER BY name`)
 export const createAssetType = (d: { name: string; image_url?: string | null; roles?: string[]; fields?: FieldDef[] }) =>
-  one<AssetType>(`INSERT INTO vessel_asset_types (name, image_url, roles, fields) VALUES ($1,$2,$3,$4) RETURNING *`, [d.name, d.image_url ?? null, d.roles ?? [], JSON.stringify(d.fields ?? [])])
-export const updateAssetType = (id: string, body: object) => patch<AssetType>('vessel_asset_types', id, ['name', 'image_url', 'roles', 'fields'], body as never)
+  one<AssetType>(`INSERT INTO asset_types (name, image_url, roles, fields) VALUES ($1,$2,$3,$4) RETURNING *`, [d.name, d.image_url ?? null, d.roles ?? [], JSON.stringify(d.fields ?? [])])
+export const updateAssetType = (id: string, body: object) => patch<AssetType>('asset_types', id, ['name', 'image_url', 'roles', 'fields'], body as never)
 export const assetTypeInUse = async (id: string): Promise<boolean> =>
-  (await query<{ n: string }>(`SELECT COUNT(*) n FROM vessel_assets WHERE asset_type_id = $1 AND status <> 'deleted'`, [id]))[0]?.n !== '0'
+  (await query<{ n: string }>(`SELECT COUNT(*) n FROM assets WHERE asset_type_id = $1 AND status <> 'deleted'`, [id]))[0]?.n !== '0'
 export const deleteAssetType = (id: string) =>
-  query(`DELETE FROM vessel_asset_types WHERE id = $1`, [id])
+  query(`DELETE FROM asset_types WHERE id = $1`, [id])
 
 // ── Assets ──────────────────────────────────────────────────────────────────
-export const listAssets = () => query<Asset>(`SELECT * FROM vessel_assets WHERE status <> 'deleted' ORDER BY name`)
-export const getAsset = (id: string) => one<Asset>(`SELECT * FROM vessel_assets WHERE id = $1`, [id])
+export const listAssets = () => query<Asset>(`SELECT * FROM assets WHERE status <> 'deleted' ORDER BY name`)
+export const getAsset = (id: string) => one<Asset>(`SELECT * FROM assets WHERE id = $1`, [id])
 const ASSET_COLS = ['asset_type_id', 'parent_asset_id', 'name', 'mnz_number', 'mmsi', 'call_sign', 'fuel_capacity', 'refuel_threshold', 'location', 'condition', 'supplier', 'date_purchased', 'image_url', 'notes', 'status', 'particulars', 'food_control_plan_id'] as const
 export const createAsset = (d: Record<string, unknown>, createdBy: string | null) =>
   one<Asset>(
-    `INSERT INTO vessel_assets (asset_type_id, name, parent_asset_id, mnz_number, mmsi, call_sign, fuel_capacity, refuel_threshold, location, condition, supplier, date_purchased, image_url, notes, particulars, created_by)
+    `INSERT INTO assets (asset_type_id, name, parent_asset_id, mnz_number, mmsi, call_sign, fuel_capacity, refuel_threshold, location, condition, supplier, date_purchased, image_url, notes, particulars, created_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
     [d.asset_type_id, d.name, d.parent_asset_id ?? null, d.mnz_number ?? null, d.mmsi ?? null, d.call_sign ?? null, d.fuel_capacity ?? null, d.refuel_threshold ?? null, d.location ?? null, d.condition ?? null, d.supplier ?? null, d.date_purchased ?? null, d.image_url ?? null, d.notes ?? null, JSON.stringify(d.particulars ?? {}), createdBy],
   )
-export const updateAsset = (id: string, body: object, updatedBy: string | null) => patch<Asset>('vessel_assets', id, ASSET_COLS, body as never, updatedBy)
+export const updateAsset = (id: string, body: object, updatedBy: string | null) => patch<Asset>('assets', id, ASSET_COLS, body as never, updatedBy)
 export const softDeleteAsset = (id: string, updatedBy: string | null) =>
-  query(`UPDATE vessel_assets SET status = 'deleted', updated_by = $2, updated_at = now() WHERE id = $1`, [id, updatedBy])
+  query(`UPDATE assets SET status = 'deleted', updated_by = $2, updated_at = now() WHERE id = $1`, [id, updatedBy])
 
 // ── Components ──────────────────────────────────────────────────────────────
 export const listComponents = (assetId?: string) =>
-  assetId ? query<Component>(`SELECT * FROM vessel_components WHERE asset_id = $1 AND status <> 'deleted' ORDER BY name`, [assetId])
-          : query<Component>(`SELECT * FROM vessel_components WHERE status <> 'deleted' ORDER BY name`)
+  assetId ? query<Component>(`SELECT * FROM asset_components WHERE asset_id = $1 AND status <> 'deleted' ORDER BY name`, [assetId])
+          : query<Component>(`SELECT * FROM asset_components WHERE status <> 'deleted' ORDER BY name`)
 const COMPONENT_COLS = ['asset_id', 'parent_component_id', 'name', 'category', 'quantity', 'serial_number', 'model', 'manufacturer', 'install_date', 'critical_component', 'notes', 'status'] as const
 export const createComponent = (d: Record<string, unknown>, createdBy: string | null) =>
   one<Component>(
-    `INSERT INTO vessel_components (asset_id, name, parent_component_id, category, quantity, serial_number, model, manufacturer, install_date, critical_component, notes, created_by)
+    `INSERT INTO asset_components (asset_id, name, parent_component_id, category, quantity, serial_number, model, manufacturer, install_date, critical_component, notes, created_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,false),$11,$12) RETURNING *`,
     [d.asset_id, d.name, d.parent_component_id ?? null, d.category ?? null, d.quantity ?? null, d.serial_number ?? null, d.model ?? null, d.manufacturer ?? null, d.install_date ?? null, d.critical_component ?? null, d.notes ?? null, createdBy],
   )
-export const updateComponent = (id: string, body: object, updatedBy: string | null) => patch<Component>('vessel_components', id, COMPONENT_COLS, body as never, updatedBy)
+export const updateComponent = (id: string, body: object, updatedBy: string | null) => patch<Component>('asset_components', id, COMPONENT_COLS, body as never, updatedBy)
 
 // ── Assignments (person ↔ asset) ────────────────────────────────────────────
 export const listAssignments = (f: { asset_id?: string; person_id?: string }) =>
   query<Assignment>(
-    `SELECT * FROM vessel_asset_assignments
+    `SELECT * FROM asset_assignments
      WHERE ($1::uuid IS NULL OR asset_id = $1) AND ($2::uuid IS NULL OR person_id = $2)`,
     [f.asset_id ?? null, f.person_id ?? null],
   )
 export const upsertAssignment = (d: { person_id: string; asset_id: string; role?: string | null }) =>
   one<Assignment>(
-    `INSERT INTO vessel_asset_assignments (person_id, asset_id, role) VALUES ($1,$2,$3)
+    `INSERT INTO asset_assignments (person_id, asset_id, role) VALUES ($1,$2,$3)
      ON CONFLICT (person_id, asset_id) DO UPDATE SET role = EXCLUDED.role RETURNING *`,
     [d.person_id, d.asset_id, d.role ?? null],
   )
 export const deleteAssignment = async (id: string): Promise<boolean> =>
-  (await query<{ id: string }>(`DELETE FROM vessel_asset_assignments WHERE id = $1 RETURNING id`, [id])).length > 0
+  (await query<{ id: string }>(`DELETE FROM asset_assignments WHERE id = $1 RETURNING id`, [id])).length > 0
 
 // ── Faults ──────────────────────────────────────────────────────────────────
 // Reads embed the resolution timeline (fault.steps) so the whole fault is one row.
 const FAULT_SELECT = `
   SELECT f.*, COALESCE(
     (SELECT json_agg(json_build_object('id', s.id, 'note', s.note, 'kind', s.kind, 'created_by', s.created_by, 'created_at', s.created_at) ORDER BY s.created_at)
-       FROM vessel_fault_steps s WHERE s.fault_id = f.id),
+       FROM asset_fault_steps s WHERE s.fault_id = f.id),
     '[]'::json) AS steps
-  FROM vessel_faults f`
+  FROM asset_faults f`
 export const listFaults = (f: { asset_id?: string; status?: string }) =>
   query<Fault>(
     `${FAULT_SELECT}
@@ -147,9 +147,9 @@ export const getFault = (id: string) => one<Fault>(`${FAULT_SELECT} WHERE f.id =
 // Append a resolution step (idempotent on the outbox key). kind: 'step' | 'close'.
 export const addFaultStep = (d: { fault_id: string; note: string; kind?: string; idempotency_key?: string }, createdBy: string | null) =>
   one<FaultStep>(
-    `INSERT INTO vessel_fault_steps (fault_id, note, kind, created_by, idempotency_key)
+    `INSERT INTO asset_fault_steps (fault_id, note, kind, created_by, idempotency_key)
      VALUES ($1,$2,COALESCE($3,'step'),$4,$5)
-     ON CONFLICT (idempotency_key) DO UPDATE SET note = vessel_fault_steps.note
+     ON CONFLICT (idempotency_key) DO UPDATE SET note = asset_fault_steps.note
      RETURNING *`,
     [d.fault_id, d.note, d.kind ?? null, createdBy, d.idempotency_key ?? null],
   )
@@ -158,7 +158,7 @@ export const addFaultStep = (d: { fault_id: string; note: string; kind?: string;
 // closing an already-closed fault just re-sets the same values.
 export const closeFault = (id: string, resolutionNotes: string, updatedBy: string | null) =>
   one<Fault>(
-    `UPDATE vessel_faults SET status = 'closed', resolution_notes = $2, updated_by = $3, updated_at = now()
+    `UPDATE asset_faults SET status = 'closed', resolution_notes = $2, updated_by = $3, updated_at = now()
      WHERE id = $1 RETURNING *`,
     [id, resolutionNotes, updatedBy],
   )
@@ -167,26 +167,26 @@ export const closeFault = (id: string, resolutionNotes: string, updatedBy: strin
 // (online request) never conflicts.
 export const createFault = (d: Record<string, unknown>, createdBy: string | null) =>
   one<Fault>(
-    `INSERT INTO vessel_faults (asset_id, component_id, name, description, image_urls, urgency, reported_by, assigned_to, created_by, idempotency_key)
+    `INSERT INTO asset_faults (asset_id, component_id, name, description, image_urls, urgency, reported_by, assigned_to, created_by, idempotency_key)
      VALUES ($1,$2,$3,$4,COALESCE($5::text[],'{}'),$6,$7,$8,$9,$10)
-     ON CONFLICT (idempotency_key) DO UPDATE SET updated_at = vessel_faults.updated_at
+     ON CONFLICT (idempotency_key) DO UPDATE SET updated_at = asset_faults.updated_at
      RETURNING *`,
     [d.asset_id, d.component_id ?? null, d.name, d.description ?? null, d.image_urls ?? null, d.urgency ?? null, d.reported_by ?? null, d.assigned_to ?? null, createdBy, d.idempotency_key ?? null],
   )
 const FAULT_COLS = ['component_id', 'name', 'description', 'image_urls', 'urgency', 'status', 'assigned_to', 'resolution_notes', 'signed_by', 'signed_at'] as const
-export const updateFault = (id: string, body: object, updatedBy: string | null) => patch<Fault>('vessel_faults', id, FAULT_COLS, body as never, updatedBy)
+export const updateFault = (id: string, body: object, updatedBy: string | null) => patch<Fault>('asset_faults', id, FAULT_COLS, body as never, updatedBy)
 
 // ── Maintenance schedules ───────────────────────────────────────────────────
 export const listSchedules = (assetId?: string) =>
-  assetId ? query<MaintenanceSchedule>(`SELECT * FROM vessel_maintenance_schedules WHERE asset_id = $1 AND active ORDER BY task_name`, [assetId])
-          : query<MaintenanceSchedule>(`SELECT * FROM vessel_maintenance_schedules WHERE active ORDER BY task_name`)
+  assetId ? query<MaintenanceSchedule>(`SELECT * FROM asset_maintenance_schedules WHERE asset_id = $1 AND active ORDER BY task_name`, [assetId])
+          : query<MaintenanceSchedule>(`SELECT * FROM asset_maintenance_schedules WHERE active ORDER BY task_name`)
 // Each active schedule + the date it was last completed (max completed_date of its
 // maintenance logs). Drives the "next due" derivation for the Coming-up feed.
 export interface ScheduleDueRow extends MaintenanceSchedule { last_completed: string | null }
 export const schedulesWithLastCompleted = (assetId?: string) =>
   query<ScheduleDueRow>(
-    `SELECT s.*, (SELECT max(completed_date) FROM vessel_maintenance_logs l WHERE l.schedule_id = s.id) AS last_completed
-     FROM vessel_maintenance_schedules s
+    `SELECT s.*, (SELECT max(completed_date) FROM asset_maintenance_logs l WHERE l.schedule_id = s.id) AS last_completed
+     FROM asset_maintenance_schedules s
      WHERE s.active AND ($1::uuid IS NULL OR s.asset_id = $1)
      ORDER BY s.task_name`,
     [assetId ?? null],
@@ -194,17 +194,17 @@ export const schedulesWithLastCompleted = (assetId?: string) =>
 
 export const createSchedule = (d: Record<string, unknown>, createdBy: string | null) =>
   one<MaintenanceSchedule>(
-    `INSERT INTO vessel_maintenance_schedules (asset_id, component_id, task_name, interval_type, interval_value, initial_due_date, alert_days, alert_hours, alerts, task_notes, document_urls, form_schema, created_by)
+    `INSERT INTO asset_maintenance_schedules (asset_id, component_id, task_name, interval_type, interval_value, initial_due_date, alert_days, alert_hours, alerts, task_notes, document_urls, form_schema, created_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
     [d.asset_id, d.component_id ?? null, d.task_name, d.interval_type ?? null, d.interval_value ?? null, d.initial_due_date ?? null, d.alert_days ?? null, d.alert_hours ?? null, JSON.stringify(d.alerts ?? []), d.task_notes ?? null, JSON.stringify(d.document_urls ?? []), d.form_schema ? JSON.stringify(d.form_schema) : null, createdBy],
   )
 const SCHED_COLS = ['component_id', 'task_name', 'interval_type', 'interval_value', 'initial_due_date', 'alert_days', 'alert_hours', 'active', 'task_notes', 'document_urls', 'form_schema'] as const
-export const updateSchedule = (id: string, body: object, updatedBy: string | null) => patch<MaintenanceSchedule>('vessel_maintenance_schedules', id, SCHED_COLS, body as never, updatedBy)
+export const updateSchedule = (id: string, body: object, updatedBy: string | null) => patch<MaintenanceSchedule>('asset_maintenance_schedules', id, SCHED_COLS, body as never, updatedBy)
 
 // ── Maintenance logs (append-only evidence) ─────────────────────────────────
 export const listLogs = (f: { asset_id?: string; fault_id?: string }) =>
   query<MaintenanceLog>(
-    `SELECT * FROM vessel_maintenance_logs
+    `SELECT * FROM asset_maintenance_logs
      WHERE ($1::uuid IS NULL OR asset_id = $1) AND ($2::uuid IS NULL OR fault_id = $2)
      ORDER BY completed_date DESC NULLS LAST, created_at DESC LIMIT 500`,
     [f.asset_id ?? null, f.fault_id ?? null],
@@ -214,9 +214,9 @@ export const listLogs = (f: { asset_id?: string; fault_id?: string }) =>
 // is itself idempotent).
 export const createLog = (d: Record<string, unknown>, createdBy: string | null) =>
   one<MaintenanceLog>(
-    `INSERT INTO vessel_maintenance_logs (schedule_id, fault_id, asset_id, component_id, task_name, maintenance_type, completed_date, usage_at_service, supplier, image_urls, resolves_fault, resolution_notes, notes, form_data, attachments, completed_by, created_by, idempotency_key)
+    `INSERT INTO asset_maintenance_logs (schedule_id, fault_id, asset_id, component_id, task_name, maintenance_type, completed_date, usage_at_service, supplier, image_urls, resolves_fault, resolution_notes, notes, form_data, attachments, completed_by, created_by, idempotency_key)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10::text[],'{}'),COALESCE($11,false),$12,$13,$14,COALESCE($15::jsonb,'[]'),$16,$17,$18)
-     ON CONFLICT (idempotency_key) DO UPDATE SET updated_at = vessel_maintenance_logs.updated_at
+     ON CONFLICT (idempotency_key) DO UPDATE SET updated_at = asset_maintenance_logs.updated_at
      RETURNING *`,
     [d.schedule_id ?? null, d.fault_id ?? null, d.asset_id, d.component_id ?? null, d.task_name ?? null, d.maintenance_type ?? null, d.completed_date ?? null, d.usage_at_service ?? null, d.supplier ?? null, d.image_urls ?? null, d.resolves_fault ?? null, d.resolution_notes ?? null, d.notes ?? null, d.form_data ? JSON.stringify(d.form_data) : null, d.attachments ? JSON.stringify(d.attachments) : null, d.completed_by ?? null, createdBy, d.idempotency_key ?? null],
   )

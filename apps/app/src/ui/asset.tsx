@@ -1,5 +1,5 @@
 import { View, Pressable } from 'react-native';
-import type { VesselFieldDef } from '@blnk/shared';
+import type { AssetFieldDef } from '@blnk/shared';
 import { useTheme } from '@/theme';
 import { Text, TextField } from './components';
 import { DateField } from './date-field';
@@ -19,13 +19,13 @@ const makeStyles = (t: ThemeT) => ({
 });
 
 // Renders a schema-driven form for a single asset's particulars.
-// `fields` comes from VesselAssetType.fields; `value` / `onChange` are controlled.
+// `fields` comes from AssetType.fields; `value` / `onChange` are controlled.
 export function ParticularsForm({
   fields,
   value,
   onChange,
 }: {
-  fields: VesselFieldDef[];
+  fields: AssetFieldDef[];
   value: Record<string, string>;
   onChange: (next: Record<string, string>) => void;
 }) {

@@ -82,7 +82,7 @@ function FaultItem({
 
   return (
     <Pressable
-      onPress={() => router.push({ pathname: '/dashboard/vessel/[assetId]/faults', params: { assetId: data.asset_id } })}
+      onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/faults', params: { assetId: data.asset_id } })}
       accessibilityRole="button"
       accessibilityLabel={`View fault: ${data.fault_name}`}
     >

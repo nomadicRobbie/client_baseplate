@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, FoodControlPlan, Product, VesselAsset, VesselAssetType, VesselFieldDef, VesselFault, VesselFaultStep, VesselMaintenanceLog, VesselMaintenanceSchedule, VesselUpcomingItem, VesselScheduleAlert, VesselComponent, VesselAssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, FoodControlPlan, Product, Asset, AssetType, AssetFieldDef, AssetFault, AssetFaultStep, AssetMaintenanceLog, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert, AssetComponent, AssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData } from '@blnk/shared';
 import { getAccessToken, getRefreshToken, setTokens, clearSession } from './session';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
@@ -191,21 +191,21 @@ export const setPersonModule = (token: string, id: string, module: string, role:
 export const removePersonModule = (token: string, id: string, module: string) =>
   req<void>(`/people/${id}/modules/${module}`, { method: 'DELETE', token });
 
-// ── Vessel / asset management (requires FEATURE_VESSEL) ──────────────────────
-export const listVesselAssetTypes = (token: string) =>
-  req<{ asset_types: VesselAssetType[] }>('/vessel/asset-types', { method: 'GET', token });
-export const createVesselAssetType = (token: string, body: { name: string; roles?: string[]; fields?: VesselFieldDef[] }) =>
-  req<{ asset_type: VesselAssetType }>('/vessel/asset-types', { method: 'POST', body, token });
-export const deleteVesselAssetType = (token: string, id: string) =>
-  req<void>(`/vessel/asset-types/${id}`, { method: 'DELETE', token });
+// ── Asset management (requires FEATURE_ASSET) ────────────────────────────────
+export const listAssetTypes = (token: string) =>
+  req<{ asset_types: AssetType[] }>('/asset/asset-types', { method: 'GET', token });
+export const createAssetType = (token: string, body: { name: string; roles?: string[]; fields?: AssetFieldDef[] }) =>
+  req<{ asset_type: AssetType }>('/asset/asset-types', { method: 'POST', body, token });
+export const deleteAssetType = (token: string, id: string) =>
+  req<void>(`/asset/asset-types/${id}`, { method: 'DELETE', token });
 
-export const listVesselAssets = (token: string) =>
-  req<{ assets: VesselAsset[] }>('/vessel/assets', { method: 'GET', token });
-export const createVesselAsset = (token: string, body: { asset_type_id: string; name: string; location?: string; condition?: string; notes?: string; particulars?: Record<string, string> }) =>
-  req<{ asset: VesselAsset }>('/vessel/assets', { method: 'POST', body, token });
-export const updateVesselAsset = (token: string, id: string, patch: { name?: string; particulars?: Record<string, string>; location?: string; condition?: string; notes?: string; image_url?: string | null; food_control_plan_id?: string | null }) =>
-  req<{ asset: VesselAsset }>(`/vessel/assets/${id}`, { method: 'PATCH', body: patch, token });
-export const uploadVesselAssetImage = async (token: string, uri: string): Promise<string> => {
+export const listAssets = (token: string) =>
+  req<{ assets: Asset[] }>('/asset/assets', { method: 'GET', token });
+export const createAsset = (token: string, body: { asset_type_id: string; name: string; location?: string; condition?: string; notes?: string; particulars?: Record<string, string> }) =>
+  req<{ asset: Asset }>('/asset/assets', { method: 'POST', body, token });
+export const updateAsset = (token: string, id: string, patch: { name?: string; particulars?: Record<string, string>; location?: string; condition?: string; notes?: string; image_url?: string | null; food_control_plan_id?: string | null }) =>
+  req<{ asset: Asset }>(`/asset/assets/${id}`, { method: 'PATCH', body: patch, token });
+export const uploadAssetImage = async (token: string, uri: string): Promise<string> => {
   const filename = uri.split('/').pop() ?? 'image.jpg';
   const buildForm = async () => {
     const form = new FormData();
@@ -217,7 +217,7 @@ export const uploadVesselAssetImage = async (token: string, uri: string): Promis
     }
     return form;
   };
-  const doUpload = async (tok: string) => fetch(`${API}/vessel/documents/upload`, {
+  const doUpload = async (tok: string) => fetch(`${API}/asset/documents/upload`, {
     method: 'POST',
     headers: { authorization: `Bearer ${tok}` },
     body: await buildForm(),
@@ -235,47 +235,47 @@ export const uploadVesselAssetImage = async (token: string, uri: string): Promis
   if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
   return (json as { url: string }).url;
 };
-export const deleteVesselAsset = (token: string, id: string) =>
-  req<void>(`/vessel/assets/${id}`, { method: 'DELETE', token });
+export const deleteAsset = (token: string, id: string) =>
+  req<void>(`/asset/assets/${id}`, { method: 'DELETE', token });
 
-export const listVesselFaults = (token: string, opts?: { asset_id?: string; status?: string }) => {
+export const listAssetFaults = (token: string, opts?: { asset_id?: string; status?: string }) => {
   const q = new URLSearchParams();
   if (opts?.asset_id) q.set('asset_id', opts.asset_id);
   if (opts?.status) q.set('status', opts.status);
   const qs = q.toString();
-  return req<{ faults: VesselFault[] }>(`/vessel/faults${qs ? `?${qs}` : ''}`, { method: 'GET', token });
+  return req<{ faults: AssetFault[] }>(`/asset/faults${qs ? `?${qs}` : ''}`, { method: 'GET', token });
 };
-export const createVesselFault = (token: string, body: { asset_id: string; name: string; description?: string; urgency?: string; component_id?: string | null; idempotency_key?: string }) =>
-  req<{ fault: VesselFault }>('/vessel/faults', { method: 'POST', body, token });
-export const updateVesselFault = (token: string, id: string, patch: { urgency?: string; assigned_to?: string | null }) =>
-  req<{ fault: VesselFault }>(`/vessel/faults/${id}`, { method: 'PATCH', body: patch, token });
+export const createAssetFault = (token: string, body: { asset_id: string; name: string; description?: string; urgency?: string; component_id?: string | null; idempotency_key?: string }) =>
+  req<{ fault: AssetFault }>('/asset/faults', { method: 'POST', body, token });
+export const updateAssetFault = (token: string, id: string, patch: { urgency?: string; assigned_to?: string | null }) =>
+  req<{ fault: AssetFault }>(`/asset/faults/${id}`, { method: 'PATCH', body: patch, token });
 
 // Add a progress step to a fault (stays open).
-export const addVesselFaultStep = (token: string, id: string, body: { note: string; idempotency_key?: string }) =>
-  req<{ step: VesselFaultStep }>(`/vessel/faults/${id}/steps`, { method: 'POST', body, token });
+export const addAssetFaultStep = (token: string, id: string, body: { note: string; idempotency_key?: string }) =>
+  req<{ step: AssetFaultStep }>(`/asset/faults/${id}/steps`, { method: 'POST', body, token });
 // Close a fault with a resolution note (no maintenance record required).
-export const closeVesselFault = (token: string, id: string, body: { resolution_notes: string; idempotency_key?: string }) =>
-  req<{ fault: VesselFault }>(`/vessel/faults/${id}/close`, { method: 'POST', body, token });
+export const closeAssetFault = (token: string, id: string, body: { resolution_notes: string; idempotency_key?: string }) =>
+  req<{ fault: AssetFault }>(`/asset/faults/${id}/close`, { method: 'POST', body, token });
 
 // Complete maintenance — resolving a fault closes it (server sets fault status).
-export const createVesselMaintenanceLog = (token: string, body: { asset_id: string; schedule_id?: string; fault_id?: string; task_name?: string; notes?: string; resolves_fault?: boolean; completed_date?: string; form_data?: FormResponseData; attachments?: string[]; idempotency_key?: string }) =>
-  req<{ log: VesselMaintenanceLog; fault_closed: boolean }>('/vessel/maintenance-logs', { method: 'POST', body, token });
+export const createAssetMaintenanceLog = (token: string, body: { asset_id: string; schedule_id?: string; fault_id?: string; task_name?: string; notes?: string; resolves_fault?: boolean; completed_date?: string; form_data?: FormResponseData; attachments?: string[]; idempotency_key?: string }) =>
+  req<{ log: AssetMaintenanceLog; fault_closed: boolean }>('/asset/maintenance-logs', { method: 'POST', body, token });
 
 // Coming-up feed — due/overdue services derived from maintenance schedules.
-export const getVesselUpcoming = (token: string, assetId?: string) =>
-  req<{ items: VesselUpcomingItem[] }>(`/vessel/upcoming${assetId ? `?asset_id=${assetId}` : ''}`, { method: 'GET', token });
+export const getAssetUpcoming = (token: string, assetId?: string) =>
+  req<{ items: AssetUpcomingItem[] }>(`/asset/upcoming${assetId ? `?asset_id=${assetId}` : ''}`, { method: 'GET', token });
 
-export const listVesselSchedules = (token: string, assetId?: string) =>
-  req<{ schedules: VesselMaintenanceSchedule[] }>(`/vessel/maintenance-schedules${assetId ? `?asset_id=${assetId}` : ''}`, { method: 'GET', token });
-export const createVesselSchedule = (token: string, body: { asset_id: string; task_name: string; interval_type?: string; interval_value?: number; initial_due_date?: string; alert_days?: number; alerts?: VesselScheduleAlert[]; task_notes?: string; document_urls?: string[]; form_schema?: FormSchema }) =>
-  req<{ schedule: VesselMaintenanceSchedule }>('/vessel/maintenance-schedules', { method: 'POST', body, token });
-export const updateVesselSchedule = (token: string, id: string, body: { task_notes?: string | null; document_urls?: string[]; form_schema?: FormSchema | null; active?: boolean }) =>
-  req<{ schedule: VesselMaintenanceSchedule }>(`/vessel/maintenance-schedules/${id}`, { method: 'PATCH', body, token });
+export const listAssetSchedules = (token: string, assetId?: string) =>
+  req<{ schedules: AssetMaintenanceSchedule[] }>(`/asset/maintenance-schedules${assetId ? `?asset_id=${assetId}` : ''}`, { method: 'GET', token });
+export const createAssetSchedule = (token: string, body: { asset_id: string; task_name: string; interval_type?: string; interval_value?: number; initial_due_date?: string; alert_days?: number; alerts?: AssetScheduleAlert[]; task_notes?: string; document_urls?: string[]; form_schema?: FormSchema }) =>
+  req<{ schedule: AssetMaintenanceSchedule }>('/asset/maintenance-schedules', { method: 'POST', body, token });
+export const updateAssetSchedule = (token: string, id: string, body: { task_notes?: string | null; document_urls?: string[]; form_schema?: FormSchema | null; active?: boolean }) =>
+  req<{ schedule: AssetMaintenanceSchedule }>(`/asset/maintenance-schedules/${id}`, { method: 'PATCH', body, token });
 
-export const uploadVesselDocument = async (token: string, file: File): Promise<{ url: string }> => {
+export const uploadAssetDocument = async (token: string, file: File): Promise<{ url: string }> => {
   const form = new FormData();
   form.append('file', file);
-  const res = await fetch(`${API}/vessel/documents/upload`, {
+  const res = await fetch(`${API}/asset/documents/upload`, {
     method: 'POST',
     headers: { authorization: `Bearer ${token}` },
     body: form,
@@ -285,17 +285,17 @@ export const uploadVesselDocument = async (token: string, file: File): Promise<{
   return json as { url: string };
 };
 
-export const listVesselComponents = (token: string, assetId: string) =>
-  req<{ components: VesselComponent[] }>(`/vessel/components?asset_id=${assetId}`, { method: 'GET', token });
-export const createVesselComponent = (token: string, body: { asset_id: string; name: string; category?: string; critical_component?: boolean; notes?: string }) =>
-  req<{ component: VesselComponent }>('/vessel/components', { method: 'POST', body, token });
+export const listAssetComponents = (token: string, assetId: string) =>
+  req<{ components: AssetComponent[] }>(`/asset/components?asset_id=${assetId}`, { method: 'GET', token });
+export const createAssetComponent = (token: string, body: { asset_id: string; name: string; category?: string; critical_component?: boolean; notes?: string }) =>
+  req<{ component: AssetComponent }>('/asset/components', { method: 'POST', body, token });
 
-export const listVesselAssignments = (token: string, assetId: string) =>
-  req<{ assignments: VesselAssetAssignment[] }>(`/vessel/assignments?asset_id=${assetId}`, { method: 'GET', token });
-export const upsertVesselAssignment = (token: string, body: { person_id: string; asset_id: string; role?: string | null }) =>
-  req<{ assignment: VesselAssetAssignment }>('/vessel/assignments', { method: 'PUT', body, token });
-export const deleteVesselAssignment = (token: string, id: string) =>
-  req<void>(`/vessel/assignments/${id}`, { method: 'DELETE', token });
+export const listAssetAssignments = (token: string, assetId: string) =>
+  req<{ assignments: AssetAssignment[] }>(`/asset/assignments?asset_id=${assetId}`, { method: 'GET', token });
+export const upsertAssetAssignment = (token: string, body: { person_id: string; asset_id: string; role?: string | null }) =>
+  req<{ assignment: AssetAssignment }>('/asset/assignments', { method: 'PUT', body, token });
+export const deleteAssetAssignment = (token: string, id: string) =>
+  req<void>(`/asset/assignments/${id}`, { method: 'DELETE', token });
 
 // ── Payments (client charges end users via Stripe Checkout) ──────────────────
 export const subscribeCheckout = (token: string, data: { price_id: string; success_url: string; cancel_url: string }) =>

@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import { Redirect, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { VesselAsset, VesselFault } from '@blnk/shared';
+import type { Asset, AssetFault } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { listVesselFaults } from '@/lib/api';
+import { listAssetFaults } from '@/lib/api';
 import { readThrough } from '@/lib/mirror';
 import { enqueue, pending as pendingCommands, pendingCount } from '@/lib/outbox';
-import { syncVesselOutbox, loadAsset } from '@/lib/vessel-sync';
+import { syncAssetOutbox, loadAsset } from '@/lib/asset-sync';
 import { useOnReconnect } from '@/lib/use-reconnect';
 import { formatDMY } from '@/lib/format';
 import { useTheme } from '@/theme';
@@ -40,14 +40,14 @@ type Msg = { text: string; tone: 'success' | 'error' | 'info' };
 const URGENCIES = ['Low', 'Medium', 'High', 'Critical'];
 const tok = () => getAccessToken()!;
 
-export default function VesselFaults() {
+export default function AssetFaults() {
   const t = useTheme();
   const router = useRouter();
   const { assetId } = useLocalSearchParams<{ assetId: string }>();
   const { features } = useAuth();
 
-  const [asset, setAsset] = useState<VesselAsset | null>(null);
-  const [faults, setFaults] = useState<VesselFault[]>([]);
+  const [asset, setAsset] = useState<Asset | null>(null);
+  const [faults, setFaults] = useState<AssetFault[]>([]);
   const [offline, setOffline] = useState(false);
   const [pending, setPending] = useState(pendingCount());
   const [busy, setBusy] = useState(false);
@@ -64,12 +64,12 @@ export default function VesselFaults() {
 
   const loadFaults = async () => {
     try {
-      const r = await readThrough('vessel:faults:' + assetId, () => listVesselFaults(tok(), { asset_id: assetId }));
+      const r = await readThrough('asset:faults:' + assetId, () => listAssetFaults(tok(), { asset_id: assetId }));
       setFaults(r.value.faults); setOffline(r.stale);
     } catch (e) { err(e); }
   };
   const doSync = async (): Promise<number> => {
-    const { remaining } = await syncVesselOutbox();
+    const { remaining } = await syncAssetOutbox();
     setPending(remaining);
     await loadFaults();
     return remaining;
@@ -80,7 +80,7 @@ export default function VesselFaults() {
   }, [assetId]);
   useOnReconnect(() => { void doSync(); });
 
-  if (features && !features.vessel) return <Redirect href="/dashboard" />;
+  if (features && !features.asset) return <Redirect href="/dashboard" />;
 
   const queued = (remaining: number, done: string) =>
     setMsg(remaining === 0 ? { text: done, tone: 'success' } : { text: `Queued offline — ${remaining} waiting to sync.`, tone: 'info' });
@@ -93,7 +93,7 @@ export default function VesselFaults() {
     try { queued(await doSync(), 'Fault logged.'); } finally { setBusy(false); }
   };
   // Progress step — records what's been done, fault stays open.
-  const addStep = async (f: VesselFault) => {
+  const addStep = async (f: AssetFault) => {
     if (!note.trim()) { setMsg({ text: 'Add a note for the step.', tone: 'error' }); return; }
     setBusy(true); setMsg(null);
     enqueue('AddFaultStep', { fault_id: f.id, note: note.trim() });
@@ -101,7 +101,7 @@ export default function VesselFaults() {
     try { queued(await doSync(), 'Step recorded.'); } finally { setBusy(false); }
   };
   // Close with just a note — no maintenance record required.
-  const closeWithNote = async (f: VesselFault) => {
+  const closeWithNote = async (f: AssetFault) => {
     if (!note.trim()) { setMsg({ text: 'Add a closing note.', tone: 'error' }); return; }
     setBusy(true); setMsg(null);
     enqueue('CloseFault', { fault_id: f.id, resolution_notes: note.trim() });
@@ -127,9 +127,9 @@ export default function VesselFaults() {
 
   return (
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
-      <Pressable onPress={() => router.push({ pathname: '/dashboard/vessel/[assetId]', params: { assetId } })} accessibilityRole="button" style={s.backBtn}>
+      <Pressable onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]', params: { assetId } })} accessibilityRole="button" style={s.backBtn}>
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
-        <Text variant="label" color={t.color.primary}>{asset?.name ?? 'Vessel'}</Text>
+        <Text variant="label" color={t.color.primary}>{asset?.name ?? 'Asset'}</Text>
       </Pressable>
       <Text variant="title">Faults</Text>
 

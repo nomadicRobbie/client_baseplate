@@ -1,5 +1,5 @@
 import { Redirect } from 'expo-router';
 
 export default function NewAsset() {
-  return <Redirect href="/dashboard/vessel" />;
+  return <Redirect href="/dashboard/asset" />;
 }

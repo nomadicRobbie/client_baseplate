@@ -126,7 +126,7 @@ export default function People() {
   };
 
   // Module membership = access. Assign defaults to the 'user' role; role refinement
-  // (e.g. vessel manager) lands when a module actually consumes person_module.role.
+  // (e.g. asset manager) lands when a module actually consumes person_module.role.
   const assign = async (p: Person, moduleKey: string) => {
     try { await setPersonModule(getAccessToken()!, p.id, moduleKey, 'user'); await load(); }
     catch (e) { err(e); }

@@ -289,7 +289,7 @@ export async function scheduleDoneCounts(on: string): Promise<Record<string, num
 
 // ── Food Control Plans ────────────────────────────────────────────────────────
 // Admin sees all plans; members see only plans they're assigned to via person_plan.
-const assetImageSub = `(SELECT image_url FROM vessel_assets WHERE food_control_plan_id = fcp.id AND image_url IS NOT NULL LIMIT 1) AS asset_image_url`
+const assetImageSub = `(SELECT image_url FROM assets WHERE food_control_plan_id = fcp.id AND image_url IS NOT NULL LIMIT 1) AS asset_image_url`
 
 export async function listPlans(opts: { isAdmin: boolean; userId?: string | null }): Promise<FoodControlPlan[]> {
   if (opts.isAdmin) {

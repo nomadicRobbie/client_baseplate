@@ -4,18 +4,18 @@ import { Image } from 'expo-image';
 import { Redirect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDMY } from '@/lib/format';
-import type { VesselAsset, VesselAssetType, VesselFault, VesselFieldDef, VesselUpcomingItem } from '@blnk/shared';
+import type { Asset, AssetType, AssetFault, AssetFieldDef, AssetUpcomingItem } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { listVesselAssets, listVesselAssetTypes, listVesselFaults, getVesselUpcoming, createVesselAsset, createVesselAssetType, deleteVesselAssetType } from '@/lib/api';
+import { listAssets, listAssetTypes, listAssetFaults, getAssetUpcoming, createAsset, createAssetType, deleteAssetType } from '@/lib/api';
 import { readThrough } from '@/lib/mirror';
 import { pendingCount } from '@/lib/outbox';
-import { syncVesselOutbox } from '@/lib/vessel-sync';
+import { syncAssetOutbox } from '@/lib/asset-sync';
 import { useOnReconnect } from '@/lib/use-reconnect';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Row, Button, TextField, Notice } from '@/ui/components';
 import { OfflineBanner, PendingSyncBanner } from '@/ui/status';
-import { ParticularsForm } from '@/ui/vessel';
+import { ParticularsForm } from '@/ui/asset';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' | 'info' };
@@ -51,7 +51,7 @@ const makeStyles = (t: ThemeT) => ({
   flex1: { flex: 1 },
   addTypeSection: { gap: t.space.md, paddingTop: t.space.md },
   addFieldSection: { gap: t.space.sm, paddingTop: t.space.md },
-  levelDot: (level: VesselUpcomingItem['level']) => ({
+  levelDot: (level: AssetUpcomingItem['level']) => ({
     width: 8, height: 8, borderRadius: 4, marginTop: 5,
     backgroundColor: level === 'over' ? t.color.danger : level === 'due' ? t.color.primary : t.color.border,
   }),
@@ -69,10 +69,10 @@ export default function AssetManager() {
   const isAdmin = user?.role === 'admin' || user?.role === 'super';
 
   const [tab, setTab] = useState<Tab>('overview');
-  const [assets, setAssets] = useState<VesselAsset[]>([]);
-  const [types, setTypes] = useState<VesselAssetType[]>([]);
-  const [faults, setFaults] = useState<VesselFault[]>([]);
-  const [upcoming, setUpcoming] = useState<VesselUpcomingItem[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [types, setTypes] = useState<AssetType[]>([]);
+  const [faults, setFaults] = useState<AssetFault[]>([]);
+  const [upcoming, setUpcoming] = useState<AssetUpcomingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
   const [pending, setPending] = useState(pendingCount());
@@ -89,9 +89,9 @@ export default function AssetManager() {
   // Add-type form
   const [showAddType, setShowAddType] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
-  const [draftFields, setDraftFields] = useState<VesselFieldDef[]>([]);
+  const [draftFields, setDraftFields] = useState<AssetFieldDef[]>([]);
   const [fieldLabel, setFieldLabel] = useState('');
-  const [fieldType, setFieldType] = useState<VesselFieldDef['type']>('text');
+  const [fieldType, setFieldType] = useState<AssetFieldDef['type']>('text');
   const [fieldUnit, setFieldUnit] = useState('');
   const [fieldOptions, setFieldOptions] = useState('');
 
@@ -103,10 +103,10 @@ export default function AssetManager() {
     setLoading(true);
     try {
       const [a, f, u, ty] = await Promise.all([
-        readThrough('vessel:assets', () => listVesselAssets(tok())),
-        readThrough('vessel:faults:all', () => listVesselFaults(tok())),
-        readThrough('vessel:upcoming:all', () => getVesselUpcoming(tok())),
-        readThrough('vessel:asset-types', () => listVesselAssetTypes(tok())),
+        readThrough('asset:assets', () => listAssets(tok())),
+        readThrough('asset:faults:all', () => listAssetFaults(tok())),
+        readThrough('asset:upcoming:all', () => getAssetUpcoming(tok())),
+        readThrough('asset:asset-types', () => listAssetTypes(tok())),
       ]);
       setAssets(a.value.assets);
       setFaults(f.value.faults.filter((x) => x.status !== 'closed'));
@@ -117,14 +117,14 @@ export default function AssetManager() {
     } catch { /* mirror serves stale on error */ } finally { setLoading(false); }
   };
   const doSync = async (reload = false) => {
-    const { remaining } = await syncVesselOutbox();
+    const { remaining } = await syncAssetOutbox();
     setPending(remaining);
     if (reload) void load();
   };
   useEffect(() => { void load(); void doSync(); }, []);
   useOnReconnect(() => { void doSync(true); });
 
-  if (features && !features.vessel) return <Redirect href="/dashboard" />;
+  if (features && !features.asset) return <Redirect href="/dashboard" />;
 
   // ── Derived ──────────────────────────────────────────────────────────────────
   const faultAssets = new Set(faults.map((f) => f.asset_id)).size;
@@ -142,7 +142,7 @@ export default function AssetManager() {
   const moreMaint = actionableUpcoming.length - maintPreview.length;
 
   const toggle = (card: 'faults' | 'maintenance') => setExpandedCard((c) => (c === card ? null : card));
-  const openAsset = (id: string) => router.push({ pathname: '/dashboard/vessel/[assetId]', params: { assetId: id } });
+  const openAsset = (id: string) => router.push({ pathname: '/dashboard/asset/[assetId]', params: { assetId: id } });
 
   // ── Add-asset actions ─────────────────────────────────────────────────────────
   const addAsset = async () => {
@@ -150,7 +150,7 @@ export default function AssetManager() {
     if (!typeId) { setAddMsg({ text: 'Select an asset type.', tone: 'error' }); return; }
     setAddBusy(true); setAddMsg(null);
     try {
-      await createVesselAsset(tok(), { asset_type_id: typeId, name: assetName.trim(), particulars });
+      await createAsset(tok(), { asset_type_id: typeId, name: assetName.trim(), particulars });
       setAssetName(''); setParticulars({}); setTab('overview'); void load();
     } catch (e) { setAddMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' }); setAddBusy(false); }
   };
@@ -158,7 +158,7 @@ export default function AssetManager() {
   const addField = () => {
     if (!fieldLabel.trim()) return;
     const key = slugify(fieldLabel.trim()) || `field_${draftFields.length + 1}`;
-    const field: VesselFieldDef = {
+    const field: AssetFieldDef = {
       key, label: fieldLabel.trim(), type: fieldType,
       ...(fieldUnit.trim() ? { unit: fieldUnit.trim() } : {}),
       ...(fieldType === 'select' && fieldOptions.trim() ? { options: fieldOptions.split(',').map((o) => o.trim()).filter(Boolean) } : {}),
@@ -176,16 +176,16 @@ export default function AssetManager() {
     if (!newTypeName.trim()) return;
     setAddBusy(true); setAddMsg(null);
     try {
-      const { asset_type } = await createVesselAssetType(tok(), { name: newTypeName.trim(), fields: draftFields });
+      const { asset_type } = await createAssetType(tok(), { name: newTypeName.trim(), fields: draftFields });
       resetAddType(); selectType(asset_type.id); void load();
       setAddMsg({ text: `Type "${asset_type.name}" added.`, tone: 'success' });
     } catch (e) { setAddMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' }); } finally { setAddBusy(false); }
   };
 
-  const deleteType = async (ty: VesselAssetType) => {
+  const deleteType = async (ty: AssetType) => {
     setAddBusy(true); setAddMsg(null);
     try {
-      await deleteVesselAssetType(tok(), ty.id);
+      await deleteAssetType(tok(), ty.id);
       if (typeId === ty.id) setTypeId(null);
       void load();
       setAddMsg({ text: `"${ty.name}" deleted.`, tone: 'success' });
@@ -212,7 +212,7 @@ export default function AssetManager() {
                   {faultPreview.map((f) => {
                     const assetName = assets.find((a) => a.id === f.asset_id)?.name;
                     return (
-                      <Pressable key={f.id} onPress={() => router.push({ pathname: '/dashboard/vessel/[assetId]/faults', params: { assetId: f.asset_id } })} accessibilityRole="button" style={s.itemLink}>
+                      <Pressable key={f.id} onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/faults', params: { assetId: f.asset_id } })} accessibilityRole="button" style={s.itemLink}>
                         <Text variant="small" numberOfLines={1}>{f.name}</Text>
                         <Text variant="small" muted numberOfLines={1}>{[assetName, f.urgency].filter(Boolean).join(' · ')}</Text>
                       </Pressable>
@@ -249,7 +249,7 @@ export default function AssetManager() {
                   {maintPreview.map((u) => {
                     const assetName = assets.find((a) => a.id === u.asset_id)?.name;
                     return (
-                      <Pressable key={u.id} onPress={() => router.push({ pathname: '/dashboard/vessel/[assetId]/maintenance', params: { assetId: u.asset_id } })} accessibilityRole="button" style={s.itemLink}>
+                      <Pressable key={u.id} onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/maintenance', params: { assetId: u.asset_id } })} accessibilityRole="button" style={s.itemLink}>
                         <Text variant="small" numberOfLines={1}>{u.title}</Text>
                         <Text variant="small" muted numberOfLines={1}>
                           {[assetName, u.level === 'over' ? 'Overdue' : 'Due soon', u.due_date ? formatDMY(u.due_date) : null].filter(Boolean).join(' · ')}
@@ -324,7 +324,7 @@ export default function AssetManager() {
             {actionable.map((u) => {
               const assetName = assets.find((a) => a.id === u.asset_id)?.name;
               return (
-                <Pressable key={u.id} onPress={() => router.push({ pathname: '/dashboard/vessel/[assetId]/maintenance', params: { assetId: u.asset_id } })} accessibilityRole="button"
+                <Pressable key={u.id} onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/maintenance', params: { assetId: u.asset_id } })} accessibilityRole="button"
                   style={s.scheduleRow}>
                   <View style={s.levelDot(u.level)} />
                   <View style={s.scheduleInfo}>
@@ -350,7 +350,7 @@ export default function AssetManager() {
                 const assetName = assets.find((a) => a.id === f.asset_id)?.name;
                 const dotColor = faultDotColor(f.urgency);
                 return (
-                  <Pressable key={f.id} onPress={() => router.push({ pathname: '/dashboard/vessel/[assetId]/faults', params: { assetId: f.asset_id } })} accessibilityRole="button"
+                  <Pressable key={f.id} onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/faults', params: { assetId: f.asset_id } })} accessibilityRole="button"
                     style={s.scheduleRow}>
                     <View style={{ width: 8, height: 8, borderRadius: 4, marginTop: 5, backgroundColor: dotColor }} />
                     <View style={s.scheduleInfo}>
@@ -374,7 +374,7 @@ export default function AssetManager() {
               {scheduled.map((u) => {
                 const assetName = assets.find((a) => a.id === u.asset_id)?.name;
                 return (
-                  <Pressable key={u.id} onPress={() => router.push({ pathname: '/dashboard/vessel/[assetId]/maintenance', params: { assetId: u.asset_id } })} accessibilityRole="button"
+                  <Pressable key={u.id} onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/maintenance', params: { assetId: u.asset_id } })} accessibilityRole="button"
                     style={s.scheduleRow}>
                     <View style={s.levelDot(u.level)} />
                     <View style={s.scheduleInfo}>

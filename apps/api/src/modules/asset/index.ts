@@ -8,18 +8,16 @@ import { config } from '../../config'
 import { getPersonByUserId, getPushTokensForModules } from '../../db/queries/people'
 import { sendPush } from '../../utils/push'
 import { buildUpcoming } from './upcoming'
-import * as q from '../../db/queries/vessel'
+import * as q from '../../db/queries/asset'
 
 const UPLOAD_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'])
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024 // 20 MB
 
-// Vessel / asset management (pilot slice). Guard policy mirrors compliance:
-//   member = anyone assigned to the vessel module (admins bypass) — view + log
+// Asset management module. Guard policy mirrors compliance:
+//   member = anyone assigned to the asset module (admins bypass) — view + log
 //   admin  = platform admin/super — fleet setup & config
-// (Finer vessel-manager-vs-user enforcement waits on a domain-role guard; for now
-// operational writes are open to any assigned member.)
-const vesselPlugin: FastifyPluginAsync = async (fastify) => {
-  const member = [verifyBlnkAuth, requireModule('vessel')]
+const assetPlugin: FastifyPluginAsync = async (fastify) => {
+  const member = [verifyBlnkAuth, requireModule('asset')]
   const admin = [verifyBlnkAuth, requireRole('admin', 'super')]
 
   // ── Document upload ────────────────────────────────────────────────────────
@@ -27,14 +25,14 @@ const vesselPlugin: FastifyPluginAsync = async (fastify) => {
   await fastify.register(async (sub) => {
     await sub.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } })
     cloudinary.config({ cloud_name: config.cloudinary.cloudName, api_key: config.cloudinary.apiKey, api_secret: config.cloudinary.apiSecret })
-    sub.post('/vessel/documents/upload', { preHandler: admin }, async (req, reply) => {
+    sub.post('/asset/documents/upload', { preHandler: admin }, async (req, reply) => {
       const data = await req.file()
       if (!data) throw Errors.badRequest('no file received')
       if (!UPLOAD_MIME.has(data.mimetype)) throw Errors.badRequest('only PDF and images are accepted')
       const buffer = await data.toBuffer()
       const result = await new Promise<{ secure_url: string }>((resolve, reject) =>
         cloudinary.uploader.upload_stream(
-          { folder: `${config.tenantSlug}/vessel-docs`, resource_type: 'auto' },
+          { folder: `${config.tenantSlug}/asset-docs`, resource_type: 'auto' },
           (err, res) => err || !res ? reject(err ?? new Error('upload failed')) : resolve(res as { secure_url: string }),
         ).end(buffer),
       )
@@ -50,18 +48,18 @@ const vesselPlugin: FastifyPluginAsync = async (fastify) => {
   }
 
   // ── Asset types ────────────────────────────────────────────────────────────
-  fastify.get('/vessel/asset-types', { preHandler: member }, async (_req, reply) =>
+  fastify.get('/asset/asset-types', { preHandler: member }, async (_req, reply) =>
     reply.send({ asset_types: await q.listAssetTypes() }))
-  fastify.post('/vessel/asset-types', {
+  fastify.post('/asset/asset-types', {
     preHandler: admin,
     schema: { body: { type: 'object', required: ['name'], properties: { name: { type: 'string', minLength: 1 }, image_url: { type: ['string', 'null'] }, roles: { type: 'array', items: { type: 'string' } }, fields: { type: 'array' } } } },
   }, async (req, reply) => reply.status(201).send({ asset_type: await q.createAssetType(req.body as never) }))
-  fastify.patch('/vessel/asset-types/:id', { preHandler: admin }, async (req, reply) => {
+  fastify.patch('/asset/asset-types/:id', { preHandler: admin }, async (req, reply) => {
     const at = await q.updateAssetType((req.params as { id: string }).id, req.body as object)
     if (!at) throw Errors.notFound('asset type')
     return reply.send({ asset_type: at })
   })
-  fastify.delete('/vessel/asset-types/:id', { preHandler: admin }, async (req, reply) => {
+  fastify.delete('/asset/asset-types/:id', { preHandler: admin }, async (req, reply) => {
     const { id } = req.params as { id: string }
     if (await q.assetTypeInUse(id)) throw Errors.badRequest('asset type is in use — reassign or delete its assets first')
     await q.deleteAssetType(id)
@@ -69,26 +67,26 @@ const vesselPlugin: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── Assets ─────────────────────────────────────────────────────────────────
-  fastify.get('/vessel/assets', { preHandler: member }, async (_req, reply) =>
+  fastify.get('/asset/assets', { preHandler: member }, async (_req, reply) =>
     reply.send({ assets: await q.listAssets() }))
-  fastify.get('/vessel/assets/:id', { preHandler: member }, async (req, reply) => {
+  fastify.get('/asset/assets/:id', { preHandler: member }, async (req, reply) => {
     const asset = await q.getAsset((req.params as { id: string }).id)
     if (!asset) throw Errors.notFound('asset')
     return reply.send({ asset })
   })
-  fastify.post('/vessel/assets', {
+  fastify.post('/asset/assets', {
     preHandler: admin,
     schema: { body: { type: 'object', required: ['asset_type_id', 'name'], properties: {
       asset_type_id: { type: 'string' }, name: { type: 'string', minLength: 1 }, parent_asset_id: { type: ['string', 'null'] },
       mnz_number: {}, mmsi: {}, call_sign: {}, fuel_capacity: {}, refuel_threshold: {}, location: {}, condition: {}, supplier: {}, date_purchased: {}, image_url: {}, notes: {}, particulars: { type: 'object' },
     } } },
   }, async (req, reply) => reply.status(201).send({ asset: await q.createAsset(req.body as never, uid(req)) }))
-  fastify.patch('/vessel/assets/:id', { preHandler: admin }, async (req, reply) => {
+  fastify.patch('/asset/assets/:id', { preHandler: admin }, async (req, reply) => {
     const asset = await q.updateAsset((req.params as { id: string }).id, req.body as object, uid(req))
     if (!asset) throw Errors.notFound('asset')
     return reply.send({ asset })
   })
-  fastify.delete('/vessel/assets/:id', { preHandler: admin }, async (req, reply) => {
+  fastify.delete('/asset/assets/:id', { preHandler: admin }, async (req, reply) => {
     const asset = await q.getAsset((req.params as { id: string }).id)
     if (!asset || asset.status === 'deleted') throw Errors.notFound('asset')
     await q.softDeleteAsset(asset.id, uid(req))
@@ -96,50 +94,50 @@ const vesselPlugin: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── Components ─────────────────────────────────────────────────────────────
-  fastify.get('/vessel/components', { preHandler: member }, async (req, reply) =>
+  fastify.get('/asset/components', { preHandler: member }, async (req, reply) =>
     reply.send({ components: await q.listComponents((req.query as { asset_id?: string }).asset_id) }))
-  fastify.post('/vessel/components', {
+  fastify.post('/asset/components', {
     preHandler: admin,
     schema: { body: { type: 'object', required: ['asset_id', 'name'], properties: {
       asset_id: { type: 'string' }, name: { type: 'string', minLength: 1 }, parent_component_id: { type: ['string', 'null'] },
       category: {}, quantity: {}, serial_number: {}, model: {}, manufacturer: {}, install_date: {}, critical_component: {}, notes: {},
     } } },
   }, async (req, reply) => reply.status(201).send({ component: await q.createComponent(req.body as never, uid(req)) }))
-  fastify.patch('/vessel/components/:id', { preHandler: admin }, async (req, reply) => {
+  fastify.patch('/asset/components/:id', { preHandler: admin }, async (req, reply) => {
     const c = await q.updateComponent((req.params as { id: string }).id, req.body as object, uid(req))
     if (!c) throw Errors.notFound('component')
     return reply.send({ component: c })
   })
 
   // ── Assignments (person ↔ asset) ───────────────────────────────────────────
-  fastify.get('/vessel/assignments', { preHandler: member }, async (req, reply) => {
+  fastify.get('/asset/assignments', { preHandler: member }, async (req, reply) => {
     const { asset_id, person_id } = req.query as { asset_id?: string; person_id?: string }
     return reply.send({ assignments: await q.listAssignments({ asset_id, person_id }) })
   })
-  fastify.put('/vessel/assignments', {
+  fastify.put('/asset/assignments', {
     preHandler: admin,
     schema: { body: { type: 'object', required: ['person_id', 'asset_id'], properties: {
       person_id: { type: 'string' }, asset_id: { type: 'string' }, role: { type: ['string', 'null'] },
     } } },
   }, async (req, reply) => reply.send({ assignment: await q.upsertAssignment(req.body as never) }))
-  fastify.delete('/vessel/assignments/:id', { preHandler: admin }, async (req, reply) => {
+  fastify.delete('/asset/assignments/:id', { preHandler: admin }, async (req, reply) => {
     const ok = await q.deleteAssignment((req.params as { id: string }).id)
     if (!ok) throw Errors.notFound('assignment')
     return reply.status(204).send()
   })
 
   // ── Faults ─────────────────────────────────────────────────────────────────
-  fastify.get('/vessel/faults', { preHandler: member }, async (req, reply) => {
+  fastify.get('/asset/faults', { preHandler: member }, async (req, reply) => {
     const { asset_id, status } = req.query as { asset_id?: string; status?: string }
     return reply.send({ faults: await q.listFaults({ asset_id, status }) })
   })
-  fastify.get('/vessel/faults/:id', { preHandler: member }, async (req, reply) => {
+  fastify.get('/asset/faults/:id', { preHandler: member }, async (req, reply) => {
     const fault = await q.getFault((req.params as { id: string }).id)
     if (!fault) throw Errors.notFound('fault')
     return reply.send({ fault })
   })
   // Log Fault — reported_by defaults to the caller's person id if not given.
-  fastify.post('/vessel/faults', {
+  fastify.post('/asset/faults', {
     preHandler: member,
     schema: { body: { type: 'object', required: ['asset_id', 'name'], properties: {
       asset_id: { type: 'string' }, name: { type: 'string', minLength: 1 }, component_id: { type: ['string', 'null'] },
@@ -154,20 +152,20 @@ const vesselPlugin: FastifyPluginAsync = async (fastify) => {
       const [asset, reporter, tokens] = await Promise.all([
         q.getAsset(fault.asset_id),
         getPersonByUserId(req.user!.userId),
-        getPushTokensForModules(['vessel']),
+        getPushTokensForModules(['asset']),
       ])
       sendPush(
         tokens,
         'New fault logged',
         `${reporter?.name ?? 'Someone'} logged "${fault.name}" on ${asset?.name ?? 'an asset'}`,
-        { route: `/dashboard/vessel/${fault.asset_id}/faults` },
+        { route: `/dashboard/asset/${fault.asset_id}/faults` },
       )
     }
     return reply.status(201).send({ fault })
   })
   // Triage only (assign / urgency). Closing is a deliberate action — use /close
   // (with a note) or a maintenance record; you can't just flip status to closed.
-  fastify.patch('/vessel/faults/:id', { preHandler: member }, async (req, reply) => {
+  fastify.patch('/asset/faults/:id', { preHandler: member }, async (req, reply) => {
     const { id } = req.params as { id: string }
     const body = req.body as { status?: string }
     if (body.status === 'closed') {
@@ -179,7 +177,7 @@ const vesselPlugin: FastifyPluginAsync = async (fastify) => {
   })
 
   // Add a resolution step — a progress note (e.g. "part ordered"). Fault stays open.
-  fastify.post('/vessel/faults/:id/steps', {
+  fastify.post('/asset/faults/:id/steps', {
     preHandler: member,
     schema: { body: { type: 'object', required: ['note'], properties: {
       note: { type: 'string', minLength: 1 }, idempotency_key: { type: 'string' },
@@ -195,7 +193,7 @@ const vesselPlugin: FastifyPluginAsync = async (fastify) => {
   // Close a fault WITH A NOTE — no maintenance record required. Records a 'close'
   // step. (Closing with a maintenance record still goes via POST /maintenance-logs;
   // an incident-based close lands when the incidents module ships.)
-  fastify.post('/vessel/faults/:id/close', {
+  fastify.post('/asset/faults/:id/close', {
     preHandler: member,
     schema: { body: { type: 'object', required: ['resolution_notes'], properties: {
       resolution_notes: { type: 'string', minLength: 1 }, idempotency_key: { type: 'string' },
@@ -210,15 +208,15 @@ const vesselPlugin: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── Coming up — derived due/overdue services for the dashboard ─────────────
-  fastify.get('/vessel/upcoming', { preHandler: member }, async (req, reply) => {
+  fastify.get('/asset/upcoming', { preHandler: member }, async (req, reply) => {
     const { asset_id } = req.query as { asset_id?: string }
     return reply.send({ items: await buildUpcoming(asset_id) })
   })
 
   // ── Maintenance schedules ──────────────────────────────────────────────────
-  fastify.get('/vessel/maintenance-schedules', { preHandler: member }, async (req, reply) =>
+  fastify.get('/asset/maintenance-schedules', { preHandler: member }, async (req, reply) =>
     reply.send({ schedules: await q.listSchedules((req.query as { asset_id?: string }).asset_id) }))
-  fastify.post('/vessel/maintenance-schedules', {
+  fastify.post('/asset/maintenance-schedules', {
     preHandler: admin,
     schema: { body: { type: 'object', required: ['asset_id', 'task_name'], properties: {
       asset_id: { type: 'string' }, task_name: { type: 'string', minLength: 1 }, component_id: { type: ['string', 'null'] },
@@ -229,7 +227,7 @@ const vesselPlugin: FastifyPluginAsync = async (fastify) => {
       form_schema: { type: ['object', 'null'] },
     } } },
   }, async (req, reply) => reply.status(201).send({ schedule: await q.createSchedule(req.body as never, uid(req)) }))
-  fastify.patch('/vessel/maintenance-schedules/:id', { preHandler: admin }, async (req, reply) => {
+  fastify.patch('/asset/maintenance-schedules/:id', { preHandler: admin }, async (req, reply) => {
     const s = await q.updateSchedule((req.params as { id: string }).id, req.body as object, uid(req))
     if (!s) throw Errors.notFound('maintenance schedule')
     return reply.send({ schedule: s })
@@ -238,11 +236,11 @@ const vesselPlugin: FastifyPluginAsync = async (fastify) => {
   // ── Maintenance logs — Complete Maintenance ────────────────────────────────
   // Append-only evidence. If it resolves a fault, that fault is closed here — the
   // maintenance log IS the closure evidence the fault-close guard looks for.
-  fastify.get('/vessel/maintenance-logs', { preHandler: member }, async (req, reply) => {
+  fastify.get('/asset/maintenance-logs', { preHandler: member }, async (req, reply) => {
     const { asset_id, fault_id } = req.query as { asset_id?: string; fault_id?: string }
     return reply.send({ logs: await q.listLogs({ asset_id, fault_id }) })
   })
-  fastify.post('/vessel/maintenance-logs', {
+  fastify.post('/asset/maintenance-logs', {
     preHandler: member,
     schema: { body: { type: 'object', required: ['asset_id'], properties: {
       asset_id: { type: 'string' }, schedule_id: { type: ['string', 'null'] }, fault_id: { type: ['string', 'null'] }, component_id: { type: ['string', 'null'] },
@@ -265,20 +263,20 @@ const vesselPlugin: FastifyPluginAsync = async (fastify) => {
       await q.closeFault(log.fault_id, note, uid(req))
       fault_closed = true
     }
-    // Notify vessel module members of the completed maintenance.
+    // Notify asset module members of the completed maintenance.
     const [asset, completer, tokens] = await Promise.all([
       q.getAsset(log.asset_id),
       getPersonByUserId(req.user!.userId),
-      getPushTokensForModules(['vessel']),
+      getPushTokensForModules(['asset']),
     ])
     sendPush(
       tokens,
       'Maintenance completed',
       `${completer?.name ?? 'Someone'} logged maintenance on ${asset?.name ?? 'an asset'}${log.task_name ? `: ${log.task_name}` : ''}`,
-      { route: `/dashboard/vessel/${log.asset_id}/maintenance` },
+      { route: `/dashboard/asset/${log.asset_id}/maintenance` },
     )
     return reply.status(201).send({ log, fault_closed })
   })
 }
 
-export default vesselPlugin
+export default assetPlugin

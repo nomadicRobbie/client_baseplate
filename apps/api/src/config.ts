@@ -70,7 +70,7 @@ export const config = {
     analytics: flag('FEATURE_ANALYTICS'),
     compliance: flag('FEATURE_COMPLIANCE'),
     locations: flag('FEATURE_LOCATIONS'),
-    vessel: flag('FEATURE_VESSEL'),
+    asset: flag('FEATURE_ASSET'),
   } satisfies FeatureFlags,
 
   get stripe() {

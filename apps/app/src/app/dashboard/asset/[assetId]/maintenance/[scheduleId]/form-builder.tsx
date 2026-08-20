@@ -4,7 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { FormField, FormFieldType } from '@blnk/shared';
 import { getAccessToken } from '@/lib/session';
-import { listVesselSchedules, updateVesselSchedule } from '@/lib/api';
+import { listAssetSchedules, updateAssetSchedule } from '@/lib/api';
 import { readThrough } from '@/lib/mirror';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, TextField, Badge, Notice } from '@/ui/components';
@@ -79,7 +79,7 @@ export default function FormBuilder() {
   const [newRequired, setNewRequired] = useState(false);
 
   useEffect(() => {
-    readThrough('vessel:schedules:' + assetId, () => listVesselSchedules(getAccessToken()!, assetId))
+    readThrough('asset:schedules:' + assetId, () => listAssetSchedules(getAccessToken()!, assetId))
       .then(({ value }) => {
         const sc = value.schedules.find((s) => s.id === scheduleId);
         if (!sc) { setLoadError('Schedule not found.'); return; }
@@ -101,14 +101,14 @@ export default function FormBuilder() {
     if (!fields) return;
     setBusy(true); setMsg(null);
     try {
-      await updateVesselSchedule(getAccessToken()!, scheduleId, { form_schema: { fields } });
+      await updateAssetSchedule(getAccessToken()!, scheduleId, { form_schema: { fields } });
       setMsg({ text: 'Form saved.', tone: 'success' });
-      setTimeout(() => router.push({ pathname: '/dashboard/vessel/[assetId]/maintenance', params: { assetId } }), 800);
+      setTimeout(() => router.push({ pathname: '/dashboard/asset/[assetId]/maintenance', params: { assetId } }), 800);
     } catch (e) { setMsg({ text: e instanceof Error ? e.message : String(e), tone: 'error' }); }
     finally { setBusy(false); }
   };
 
-  const goBack = () => router.push({ pathname: '/dashboard/vessel/[assetId]/maintenance', params: { assetId } });
+  const goBack = () => router.push({ pathname: '/dashboard/asset/[assetId]/maintenance', params: { assetId } });
 
   if (loadError) return (
     <Screen>

@@ -1,10 +1,10 @@
 import { getItem, setItem } from './storage';
 
-// Offline command outbox (spike — de-risks the vessel offline model).
+// Offline command outbox (spike — de-risks the asset offline model).
 //
 // Writes are queued as commands carrying a stable, client-generated idempotency
-// key and replayed FIFO on reconnect. Because the vessel domain is append-oriented
-// and the server dedupes on the key (vessel_faults.idempotency_key), replay is
+// key and replayed FIFO on reconnect. Because the asset domain is append-oriented
+// and the server dedupes on the key (asset_faults.idempotency_key), replay is
 // EXACTLY-ONCE: a command that was sent but whose ack was lost re-sends the SAME
 // key, and the server returns the existing record instead of creating a duplicate.
 // So the client never has to reason about "did that write land?" — it just retries.

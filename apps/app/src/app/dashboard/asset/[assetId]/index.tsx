@@ -4,18 +4,18 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Redirect, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { VesselAsset, VesselAssetType, VesselFault, VesselUpcomingItem, FoodControlPlan } from '@blnk/shared';
+import type { Asset, AssetType, AssetFault, AssetUpcomingItem, FoodControlPlan } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { listVesselFaults, listVesselAssetTypes, getVesselUpcoming, updateVesselAsset, deleteVesselAsset, uploadVesselAssetImage, listPlans } from '@/lib/api';
+import { listAssetFaults, listAssetTypes, getAssetUpcoming, updateAsset, deleteAsset, uploadAssetImage, listPlans } from '@/lib/api';
 import { readThrough } from '@/lib/mirror';
 import { pendingCount } from '@/lib/outbox';
-import { syncVesselOutbox, loadAsset } from '@/lib/vessel-sync';
+import { syncAssetOutbox, loadAsset } from '@/lib/asset-sync';
 import { formatDMY } from '@/lib/format';
 import { useOnReconnect } from '@/lib/use-reconnect';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, Row, TextField } from '@/ui/components';
-import { ParticularsForm } from '@/ui/vessel';
+import { ParticularsForm } from '@/ui/asset';
 import { StatusBadge, OfflineBanner, PendingSyncBanner, type StatusLevel } from '@/ui/status';
 
 type ThemeT = ReturnType<typeof useTheme>;
@@ -60,13 +60,13 @@ export default function AssetHome() {
   const isAdmin = user?.role === 'admin' || user?.role === 'super';
 
   const [assetTab, setAssetTab] = useState<AssetTab>('overview');
-  const [asset, setAsset] = useState<VesselAsset | null>(null);
-  const [faults, setFaults] = useState<VesselFault[]>([]);
-  const [upcoming, setUpcoming] = useState<VesselUpcomingItem[]>([]);
+  const [asset, setAsset] = useState<Asset | null>(null);
+  const [faults, setFaults] = useState<AssetFault[]>([]);
+  const [upcoming, setUpcoming] = useState<AssetUpcomingItem[]>([]);
   const [offline, setOffline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(pendingCount());
-  const [assetType, setAssetType] = useState<VesselAssetType | null>(null);
+  const [assetType, setAssetType] = useState<AssetType | null>(null);
   const [editingDetails, setEditingDetails] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [draftParticulars, setDraftParticulars] = useState<Record<string, string>>({});
@@ -84,9 +84,9 @@ export default function AssetHome() {
     try {
       const [{ asset, offline: o1 }, f, u, types] = await Promise.all([
         loadAsset(assetId),
-        readThrough('vessel:faults:' + assetId, () => listVesselFaults(tok(), { asset_id: assetId })),
-        readThrough('vessel:upcoming:' + assetId, () => getVesselUpcoming(tok(), assetId)),
-        readThrough('vessel:asset-types', () => listVesselAssetTypes(tok())),
+        readThrough('asset:faults:' + assetId, () => listAssetFaults(tok(), { asset_id: assetId })),
+        readThrough('asset:upcoming:' + assetId, () => getAssetUpcoming(tok(), assetId)),
+        readThrough('asset:asset-types', () => listAssetTypes(tok())),
       ]);
       setAsset(asset); setFaults(f.value.faults); setUpcoming(u.value.items);
       setOffline(o1 || f.stale || u.stale);
@@ -97,30 +97,30 @@ export default function AssetHome() {
       }
     } finally { setLoading(false); }
   };
-  const doSync = async () => { const { remaining } = await syncVesselOutbox(); setPending(remaining); await load(); };
+  const doSync = async () => { const { remaining } = await syncAssetOutbox(); setPending(remaining); await load(); };
   useEffect(() => { void load(); void doSync(); }, [assetId]);
   useOnReconnect(() => { void doSync(); });
 
-  if (features && !features.vessel) return <Redirect href="/dashboard" />;
+  if (features && !features.asset) return <Redirect href="/dashboard" />;
 
   const openFaults = faults.filter((f) => f.status !== 'closed').length;
   const overdue = upcoming.filter((u) => u.level === 'over').length;
   const dueSoon = upcoming.filter((u) => u.level === 'due').length;
   const coming = upcoming.filter((u) => u.level !== 'ok').slice(0, 8);
 
-  const goFaults = () => router.push({ pathname: '/dashboard/vessel/[assetId]/faults', params: { assetId } });
-  const goMaint = () => router.push({ pathname: '/dashboard/vessel/[assetId]/maintenance', params: { assetId } });
-  const goCrew = () => router.push({ pathname: '/dashboard/vessel/[assetId]/crew', params: { assetId } });
-  const goComponents = () => router.push({ pathname: '/dashboard/vessel/[assetId]/components', params: { assetId } });
+  const goFaults = () => router.push({ pathname: '/dashboard/asset/[assetId]/faults', params: { assetId } });
+  const goMaint = () => router.push({ pathname: '/dashboard/asset/[assetId]/maintenance', params: { assetId } });
+  const goCrew = () => router.push({ pathname: '/dashboard/asset/[assetId]/crew', params: { assetId } });
+  const goComponents = () => router.push({ pathname: '/dashboard/asset/[assetId]/components', params: { assetId } });
 
   const saveDetails = async () => {
     if (!asset) return;
     if (!draftName.trim()) return;
     setSavingDetails(true);
     try {
-      const patch: Parameters<typeof updateVesselAsset>[2] = { particulars: draftParticulars };
+      const patch: Parameters<typeof updateAsset>[2] = { particulars: draftParticulars };
       if (draftName.trim() !== asset.name) patch.name = draftName.trim();
-      const { asset: updated } = await updateVesselAsset(tok(), asset.id, patch);
+      const { asset: updated } = await updateAsset(tok(), asset.id, patch);
       setAsset(updated);
       setEditingDetails(false);
     } finally { setSavingDetails(false); }
@@ -130,7 +130,7 @@ export default function AssetHome() {
     if (!asset) return;
     setSavingPlan(true);
     try {
-      const { asset: updated } = await updateVesselAsset(tok(), asset.id, { food_control_plan_id: planId });
+      const { asset: updated } = await updateAsset(tok(), asset.id, { food_control_plan_id: planId });
       setAsset(updated);
       setAssigningPlan(false);
     } finally { setSavingPlan(false); }
@@ -144,8 +144,8 @@ export default function AssetHome() {
     if (result.canceled || !result.assets[0]) return;
     setUploadingIcon(true);
     try {
-      const url = await uploadVesselAssetImage(tok(), result.assets[0].uri);
-      const { asset: updated } = await updateVesselAsset(tok(), asset.id, { image_url: url });
+      const url = await uploadAssetImage(tok(), result.assets[0].uri);
+      const { asset: updated } = await updateAsset(tok(), asset.id, { image_url: url });
       setAsset(updated);
     } finally { setUploadingIcon(false); }
   };
@@ -154,9 +154,9 @@ export default function AssetHome() {
     if (!asset || deleteConfirm !== asset.name) return;
     setDeleting(true);
     try {
-      await deleteVesselAsset(tok(), asset.id);
+      await deleteAsset(tok(), asset.id);
       if (router.canGoBack()) router.back();
-      else router.replace('/dashboard/vessel');
+      else router.replace('/dashboard/asset');
     } catch (e) {
       setDeleting(false);
       // surface the error in the confirm field so the zone stays visible
@@ -173,11 +173,11 @@ export default function AssetHome() {
 
   return (
     <Screen>
-      <Pressable onPress={() => router.push('/dashboard/vessel')} accessibilityRole="button" style={s.backBtn}>
+      <Pressable onPress={() => router.push('/dashboard/asset')} accessibilityRole="button" style={s.backBtn}>
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
         <Text variant="label" color={t.color.primary}>Assets</Text>
       </Pressable>
-      <Pressable onPress={() => void pickIcon()} disabled={!isAdmin || uploadingIcon} accessibilityRole="button" accessibilityLabel="Change vessel icon" style={{ alignSelf: 'flex-start' }}>
+      <Pressable onPress={() => void pickIcon()} disabled={!isAdmin || uploadingIcon} accessibilityRole="button" accessibilityLabel="Change asset icon" style={{ alignSelf: 'flex-start' }}>
         {asset?.image_url
           ? <Image source={{ uri: asset.image_url }} style={{ width: 64, height: 64, borderRadius: 12 }} contentFit="cover" />
           : <View style={{ width: 64, height: 64, borderRadius: 12, backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
@@ -232,7 +232,7 @@ export default function AssetHome() {
             </View>
           </View>
 
-          {/* Food Control Plan — only when both vessel and compliance modules are active */}
+          {/* Food Control Plan — only when both asset and compliance modules are active */}
           {features?.compliance && (
             <>
               <Text variant="heading">Food Control Plan</Text>

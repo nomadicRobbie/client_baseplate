@@ -13,7 +13,7 @@ const makeStyles = (t: ThemeT) => ({
   syncLabel: { flex: 1 },
 });
 
-// Shared status vocabulary for the vessel module — one colour language, used by
+// Shared status vocabulary for the asset module — one colour language, used by
 // every section (faults now; maintenance/compliance/… later) so the whole app
 // reads the same. green = ok · amber = due soon · red = overdue/critical ·
 // grey = closed/inactive.
@@ -51,7 +51,7 @@ export function urgencyLevel(urgency?: string | null): StatusLevel {
   return 'info';
 }
 
-// ── Shared offline affordances (used across vessel routes) ──────────────────
+// ── Shared offline affordances (used across asset routes) ───────────────────
 export function OfflineBanner({ offline }: { offline: boolean }) {
   const t = useTheme();
   const s = makeStyles(t);

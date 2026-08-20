@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { View, Pressable, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { FormField, FormResponseData, VesselMaintenanceSchedule } from '@blnk/shared';
+import type { FormField, FormResponseData, AssetMaintenanceSchedule } from '@blnk/shared';
 import { getAccessToken } from '@/lib/session';
-import { listVesselSchedules, createVesselMaintenanceLog, uploadVesselDocument } from '@/lib/api';
+import { listAssetSchedules, createAssetMaintenanceLog, uploadAssetDocument } from '@/lib/api';
 import { readThrough } from '@/lib/mirror';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, TextField, Notice } from '@/ui/components';
@@ -92,7 +92,7 @@ export default function CompleteTask() {
   const router = useRouter();
   const { assetId, scheduleId } = useLocalSearchParams<{ assetId: string; scheduleId: string }>();
 
-  const [schedule, setSchedule] = useState<VesselMaintenanceSchedule | null>(null);
+  const [schedule, setSchedule] = useState<AssetMaintenanceSchedule | null>(null);
   const [loadError, setLoadError] = useState('');
   const [formData, setFormData] = useState<FormResponseData>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -102,7 +102,7 @@ export default function CompleteTask() {
   const [msg, setMsg] = useState<Msg | null>(null);
 
   useEffect(() => {
-    readThrough('vessel:schedules:' + assetId, () => listVesselSchedules(getAccessToken()!, assetId))
+    readThrough('asset:schedules:' + assetId, () => listAssetSchedules(getAccessToken()!, assetId))
       .then(({ value }) => {
         const sc = value.schedules.find((s) => s.id === scheduleId);
         if (!sc) { setLoadError('Schedule not found.'); return; }
@@ -129,7 +129,7 @@ export default function CompleteTask() {
     input.onchange = async () => {
       const file = input.files?.[0]; if (!file) return;
       setUploading(true);
-      try { const { url } = await uploadVesselDocument(getAccessToken()!, file); setAttachments((prev) => [...prev, url]); }
+      try { const { url } = await uploadAssetDocument(getAccessToken()!, file); setAttachments((prev) => [...prev, url]); }
       catch (e) { setMsg({ text: e instanceof Error ? e.message : 'Upload failed', tone: 'error' }); }
       finally { setUploading(false); }
     };
@@ -160,19 +160,19 @@ export default function CompleteTask() {
       for (const f of fields) {
         if (f.type === 'number' && typeof coerced[f.id] === 'string') coerced[f.id] = Number(coerced[f.id]);
       }
-      await createVesselMaintenanceLog(getAccessToken()!, {
+      await createAssetMaintenanceLog(getAccessToken()!, {
         asset_id: assetId, schedule_id: scheduleId,
         task_name: schedule?.task_name,
         completed_date: new Date().toISOString().slice(0, 10),
         form_data: coerced,
         attachments: attachments.length ? attachments : undefined,
       });
-      router.push({ pathname: '/dashboard/vessel/[assetId]/maintenance', params: { assetId } });
+      router.push({ pathname: '/dashboard/asset/[assetId]/maintenance', params: { assetId } });
     } catch (e) { setMsg({ text: e instanceof Error ? e.message : String(e), tone: 'error' }); }
     finally { setBusy(false); }
   };
 
-  const goBack = () => router.push({ pathname: '/dashboard/vessel/[assetId]/maintenance', params: { assetId } });
+  const goBack = () => router.push({ pathname: '/dashboard/asset/[assetId]/maintenance', params: { assetId } });
 
   if (loadError) return (
     <Screen>

@@ -1,6 +1,6 @@
 import { query } from '../pool'
 import type { FeedPost, FeedPostComment, FeedItem } from '@blnk/shared'
-import { buildUpcoming } from '../../modules/vessel/upcoming'
+import { buildUpcoming } from '../../modules/asset/upcoming'
 import { listActiveSchedules, scheduleDoneCounts } from './compliance'
 import { isDueOn } from '../../modules/compliance/schedule'
 
@@ -92,14 +92,14 @@ export async function listFeedItems(opts: {
   limit?: number
 }): Promise<FeedItem[]> {
   const { isAdmin, myModules, limit = 50 } = opts
-  const hasVessel = isAdmin || myModules.includes('vessel')
+  const hasAsset = isAdmin || myModules.includes('asset')
   const hasCompliance = isAdmin || myModules.includes('compliance')
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
   const items: FeedItem[] = []
 
-  // ── Vessel faults (recently opened, with step preview) ────────────────────
-  if (hasVessel) {
+  // ── Asset faults (recently opened, with step preview) ────────────────────
+  if (hasAsset) {
     const faults = await query<FaultRow>(
       `SELECT vf.id, vf.asset_id, va.name AS asset_name,
               vf.name AS fault_name, vf.urgency, vf.status,
@@ -107,13 +107,13 @@ export async function listFeedItems(opts: {
               COUNT(vfs.id)::int AS step_count,
               (SELECT row_to_json(s) FROM (
                 SELECT note, created_at::text AS created_at
-                FROM vessel_fault_steps
+                FROM asset_fault_steps
                 WHERE fault_id = vf.id
                 ORDER BY created_at DESC LIMIT 1
               ) s) AS latest_step
-       FROM vessel_faults vf
-       JOIN vessel_assets va ON va.id = vf.asset_id
-       LEFT JOIN vessel_fault_steps vfs ON vfs.fault_id = vf.id
+       FROM asset_faults vf
+       JOIN assets va ON va.id = vf.asset_id
+       LEFT JOIN asset_fault_steps vfs ON vfs.fault_id = vf.id
        WHERE vf.status = 'open'
          AND vf.created_at > $1
          AND va.status != 'deleted'
@@ -125,7 +125,7 @@ export async function listFeedItems(opts: {
     for (const f of faults) {
       items.push({
         kind: 'fault',
-        module: 'vessel',
+        module: 'asset',
         created_at: f.created_at,
         data: {
           id: f.id, asset_id: f.asset_id, asset_name: f.asset_name,
@@ -136,13 +136,13 @@ export async function listFeedItems(opts: {
     }
   }
 
-  // ── Vessel maintenance (upcoming / overdue) ───────────────────────────────
-  if (hasVessel) {
+  // ── Asset maintenance (upcoming / overdue) ───────────────────────────────
+  if (hasAsset) {
     const upcoming = await buildUpcoming()
     for (const u of upcoming.filter(x => x.level !== 'ok')) {
       items.push({
         kind: 'maintenance',
-        module: 'vessel',
+        module: 'asset',
         created_at: u.due_date ?? new Date().toISOString().slice(0, 10),
         data: { id: u.id, asset_id: u.asset_id, asset_name: '', task_name: u.title, due_date: u.due_date, level: u.level },
       })
@@ -151,7 +151,7 @@ export async function listFeedItems(opts: {
     if (maintItems.length) {
       const assetIds = [...new Set(maintItems.map(i => (i.data as { asset_id: string }).asset_id))]
       const names = await query<{ id: string; name: string }>(
-        `SELECT id, name FROM vessel_assets WHERE id = ANY($1)`,
+        `SELECT id, name FROM assets WHERE id = ANY($1)`,
         [assetIds],
       )
       const nameMap = Object.fromEntries(names.map(a => [a.id, a.name]))

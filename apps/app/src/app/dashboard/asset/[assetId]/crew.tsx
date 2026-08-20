@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { Redirect, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { Person, VesselAsset, VesselAssetAssignment, VesselAssetType } from '@blnk/shared';
+import type { Person, Asset, AssetAssignment, AssetType } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { listPeople, createPerson, listVesselAssignments, listVesselAssetTypes, upsertVesselAssignment, deleteVesselAssignment } from '@/lib/api';
-import { loadAsset } from '@/lib/vessel-sync';
+import { listPeople, createPerson, listAssetAssignments, listAssetTypes, upsertAssetAssignment, deleteAssetAssignment } from '@/lib/api';
+import { loadAsset } from '@/lib/asset-sync';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, Row, TextField } from '@/ui/components';
 
@@ -25,7 +25,7 @@ const makeStyles = (t: ThemeT) => ({
   personInfo: { flex: 1 },
 });
 
-export default function VesselCrew() {
+export default function AssetCrew() {
   const t = useTheme();
   const s = makeStyles(t);
   const router = useRouter();
@@ -33,10 +33,10 @@ export default function VesselCrew() {
   const { features, user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'super';
 
-  const [asset, setAsset] = useState<VesselAsset | null>(null);
-  const [assetType, setAssetType] = useState<VesselAssetType | null>(null);
+  const [asset, setAsset] = useState<Asset | null>(null);
+  const [assetType, setAssetType] = useState<AssetType | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
-  const [assignments, setAssignments] = useState<VesselAssetAssignment[]>([]);
+  const [assignments, setAssignments] = useState<AssetAssignment[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<Msg | null>(null);
   const [pickedId, setPickedId] = useState<string | null>(null);
@@ -50,8 +50,8 @@ export default function VesselCrew() {
     const [{ asset: a }, { people: ps }, { assignments: as_ }, { asset_types }] = await Promise.all([
       loadAsset(assetId),
       listPeople(tok(), { active: true }),
-      listVesselAssignments(tok(), assetId),
-      listVesselAssetTypes(tok()),
+      listAssetAssignments(tok(), assetId),
+      listAssetTypes(tok()),
     ]);
     const type = asset_types.find((t) => t.id === a?.asset_type_id) ?? null;
     setAsset(a); setAssetType(type); setPeople(ps); setAssignments(as_);
@@ -59,7 +59,7 @@ export default function VesselCrew() {
   };
   useEffect(() => { void load(); }, [assetId]);
 
-  if (features && !features.vessel) return <Redirect href="/dashboard" />;
+  if (features && !features.asset) return <Redirect href="/dashboard" />;
 
   const assignedIds = new Set(assignments.map((a) => a.person_id));
   const unassigned = people.filter((p) => !assignedIds.has(p.id));
@@ -88,7 +88,7 @@ export default function VesselCrew() {
         setContractorName(''); setContractorEmail(''); setContractorBusiness('');
       }
       if (!personId) { setMsg({ text: 'Select a person first.', tone: 'error' }); setBusy(false); return; }
-      await upsertVesselAssignment(tok(), { person_id: personId, asset_id: assetId, role });
+      await upsertAssetAssignment(tok(), { person_id: personId, asset_id: assetId, role });
       setPickedId(null); setMsg({ text: 'Assigned.', tone: 'success' });
       await load();
     } catch (e) { setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' }); }
@@ -97,16 +97,16 @@ export default function VesselCrew() {
 
   const remove = async (id: string) => {
     setBusy(true); setMsg(null);
-    try { await deleteVesselAssignment(tok(), id); await load(); }
+    try { await deleteAssetAssignment(tok(), id); await load(); }
     catch (e) { setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' }); }
     finally { setBusy(false); }
   };
 
   return (
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
-      <Pressable onPress={() => router.push({ pathname: '/dashboard/vessel/[assetId]', params: { assetId } })} accessibilityRole="button" style={s.backBtn}>
+      <Pressable onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]', params: { assetId } })} accessibilityRole="button" style={s.backBtn}>
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
-        <Text variant="label" color={t.color.primary}>{asset?.name ?? 'Vessel'}</Text>
+        <Text variant="label" color={t.color.primary}>{asset?.name ?? 'Asset'}</Text>
       </Pressable>
       <Text variant="title">Assigned people</Text>
 

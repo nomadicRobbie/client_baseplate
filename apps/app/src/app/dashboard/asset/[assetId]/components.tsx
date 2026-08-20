@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { Redirect, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { VesselAsset, VesselComponent } from '@blnk/shared';
+import type { Asset, AssetComponent } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { listVesselComponents, createVesselComponent } from '@/lib/api';
-import { loadAsset } from '@/lib/vessel-sync';
+import { listAssetComponents, createAssetComponent } from '@/lib/api';
+import { loadAsset } from '@/lib/asset-sync';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, TextField } from '@/ui/components';
 
@@ -24,7 +24,7 @@ const makeStyles = (t: ThemeT) => ({
   critPill: (on: boolean) => ({ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: on ? t.color.danger : t.color.border, backgroundColor: on ? t.color.danger + '22' : 'transparent' }),
 });
 
-export default function VesselComponents() {
+export default function AssetComponents() {
   const t = useTheme();
   const s = makeStyles(t);
   const router = useRouter();
@@ -32,8 +32,8 @@ export default function VesselComponents() {
   const { features, user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'super';
 
-  const [asset, setAsset] = useState<VesselAsset | null>(null);
-  const [components, setComponents] = useState<VesselComponent[]>([]);
+  const [asset, setAsset] = useState<Asset | null>(null);
+  const [components, setComponents] = useState<AssetComponent[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<Msg | null>(null);
@@ -47,20 +47,20 @@ export default function VesselComponents() {
     try {
       const [{ asset }, { components: cs }] = await Promise.all([
         loadAsset(assetId),
-        listVesselComponents(tok(), assetId),
+        listAssetComponents(tok(), assetId),
       ]);
       setAsset(asset); setComponents(cs);
     } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, [assetId]);
 
-  if (features && !features.vessel) return <Redirect href="/dashboard" />;
+  if (features && !features.asset) return <Redirect href="/dashboard" />;
 
   const add = async () => {
     if (!name.trim()) { setMsg({ text: 'Component name is required.', tone: 'error' }); return; }
     setBusy(true); setMsg(null);
     try {
-      await createVesselComponent(tok(), {
+      await createAssetComponent(tok(), {
         asset_id: assetId, name: name.trim(),
         category: category.trim() || undefined,
         critical_component: critical,
@@ -74,9 +74,9 @@ export default function VesselComponents() {
 
   return (
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
-      <Pressable onPress={() => router.push({ pathname: '/dashboard/vessel/[assetId]', params: { assetId } })} accessibilityRole="button" style={s.backBtn}>
+      <Pressable onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]', params: { assetId } })} accessibilityRole="button" style={s.backBtn}>
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
-        <Text variant="label" color={t.color.primary}>{asset?.name ?? 'Vessel'}</Text>
+        <Text variant="label" color={t.color.primary}>{asset?.name ?? 'Asset'}</Text>
       </Pressable>
       <Text variant="title">Components</Text>
 
