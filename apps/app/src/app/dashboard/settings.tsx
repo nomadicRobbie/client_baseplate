@@ -4,7 +4,7 @@ import { Redirect } from 'expo-router';
 import { useProfile } from '@/lib/profile-context';
 import { getAccessToken } from '@/lib/session';
 import { updateOrg } from '@/lib/api';
-import { Screen, Text, Card, Button, TextField, Notice, ColorPicker } from '@/ui/components';
+import { Screen, Text, Card, Button, TextField, ColorPicker } from '@/ui/components';
 
 const s = { colorRow: { gap: 4 } };
 
@@ -44,7 +44,7 @@ export default function Settings() {
   };
 
   return (
-    <Screen>
+    <Screen toast={msg} onDismissToast={() => setMsg(null)}>
       <Text variant="title">Settings</Text>
 
       <Card>
@@ -85,7 +85,6 @@ export default function Settings() {
       </Card>
 
       <Button label="Save changes" onPress={save} loading={busy} />
-      {msg && <Notice message={msg.text} tone={msg.tone} />}
     </Screen>
   );
 }

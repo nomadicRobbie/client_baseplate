@@ -1,0 +1,1 @@
+ALTER TABLE feed_posts ADD COLUMN expires_at TIMESTAMPTZ;

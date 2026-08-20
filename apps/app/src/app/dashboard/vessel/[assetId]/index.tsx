@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Pressable } from 'react-native';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { Redirect, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { VesselAsset, VesselAssetType, VesselFault, VesselUpcomingItem } from '@blnk/shared';
+import type { VesselAsset, VesselAssetType, VesselFault, VesselUpcomingItem, FoodControlPlan } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { listVesselFaults, listVesselAssetTypes, getVesselUpcoming, updateVesselAsset, deleteVesselAsset } from '@/lib/api';
+import { listVesselFaults, listVesselAssetTypes, getVesselUpcoming, updateVesselAsset, deleteVesselAsset, uploadVesselAssetImage, listPlans } from '@/lib/api';
 import { readThrough } from '@/lib/mirror';
 import { pendingCount } from '@/lib/outbox';
 import { syncVesselOutbox, loadAsset } from '@/lib/vessel-sync';
@@ -18,6 +20,15 @@ import { StatusBadge, OfflineBanner, PendingSyncBanner, type StatusLevel } from 
 
 type ThemeT = ReturnType<typeof useTheme>;
 type AssetTab = 'overview' | 'sections';
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+function assetTypeIcon(typeName: string | null | undefined): IoniconName {
+  const n = (typeName ?? '').toLowerCase();
+  if (n.includes('vessel') || n.includes('boat') || n.includes('ship') || n.includes('marine')) return 'boat-outline';
+  if (n.includes('vehicle') || n.includes('car') || n.includes('truck') || n.includes('van')) return 'car-outline';
+  if (n.includes('facilit') || n.includes('building') || n.includes('site')) return 'business-outline';
+  if (n.includes('hardware') || n.includes('computer') || n.includes('server') || n.includes('network')) return 'desktop-outline';
+  return 'cube-outline';
+}
 const makeStyles = (t: ThemeT) => ({
   stat: { flex: 1, alignItems: 'center' as const, gap: 2 },
   buttonGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
@@ -60,9 +71,13 @@ export default function AssetHome() {
   const [draftName, setDraftName] = useState('');
   const [draftParticulars, setDraftParticulars] = useState<Record<string, string>>({});
   const [savingDetails, setSavingDetails] = useState(false);
+  const [plans, setPlans] = useState<FoodControlPlan[]>([]);
+  const [assigningPlan, setAssigningPlan] = useState(false);
+  const [savingPlan, setSavingPlan] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -77,6 +92,9 @@ export default function AssetHome() {
       setOffline(o1 || f.stale || u.stale);
       const matched = asset ? types.value.asset_types.find((ty) => ty.id === asset.asset_type_id) ?? null : null;
       setAssetType(matched);
+      if (features?.compliance) {
+        try { setPlans((await listPlans(tok())).plans); } catch { /* non-fatal */ }
+      }
     } finally { setLoading(false); }
   };
   const doSync = async () => { const { remaining } = await syncVesselOutbox(); setPending(remaining); await load(); };
@@ -108,6 +126,30 @@ export default function AssetHome() {
     } finally { setSavingDetails(false); }
   };
 
+  const assignPlan = async (planId: string | null) => {
+    if (!asset) return;
+    setSavingPlan(true);
+    try {
+      const { asset: updated } = await updateVesselAsset(tok(), asset.id, { food_control_plan_id: planId });
+      setAsset(updated);
+      setAssigningPlan(false);
+    } finally { setSavingPlan(false); }
+  };
+
+  const pickIcon = async () => {
+    if (!asset || !isAdmin) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') return;
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.8 });
+    if (result.canceled || !result.assets[0]) return;
+    setUploadingIcon(true);
+    try {
+      const url = await uploadVesselAssetImage(tok(), result.assets[0].uri);
+      const { asset: updated } = await updateVesselAsset(tok(), asset.id, { image_url: url });
+      setAsset(updated);
+    } finally { setUploadingIcon(false); }
+  };
+
   const handleDelete = async () => {
     if (!asset || deleteConfirm !== asset.name) return;
     setDeleting(true);
@@ -134,6 +176,19 @@ export default function AssetHome() {
       <Pressable onPress={() => router.push('/dashboard/vessel')} accessibilityRole="button" style={s.backBtn}>
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
         <Text variant="label" color={t.color.primary}>Assets</Text>
+      </Pressable>
+      <Pressable onPress={() => void pickIcon()} disabled={!isAdmin || uploadingIcon} accessibilityRole="button" accessibilityLabel="Change vessel icon" style={{ alignSelf: 'flex-start' }}>
+        {asset?.image_url
+          ? <Image source={{ uri: asset.image_url }} style={{ width: 64, height: 64, borderRadius: 12 }} contentFit="cover" />
+          : <View style={{ width: 64, height: 64, borderRadius: 12, backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name={assetTypeIcon(assetType?.name)} size={32} color={t.color.textMuted} />
+            </View>
+        }
+        {isAdmin && (
+          <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: t.color.primary, borderRadius: 10, padding: 3 }}>
+            <Ionicons name={uploadingIcon ? 'hourglass-outline' : 'camera-outline'} size={12} color={t.color.primaryText} />
+          </View>
+        )}
       </Pressable>
       <Text variant="title">{asset?.name ?? 'Asset'}</Text>
       <Text variant="small" muted>
@@ -176,6 +231,60 @@ export default function AssetHome() {
               <Button label="Components" icon="hardware-chip-outline" onPress={goComponents} />
             </View>
           </View>
+
+          {/* Food Control Plan — only when both vessel and compliance modules are active */}
+          {features?.compliance && (
+            <>
+              <Text variant="heading">Food Control Plan</Text>
+              <Card>
+                {asset?.food_control_plan_id ? (() => {
+                  const plan = plans.find((p) => p.id === asset.food_control_plan_id);
+                  return assigningPlan ? null : (
+                    <Row onPress={() => router.push('/dashboard/compliance')}>
+                      <Ionicons name="clipboard-outline" size={22} color={t.color.text} />
+                      <View style={s.sectionRow}>
+                        <Text>{plan?.name ?? 'Control plan'}</Text>
+                        <Text variant="small" muted>{plan ? `Tier: ${plan.tier}` : 'Loading…'} · Open compliance</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
+                    </Row>
+                  );
+                })() : (
+                  !assigningPlan && <Text muted>No control plan assigned to this asset.</Text>
+                )}
+
+                {assigningPlan ? (
+                  <>
+                    <Text variant="label" muted>Select a plan</Text>
+                    {plans.length === 0
+                      ? <Text variant="small" muted>No plans yet — create one in Food Compliance.</Text>
+                      : plans.map((p) => (
+                        <Pressable key={p.id} onPress={() => void assignPlan(p.id)} disabled={savingPlan}
+                          style={{ paddingVertical: t.space.sm, flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
+                          <Ionicons name={asset?.food_control_plan_id === p.id ? 'radio-button-on' : 'radio-button-off'} size={20} color={t.color.primary} />
+                          <View>
+                            <Text>{p.name}</Text>
+                            <Text variant="small" muted>Tier: {p.tier}</Text>
+                          </View>
+                        </Pressable>
+                      ))
+                    }
+                    {asset?.food_control_plan_id && (
+                      <Button label="Unassign plan" variant="ghost" onPress={() => void assignPlan(null)} loading={savingPlan} />
+                    )}
+                    <Button label="Cancel" variant="ghost" onPress={() => setAssigningPlan(false)} />
+                  </>
+                ) : isAdmin && (
+                  <Button
+                    label={asset?.food_control_plan_id ? 'Change plan' : 'Assign a control plan'}
+                    variant="ghost"
+                    onPress={() => setAssigningPlan(true)}
+                    style={{ marginTop: t.space.sm }}
+                  />
+                )}
+              </Card>
+            </>
+          )}
 
           <Text variant="heading">Coming up</Text>
           {loading ? <Card><Text muted>Loading…</Text></Card>

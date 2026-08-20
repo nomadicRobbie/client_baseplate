@@ -12,7 +12,7 @@ import { syncVesselOutbox, loadAsset } from '@/lib/vessel-sync';
 import { useOnReconnect } from '@/lib/use-reconnect';
 import { formatDMY } from '@/lib/format';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Button, TextField, Badge, Notice } from '@/ui/components';
+import { Screen, Text, Card, Button, TextField, Badge } from '@/ui/components';
 import { StatusBadge, urgencyLevel, OfflineBanner, PendingSyncBanner } from '@/ui/status';
 
 type ThemeT = ReturnType<typeof useTheme>;
@@ -135,7 +135,7 @@ export default function VesselFaults() {
   const s = makeStyles(t);
 
   return (
-    <Screen>
+    <Screen toast={msg} onDismissToast={() => setMsg(null)}>
       <Pressable onPress={() => router.push({ pathname: '/dashboard/vessel/[assetId]', params: { assetId } })} accessibilityRole="button" style={s.backBtn}>
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
         <Text variant="label" color={t.color.primary}>{asset?.name ?? 'Vessel'}</Text>
@@ -247,7 +247,6 @@ export default function VesselFaults() {
         </Card>
       )}
 
-      {msg && <Notice message={msg.text} tone={msg.tone} />}
     </Screen>
   );
 }

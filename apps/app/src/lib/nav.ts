@@ -29,7 +29,7 @@ export type NavItem = {
 
 export const NAV: NavItem[] = [
   { label: 'Library', href: '/dashboard', icon: 'library-outline', group: 'home' },
-  { label: 'News Feed', href: '/dashboard/feed', icon: 'newspaper-outline', group: 'home' },
+  { label: 'Company Feed', href: '/dashboard/feed', icon: 'newspaper-outline', group: 'home' },
   { label: 'Store', href: '/dashboard/commerce', icon: 'storefront-outline', group: 'module', adminOnly: true, feature: 'commerce' },
   { label: 'Analytics', href: '/dashboard/analytics', icon: 'bar-chart-outline', group: 'module', adminOnly: true, feature: 'analytics' },
   { label: 'Locations', href: '/dashboard/locations', icon: 'location-outline', group: 'module', adminOnly: true, feature: 'locations' },

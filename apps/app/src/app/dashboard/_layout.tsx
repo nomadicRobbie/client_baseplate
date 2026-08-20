@@ -34,7 +34,7 @@ const makeStyles = (t: ThemeT) => ({
   spinner: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const },
   sidebarContainer: { gap: t.space.xs },
   mobileBar: { flexDirection: 'row' as const, justifyContent: 'space-around' as const, borderTopWidth: 1, borderTopColor: t.color.border },
-  mobileTab: (active: boolean) => ({ flex: 1, flexDirection: 'column' as const, alignItems: 'center' as const, gap: 2, paddingTop: t.space.sm, paddingBottom: t.space.xs, minHeight: 52, backgroundColor: active ? t.color.surfaceAlt : 'transparent' }),
+  mobileTab: (active: boolean) => ({ flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: t.space.sm, minHeight: 52, backgroundColor: active ? t.color.surfaceAlt : 'transparent' }),
   brand: { gap: 2 },
   wideLayout: { flex: 1, flexDirection: 'row' as const },
   sidebar: { width: 248, borderRightWidth: 1, borderRightColor: t.color.border, padding: t.space.lg, justifyContent: 'space-between' as const },
@@ -111,6 +111,7 @@ function MobileTabBar() {
 
   const tabs: { label: string; href: NavHref; icon: IconName }[] = [
     { label: 'Library', href: HOME_HREF, icon: 'library-outline' },
+    { label: 'Company Feed', href: '/dashboard/feed', icon: 'newspaper-outline' },
     { label: 'Account', href: ACCOUNT_HREF, icon: 'person-outline' },
     ...pinned.map((m) => ({ label: m.label, href: m.href, icon: m.icon })),
   ];
@@ -128,13 +129,12 @@ function MobileTabBar() {
             accessibilityLabel={tab.label}
             style={s.mobileTab(active)}
           >
-            <View>
-              <Ionicons name={tab.icon} size={22} color={active ? t.color.primary : t.color.textMuted} />
+            <View style={{ alignItems: 'center' }}>
+              <Ionicons name={tab.icon} size={24} color={active ? t.color.primary : t.color.textMuted} />
               {tab.href === '/dashboard/feed' && hasUnseen && !active && (
                 <View style={[s.badgeDot, { position: 'absolute', top: 0, right: -2 }]} />
               )}
             </View>
-            <Text variant="small" color={active ? t.color.text : t.color.textMuted} numberOfLines={1}>{tab.label}</Text>
           </Pressable>
         );
       })}

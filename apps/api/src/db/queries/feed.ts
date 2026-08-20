@@ -19,13 +19,15 @@ export async function createFeedPost(
   body: string,
   modules: string[],
   mentions: string[],
+  expiresAt?: Date,
 ): Promise<FeedPost> {
   const rows = await query<FeedPost>(
-    `INSERT INTO feed_posts (created_by, author_name, body, modules, mentions)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO feed_posts (created_by, author_name, body, modules, mentions, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id, created_by, author_name, body, modules, mentions, image_urls,
-               0::int AS comment_count, NULL AS latest_comment, created_at`,
-    [createdBy, authorName, body, modules, mentions],
+               0::int AS comment_count, NULL AS latest_comment, created_at,
+               expires_at::text AS expires_at`,
+    [createdBy, authorName, body, modules, mentions, expiresAt ?? null],
   )
   return rows[0]
 }
@@ -190,6 +192,7 @@ export async function listFeedItems(opts: {
   const posts = await query<FeedPost>(
     `SELECT fp.id, fp.created_by, fp.author_name, fp.body, fp.modules, fp.mentions, fp.image_urls,
             fp.created_at::text AS created_at,
+            fp.expires_at::text AS expires_at,
             COUNT(fc.id)::int AS comment_count,
             (SELECT row_to_json(c) FROM (
               SELECT author_name, body, created_at::text AS created_at
@@ -201,6 +204,7 @@ export async function listFeedItems(opts: {
      LEFT JOIN feed_post_comments fc ON fc.post_id = fp.id
      WHERE fp.deleted_at IS NULL
        AND fp.created_at > $1
+       AND (fp.expires_at IS NULL OR fp.expires_at > now())
        AND ($2 OR fp.modules = '{}' OR fp.modules && $3)
      GROUP BY fp.id
      ORDER BY fp.created_at DESC

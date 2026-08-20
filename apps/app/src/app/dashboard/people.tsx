@@ -8,7 +8,7 @@ import { availableModules } from '@/lib/nav';
 import { getAccessToken } from '@/lib/session';
 import { listPeople, createPerson, updatePerson, listTeam, addTeamUser, setTeamUserActive, setPersonModule, removePersonModule } from '@/lib/api';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Button, TextField, Badge, Notice } from '@/ui/components';
+import { Screen, Text, Card, Button, TextField, Badge } from '@/ui/components';
 
 type Msg = { text: string; tone: 'success' | 'error' };
 type ThemeT = ReturnType<typeof useTheme>;
@@ -137,7 +137,7 @@ export default function People() {
   };
 
   return (
-    <Screen>
+    <Screen toast={msg} onDismissToast={() => setMsg(null)}>
       <Text variant="title">People</Text>
 
       {/* Add a person — roster only, or with app access (creates a login) */}
@@ -245,7 +245,6 @@ export default function People() {
         })}
       </Card>
 
-      {msg && <Notice message={msg.text} tone={msg.tone} />}
     </Screen>
   );
 }

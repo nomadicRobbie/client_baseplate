@@ -451,7 +451,7 @@ export default function Commerce() {
   }
 
   return (
-    <Screen>
+    <Screen toast={err ? { text: err, tone: 'error' } : null} onDismissToast={() => setErr(null)}>
       <View style={s.screenHeader}>
         <View style={s.titleSection}>
           <Text variant="title">Store</Text>
@@ -464,7 +464,6 @@ export default function Commerce() {
       </View>
 
       {adding && <AddProductForm onAdded={handleAdded} onCancel={() => setAdding(false)} />}
-      {err && <Notice message={err} tone="error" />}
 
       {loading ? (
         <Text muted>Loading products…</Text>

@@ -55,7 +55,7 @@ export async function upsertClientProfile(
      RETURNING *`,
     [
       data.org_name ?? null, data.logo_url ?? null, data.brand_color ?? null,
-      data.accent_color ?? null, data.custom_colors ?? null, data.support_email ?? null,
+      data.accent_color ?? null, data.custom_colors ?? '[]', data.support_email ?? null,
       data.timezone ?? null, data.locale ?? null, data.currency ?? null, updatedBy,
     ]
   );

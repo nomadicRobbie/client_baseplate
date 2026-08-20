@@ -1,5 +1,5 @@
 import { query } from '../pool'
-import type { ComplianceSchedule, CoolingBatch } from '@blnk/shared'
+import type { ComplianceSchedule, CoolingBatch, FoodControlPlan } from '@blnk/shared'
 
 // ── Types (mirrors the compliance_* tables) ─────────────────────────────────
 export interface RecordType {
@@ -285,6 +285,92 @@ export async function scheduleDoneCounts(on: string): Promise<Record<string, num
   const map: Record<string, number> = {}
   for (const r of rows) map[r.schedule_id] = r.n
   return map
+}
+
+// ── Food Control Plans ────────────────────────────────────────────────────────
+// Admin sees all plans; members see only plans they're assigned to via person_plan.
+export async function listPlans(opts: { isAdmin: boolean; userId?: string | null }): Promise<FoodControlPlan[]> {
+  if (opts.isAdmin) {
+    return query<FoodControlPlan>(`SELECT * FROM food_control_plans WHERE active = true ORDER BY name`, [])
+  }
+  return query<FoodControlPlan>(
+    `SELECT fcp.* FROM food_control_plans fcp
+     JOIN person_plan pp ON pp.plan_id = fcp.id
+     JOIN people p ON p.user_id = $1 AND p.id = pp.person_id
+     WHERE fcp.active = true ORDER BY fcp.name`,
+    [opts.userId ?? null],
+  )
+}
+
+export async function getPlan(id: string): Promise<FoodControlPlan | null> {
+  const rows = await query<FoodControlPlan>(`SELECT * FROM food_control_plans WHERE id = $1`, [id])
+  return rows[0] ?? null
+}
+
+export async function createPlan(p: { name: string; tier?: string; created_by?: string | null }): Promise<FoodControlPlan> {
+  const rows = await query<FoodControlPlan>(
+    `INSERT INTO food_control_plans (name, tier, created_by)
+     VALUES ($1, COALESCE($2,'FCP'), $3) RETURNING *`,
+    [p.name, p.tier ?? null, p.created_by ?? null],
+  )
+  return rows[0]
+}
+
+export async function updatePlan(
+  id: string,
+  p: Partial<Pick<FoodControlPlan, 'name' | 'tier' | 'active'>>,
+): Promise<FoodControlPlan | null> {
+  const rows = await query<FoodControlPlan>(
+    `UPDATE food_control_plans SET
+       name   = COALESCE($2, name),
+       tier   = COALESCE($3, tier),
+       active = COALESCE($4, active),
+       updated_at = now()
+     WHERE id = $1 RETURNING *`,
+    [id, p.name ?? null, p.tier ?? null, p.active ?? null],
+  )
+  return rows[0] ?? null
+}
+
+// Copy plan metadata + all its schedules in one CTE. Records are not touched.
+export async function duplicatePlan(sourceId: string, name: string, createdBy: string | null): Promise<FoodControlPlan | null> {
+  const rows = await query<FoodControlPlan>(
+    `WITH new_plan AS (
+       INSERT INTO food_control_plans (name, tier, created_by)
+       SELECT $2, tier, $3 FROM food_control_plans WHERE id = $1
+       RETURNING *
+     ), _copy AS (
+       INSERT INTO compliance_schedules
+         (jurisdiction, record_type, label, site_id, cadence, weekdays,
+          day_of_month, interval_days, anchor_date, times_per_day, plan_id)
+       SELECT cs.jurisdiction, cs.record_type, cs.label, cs.site_id, cs.cadence, cs.weekdays,
+              cs.day_of_month, cs.interval_days, cs.anchor_date, cs.times_per_day, np.id
+       FROM compliance_schedules cs, new_plan np
+       WHERE cs.plan_id = $1 AND cs.active = true
+     )
+     SELECT * FROM new_plan`,
+    [sourceId, name, createdBy],
+  )
+  return rows[0] ?? null
+}
+
+export async function assignPersonToPlan(personId: string, planId: string): Promise<void> {
+  await query(
+    `INSERT INTO person_plan (person_id, plan_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [personId, planId],
+  )
+}
+
+export async function removePersonFromPlan(personId: string, planId: string): Promise<boolean> {
+  const rows = await query<{ person_id: string }>(
+    `DELETE FROM person_plan WHERE person_id = $1 AND plan_id = $2 RETURNING person_id`,
+    [personId, planId],
+  )
+  return rows.length > 0
+}
+
+export async function listPlanMembers(planId: string): Promise<{ person_id: string }[]> {
+  return query(`SELECT person_id FROM person_plan WHERE plan_id = $1`, [planId])
 }
 
 // ── Cooling batches (live tracking) ──────────────────────────────────────────

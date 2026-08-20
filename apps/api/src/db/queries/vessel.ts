@@ -87,7 +87,7 @@ export const deleteAssetType = (id: string) =>
 // ── Assets ──────────────────────────────────────────────────────────────────
 export const listAssets = () => query<Asset>(`SELECT * FROM vessel_assets WHERE status <> 'deleted' ORDER BY name`)
 export const getAsset = (id: string) => one<Asset>(`SELECT * FROM vessel_assets WHERE id = $1`, [id])
-const ASSET_COLS = ['asset_type_id', 'parent_asset_id', 'name', 'mnz_number', 'mmsi', 'call_sign', 'fuel_capacity', 'refuel_threshold', 'location', 'condition', 'supplier', 'date_purchased', 'image_url', 'notes', 'status', 'particulars'] as const
+const ASSET_COLS = ['asset_type_id', 'parent_asset_id', 'name', 'mnz_number', 'mmsi', 'call_sign', 'fuel_capacity', 'refuel_threshold', 'location', 'condition', 'supplier', 'date_purchased', 'image_url', 'notes', 'status', 'particulars', 'food_control_plan_id'] as const
 export const createAsset = (d: Record<string, unknown>, createdBy: string | null) =>
   one<Asset>(
     `INSERT INTO vessel_assets (asset_type_id, name, parent_asset_id, mnz_number, mmsi, call_sign, fuel_capacity, refuel_threshold, location, condition, supplier, date_purchased, image_url, notes, particulars, created_by)

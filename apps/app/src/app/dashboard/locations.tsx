@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, TextInput, StyleSheet } from 'react-native';
 import { getAccessToken } from '@/lib/session';
 import { getLocations, createLocation, deleteLocation, type LocationEntry } from '@/lib/api';
-import { Screen, Text, Card, Button, Notice } from '@/ui/components';
+import { Screen, Text, Card, Button } from '@/ui/components';
 import { useTheme } from '@/theme';
 
 function formatDate(iso: string): string {
@@ -99,7 +99,7 @@ export default function Locations() {
   });
 
   return (
-    <Screen>
+    <Screen toast={msg} onDismissToast={() => setMsg(null)}>
       <Text variant="title">Location Banner</Text>
       <Text muted>Add an upcoming or current location. It will appear as a banner on the website automatically and disappear 3 hours after the start time.</Text>
 
@@ -139,8 +139,6 @@ export default function Locations() {
         />
         <Button label="Save location" onPress={handleCreate} loading={busy} />
       </Card>
-
-      {msg && <Notice message={msg.text} tone={msg.tone} />}
 
       <Card>
         <Text variant="heading">Upcoming</Text>

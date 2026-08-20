@@ -6,7 +6,7 @@ import type { ClientSubscription } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
 import { listMySubscriptions, subscribeCheckout, cancelSubscription, oneOffCheckout } from '@/lib/api';
-import { Screen, Text, Card, Button, Badge, Notice } from '@/ui/components';
+import { Screen, Text, Card, Button, Badge } from '@/ui/components';
 import { Redirect } from 'expo-router';
 
 // Client's subscription plan price (configured per client). Real clients set this
@@ -87,7 +87,7 @@ export default function Billing() {
   };
 
   return (
-    <Screen>
+    <Screen toast={msg} onDismissToast={() => setMsg(null)}>
       <Text variant="title">Billing</Text>
 
       <Card>
@@ -119,7 +119,6 @@ export default function Billing() {
         <Button label="Pay $10.00" variant="secondary" onPress={payOnce} loading={busy} />
       </Card>
 
-      {msg && <Notice message={msg.text} tone={msg.tone} />}
     </Screen>
   );
 }

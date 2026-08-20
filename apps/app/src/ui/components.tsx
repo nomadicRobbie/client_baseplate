@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import {
-  View, Text as RNText, Pressable, TextInput, ScrollView, ActivityIndicator,
+  View, Text as RNText, Pressable, TextInput, ScrollView, ActivityIndicator, Animated, Easing,
   type StyleProp, type ViewStyle, type TextStyle, type TextInput as RNTextInput,
   type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native';
@@ -89,16 +89,51 @@ export function Text({
   );
 }
 
+// ── Toast ────────────────────────────────────────────────────────────────────
+export type ToastMsg = { text: string; tone: 'success' | 'error' | 'info' };
+
+function Toast({ msg, onDismiss }: { msg: ToastMsg; onDismiss: () => void }) {
+  const t = useTheme();
+  const x = useRef(new Animated.Value(340)).current;
+
+  useEffect(() => {
+    x.setValue(340);
+    Animated.timing(x, { toValue: 0, duration: 220, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+    const timer = setTimeout(() => {
+      Animated.timing(x, { toValue: 340, duration: 180, useNativeDriver: true }).start(onDismiss);
+    }, 3500);
+    return () => clearTimeout(timer);
+  }, [msg.text, msg.tone]);
+
+  const borderColor = msg.tone === 'error' ? t.color.danger : msg.tone === 'success' ? t.color.success : t.color.border;
+  const bg = msg.tone === 'error' ? t.color.dangerMuted : msg.tone === 'success' ? t.color.successMuted : t.color.surfaceAlt;
+  const textColor = msg.tone === 'error' ? t.color.danger : msg.tone === 'success' ? t.color.success : t.color.textMuted;
+
+  return (
+    <Animated.View style={{
+      position: 'absolute', right: 16, bottom: 88, zIndex: 1000, maxWidth: 320,
+      transform: [{ translateX: x }],
+      backgroundColor: bg, borderWidth: 1, borderColor, borderRadius: t.radius.md,
+      padding: t.space.md,
+      shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4, elevation: 4,
+    }}>
+      <Text variant="small" color={textColor}>{msg.text}</Text>
+    </Animated.View>
+  );
+}
+
 // ── Screen ──────────────────────────────────────────────────────────────────
 // Caps content width and centres it so lines stay readable on wide desktop.
 export function Screen({
-  children, scroll = true, padded = true, maxWidth = 920, scrollRef, onScroll,
+  children, scroll = true, padded = true, maxWidth = 920, scrollRef, onScroll, toast, onDismissToast,
 }: {
   children: ReactNode; scroll?: boolean; padded?: boolean; maxWidth?: number;
   // Optional handles so a screen can preserve/restore scroll position across
   // in-place overlays (e.g. opening then cancelling a record form).
   scrollRef?: RefObject<ScrollView | null>;
   onScroll?: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  toast?: ToastMsg | null;
+  onDismissToast?: () => void;
 }) {
   const t = useTheme();
   const s = makeStyles(t);
@@ -113,6 +148,7 @@ export function Screen({
       {scroll
         ? <ScrollView ref={scrollRef} onScroll={onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" style={s.scrollView} contentContainerStyle={s.scrollContent}>{content}</ScrollView>
         : content}
+      {toast && onDismissToast && <Toast msg={toast} onDismiss={onDismissToast} />}
     </SafeAreaView>
   );
 }

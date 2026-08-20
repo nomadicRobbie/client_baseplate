@@ -100,6 +100,17 @@ export interface ComplianceRecord {
   updated_at: string
 }
 
+// ── Food Control Plans (named plan entities that own schedules) ───────────────
+export interface FoodControlPlan {
+  id: string
+  name: string
+  tier: string          // FCP | NP1 | NP2 | NP3
+  active: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 // ── Compliance scheduling (recurring checks that surface in "Today") ─────────
 export type ScheduleCadence = 'daily' | 'weekly' | 'monthly' | 'interval'
 
@@ -110,6 +121,7 @@ export interface ComplianceSchedule {
   label: string                 // operator's name, e.g. "Main chiller"
   unit_id: string               // auto-generated 6-char ID, pre-filled on check completion
   site_id: string | null
+  plan_id: string | null        // owning food control plan (null = unscoped / pre-migration)
   cadence: ScheduleCadence
   weekdays: number[]            // weekly: 0=Sun … 6=Sat (one or more days)
   day_of_month: number | null   // monthly: 1–31
@@ -393,6 +405,7 @@ export interface VesselAsset {
   location: string | null; condition: string | null; supplier: string | null
   date_purchased: string | null; image_url: string | null; notes: string | null; status: string
   particulars: Record<string, string | null>
+  food_control_plan_id: string | null
 }
 
 export interface VesselFaultStep { id: string; note: string; kind: 'step' | 'close'; created_by: string | null; created_at: string }
@@ -469,6 +482,7 @@ export interface FeedPost {
   comment_count: number
   latest_comment: { author_name: string; body: string; created_at: string } | null
   created_at: string
+  expires_at: string | null
 }
 
 export interface FeedFaultData {

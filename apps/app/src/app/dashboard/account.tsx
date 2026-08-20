@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { PreferredContact } from '@blnk/shared';
@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useProfile } from '@/lib/profile-context';
 import { visibleNav } from '@/lib/nav';
 import { useTheme, useColorSchemePref, type SchemePref } from '@/theme';
-import { Screen, Text, Card, Row, Button, TextField, Notice } from '@/ui/components';
+import { Screen, Text, Card, Row, Button, TextField } from '@/ui/components';
 import { passkeyRegisterBegin, passkeyRegisterComplete, updateMyProfile } from '@/lib/api';
 import { getAccessToken } from '@/lib/session';
 import { doRegister, passkeySupported } from '@/lib/passkey';
@@ -33,12 +33,16 @@ export default function Account() {
   const router = useRouter();
   const { signOut, features, user } = useAuth();
   const { data, refresh } = useProfile();
+  const { width } = useWindowDimensions();
+  const wide = width >= 900;
   const me = data?.me;
 
-  // Billing + admin screens live under Account on mobile (they're off the bar).
+  // On wide screens the sidebar already shows account-group items (e.g. People),
+  // so Manage only needs admin-group items (Billing, Settings).
+  // On mobile everything lives here since the tab bar is limited.
   const isAdmin = user?.role === 'admin' || user?.role === 'super';
   const manageLinks = visibleNav(isAdmin, features)
-    .filter((i) => i.href !== '/dashboard/account' && (i.group === 'account' || i.group === 'admin'));
+    .filter((i) => i.href !== '/dashboard/account' && (wide ? i.group === 'admin' : i.group === 'account' || i.group === 'admin'));
 
   const [name, setName] = useState(me?.name ?? '');
   const [phone, setPhone] = useState(me?.profile?.phone ?? '');
@@ -71,7 +75,7 @@ export default function Account() {
   };
 
   return (
-    <Screen>
+    <Screen toast={msg} onDismissToast={() => setMsg(null)}>
       <Text variant="title">Account</Text>
 
       <Card>
@@ -115,11 +119,15 @@ export default function Account() {
       <Card>
         <Text variant="heading">Security</Text>
         <Text muted>
-          {passkeySupported
-            ? 'Add a passkey for faster, phishing-resistant sign-in on this device.'
-            : 'Passkeys are available on the web app today; native support is coming.'}
+          {typeof window !== 'undefined' && window.location.hostname === 'localhost'
+            ? 'Passkeys are disabled in local development — deploy to your domain to enrol.'
+            : passkeySupported
+              ? 'Add a passkey for faster, phishing-resistant sign-in on this device.'
+              : 'Passkeys are available on the web app today; native support is coming.'}
         </Text>
-        {passkeySupported && <Button label="Enrol a passkey" variant="secondary" onPress={enrolPasskey} loading={busy} />}
+        {passkeySupported && typeof window !== 'undefined' && window.location.hostname !== 'localhost' && (
+          <Button label="Enrol a passkey" variant="secondary" onPress={enrolPasskey} loading={busy} />
+        )}
       </Card>
 
       {manageLinks.length > 0 && (
@@ -136,7 +144,6 @@ export default function Account() {
       )}
 
       <Button label="Log out" variant="ghost" onPress={signOut} />
-      {msg && <Notice message={msg.text} tone={msg.tone} />}
     </Screen>
   );
 }

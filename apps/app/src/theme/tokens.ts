@@ -10,6 +10,7 @@ type ColorTokens = {
   text: string; textMuted: string; textInverse: string;
   border: string; primary: string; primaryText: string;
   accent: string; danger: string; warning: string; success: string;
+  dangerMuted: string; successMuted: string; warningMuted: string;
 };
 
 export const lightColor: ColorTokens = {
@@ -34,6 +35,9 @@ export const lightColor: ColorTokens = {
   danger: '#e8613a',
   warning: '#c8922e',   // amber — "due soon" status (fits the parchment palette)
   success: '#2a7f62',
+  dangerMuted: '#fdf2ef',
+  successMuted: '#edf7f4',
+  warningMuted: '#fdf6ea',
 };
 
 export const darkColor: ColorTokens = {
@@ -58,6 +62,9 @@ export const darkColor: ColorTokens = {
   danger: '#f07a56',
   warning: '#d4a44e',
   success: '#3d9e7a',
+  dangerMuted: '#2d1a14',
+  successMuted: '#142d25',
+  warningMuted: '#2d2210',
 };
 
 export const tokens = {

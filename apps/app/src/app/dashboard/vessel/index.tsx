@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Pressable } from 'react-native';
+import { Image } from 'expo-image';
 import { Redirect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDMY } from '@/lib/format';
@@ -282,7 +283,10 @@ export default function AssetManager() {
                     </View>
                     {items.map((a) => (
                       <Row key={a.id} onPress={() => openAsset(a.id)}>
-                        <Ionicons name={assetTypeIcon(ty?.name)} size={20} color={t.color.text} />
+                        {a.image_url
+                          ? <Image source={{ uri: a.image_url }} style={{ width: 28, height: 28, borderRadius: 6 }} contentFit="cover" />
+                          : <Ionicons name={assetTypeIcon(ty?.name)} size={20} color={t.color.text} />
+                        }
                         <View style={s.assetInfo}>
                           <Text>{a.name}</Text>
                           {!!a.location && <Text variant="small" muted>{a.location}</Text>}

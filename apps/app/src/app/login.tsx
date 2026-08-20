@@ -6,7 +6,7 @@ import { setTokens } from '@/lib/session';
 import { doAuthenticate, passkeySupported } from '@/lib/passkey';
 import { useTheme } from '@/theme';
 import { getItem, setItem } from '@/lib/storage';
-import { Screen, Text, Card, Button, TextField, Notice } from '@/ui/components';
+import { Screen, Text, Card, Button, TextField } from '@/ui/components';
 
 type Msg = { text: string; tone: 'info' | 'success' | 'error' };
 type ThemeT = ReturnType<typeof useTheme>;
@@ -62,7 +62,7 @@ export default function Login() {
   });
 
   return (
-    <Screen scroll={false} padded={false}>
+    <Screen scroll={false} padded={false} toast={msg} onDismissToast={() => setMsg(null)}>
       <View style={s.center}>
         <View style={s.box}>
           <View style={s.header}>
@@ -96,7 +96,6 @@ export default function Login() {
             <Button label="Sign in with passkey" variant="secondary" onPress={loginPasskey} loading={busy} />
           )}
 
-          {msg && <Notice message={msg.text} tone={msg.tone} />}
         </View>
       </View>
     </Screen>

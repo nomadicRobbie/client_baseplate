@@ -10,6 +10,7 @@ import {
   listSites, createSite, updateSite,
   listSchedules, listActiveSchedules, createSchedule, updateSchedule, deleteSchedule, scheduleDoneCounts,
   createCoolingBatch, listActiveCoolingBatches, getCoolingBatch, updateCoolingBatch,
+  listPlans, getPlan, createPlan, updatePlan, duplicatePlan, assignPersonToPlan, removePersonFromPlan, listPlanMembers,
   type RecordFilters, type ComplianceRecord,
 } from '../../db/queries/compliance'
 
@@ -57,6 +58,94 @@ async function logRecord(input: LogInput): Promise<{ record: ComplianceRecord; c
 }
 
 const compliancePlugin: FastifyPluginAsync = async (fastify) => {
+  // ── Food Control Plans ─────────────────────────────────────────────────────
+  // Admin sees all plans; members see only plans assigned to them via person_plan.
+  fastify.get('/compliance/plans', { preHandler: [verifyBlnkAuth, requireModule('compliance')] }, async (req, reply) => {
+    const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super'
+    return reply.send({ plans: await listPlans({ isAdmin, userId: req.user?.userId }) })
+  })
+
+  fastify.post('/compliance/plans', {
+    preHandler: [verifyBlnkAuth, requireRole('admin', 'super')],
+    schema: {
+      body: {
+        type: 'object', required: ['name'],
+        additionalProperties: false,
+        properties: {
+          name: { type: 'string', minLength: 1, maxLength: 200 },
+          tier: { type: 'string', enum: ['FCP', 'NP1', 'NP2', 'NP3'] },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const b = req.body as { name: string; tier?: string }
+    const plan = await createPlan({ name: b.name, tier: b.tier, created_by: req.user?.userId ?? null })
+    return reply.status(201).send({ plan })
+  })
+
+  fastify.patch('/compliance/plans/:id', {
+    preHandler: [verifyBlnkAuth, requireRole('admin', 'super')],
+    schema: {
+      body: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          name:   { type: 'string', minLength: 1, maxLength: 200 },
+          tier:   { type: 'string', enum: ['FCP', 'NP1', 'NP2', 'NP3'] },
+          active: { type: 'boolean' },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const plan = await updatePlan(id, req.body as never)
+    if (!plan) throw Errors.notFound('plan')
+    return reply.send({ plan })
+  })
+
+  // Duplicate a plan — copies metadata + schedules; records stay on the original.
+  fastify.post('/compliance/plans/:id/duplicate', {
+    preHandler: [verifyBlnkAuth, requireRole('admin', 'super')],
+    schema: {
+      body: {
+        type: 'object', required: ['name'],
+        additionalProperties: false,
+        properties: { name: { type: 'string', minLength: 1, maxLength: 200 } },
+      },
+    },
+  }, async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const source = await getPlan(id)
+    if (!source) throw Errors.notFound('plan')
+    const { name } = req.body as { name: string }
+    const plan = await duplicatePlan(id, name, req.user?.userId ?? null)
+    return reply.status(201).send({ plan })
+  })
+
+  // ── Plan ↔ member assignment (admin only) ──────────────────────────────────
+  fastify.get('/compliance/plans/:id/members', {
+    preHandler: [verifyBlnkAuth, requireRole('admin', 'super')],
+  }, async (req, reply) => {
+    const { id } = req.params as { id: string }
+    return reply.send({ members: await listPlanMembers(id) })
+  })
+
+  fastify.put('/compliance/plans/:id/members/:personId', {
+    preHandler: [verifyBlnkAuth, requireRole('admin', 'super')],
+  }, async (req, reply) => {
+    const { id, personId } = req.params as { id: string; personId: string }
+    await assignPersonToPlan(personId, id)
+    return reply.status(204).send()
+  })
+
+  fastify.delete('/compliance/plans/:id/members/:personId', {
+    preHandler: [verifyBlnkAuth, requireRole('admin', 'super')],
+  }, async (req, reply) => {
+    const { id, personId } = req.params as { id: string; personId: string }
+    const ok = await removePersonFromPlan(personId, id)
+    if (!ok) throw Errors.notFound('plan member')
+    return reply.status(204).send()
+  })
+
   // ── Record types — drives the forms (any authed staff) ────────────────────
   fastify.get('/compliance/record-types', { preHandler: [verifyBlnkAuth, requireModule('compliance')] }, async (req, reply) => {
     const { tier } = req.query as { tier?: string }

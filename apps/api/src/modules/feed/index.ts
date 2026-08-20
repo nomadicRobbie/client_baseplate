@@ -49,16 +49,17 @@ const feedPlugin: FastifyPluginAsync = async (fastify) => {
         type: 'object',
         required: ['body'],
         properties: {
-          body:     { type: 'string', minLength: 1, maxLength: 2000 },
-          modules:  { type: 'array', items: { type: 'string' }, default: [] },
-          mentions: { type: 'array', items: { type: 'string' }, default: [] },
+          body:         { type: 'string', minLength: 1, maxLength: 2000 },
+          modules:      { type: 'array', items: { type: 'string' }, default: [] },
+          mentions:     { type: 'array', items: { type: 'string' }, default: [] },
+          expires_hours: { type: 'number', enum: [12, 24, 48] },
         },
       },
     },
   }, async (req, reply) => {
     const u = req.user!
     const isAdmin = u.role === 'admin' || u.role === 'super'
-    const { body, modules: requestedModules = [], mentions: requestedMentions = [] } = req.body as { body: string; modules: string[]; mentions: string[] }
+    const { body, modules: requestedModules = [], mentions: requestedMentions = [], expires_hours } = req.body as { body: string; modules: string[]; mentions: string[]; expires_hours?: number }
 
     // Validate the requested scope is a subset of what the poster can access.
     // Admins can post to any scope (including []); members are limited to their modules.
@@ -77,7 +78,8 @@ const feedPlugin: FastifyPluginAsync = async (fastify) => {
     }
 
     const authorName = await resolveAuthorName(u.userId, bearer(req))
-    const post = await createFeedPost(u.userId, authorName, body, requestedModules, validMentions)
+    const expiresAt = expires_hours ? new Date(Date.now() + expires_hours * 3_600_000) : undefined
+    const post = await createFeedPost(u.userId, authorName, body, requestedModules, validMentions, expiresAt)
 
     // Notify people in scope (fire-and-forget, never blocks the response).
     const excerpt = body.length > 80 ? body.slice(0, 79) + '…' : body

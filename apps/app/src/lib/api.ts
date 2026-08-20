@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, Product, VesselAsset, VesselAssetType, VesselFieldDef, VesselFault, VesselFaultStep, VesselMaintenanceLog, VesselMaintenanceSchedule, VesselUpcomingItem, VesselScheduleAlert, VesselComponent, VesselAssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, FoodControlPlan, Product, VesselAsset, VesselAssetType, VesselFieldDef, VesselFault, VesselFaultStep, VesselMaintenanceLog, VesselMaintenanceSchedule, VesselUpcomingItem, VesselScheduleAlert, VesselComponent, VesselAssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData } from '@blnk/shared';
 import { getAccessToken, getRefreshToken, setTokens, clearSession } from './session';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
@@ -16,23 +16,29 @@ interface ReqOpts {
 
 // Access tokens live 15 min; refresh tokens 7 days. When an authenticated call
 // 401s we silently exchange the refresh token for a new pair and retry once.
-// Direct fetch (not req) so it can't recurse.
+// Direct fetch (not req) so it can't recurse. Shared promise collapses
+// concurrent 401s (e.g. parallel page-load calls) into one refresh request.
+let _refreshPromise: Promise<boolean> | null = null;
 async function trySilentRefresh(): Promise<boolean> {
-  const rt = getRefreshToken();
-  if (!rt) return false;
-  try {
-    const res = await fetch(`${API}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ refresh_token: rt }),
-    });
-    if (!res.ok) return false;
-    const data = (await res.json()) as { access_token: string; refresh_token: string };
-    setTokens(data.access_token, data.refresh_token);
-    return true;
-  } catch {
-    return false;
-  }
+  if (_refreshPromise) return _refreshPromise;
+  _refreshPromise = (async () => {
+    const rt = getRefreshToken();
+    if (!rt) return false;
+    try {
+      const res = await fetch(`${API}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ refresh_token: rt }),
+      });
+      if (!res.ok) return false;
+      const data = (await res.json()) as { access_token: string; refresh_token: string };
+      setTokens(data.access_token, data.refresh_token);
+      return true;
+    } catch {
+      return false;
+    }
+  })().finally(() => { _refreshPromise = null; });
+  return _refreshPromise;
 }
 
 function redirectToLogin(): void {
@@ -61,6 +67,9 @@ async function req<T = unknown>(path: string, { method, body, token, _retried }:
       return req<T>(path, { method, body, token: getAccessToken() ?? undefined, _retried: true });
     }
     redirectToLogin();
+    // Session is gone — navigate to login; throw so callers don't process stale
+    // response data, but use a friendly message in case any catch shows a toast.
+    throw new Error('Your session expired — please sign in again.');
   }
 
   const json = await res.json().catch(() => ({}));
@@ -162,8 +171,27 @@ export const listVesselAssets = (token: string) =>
   req<{ assets: VesselAsset[] }>('/vessel/assets', { method: 'GET', token });
 export const createVesselAsset = (token: string, body: { asset_type_id: string; name: string; location?: string; condition?: string; notes?: string; particulars?: Record<string, string> }) =>
   req<{ asset: VesselAsset }>('/vessel/assets', { method: 'POST', body, token });
-export const updateVesselAsset = (token: string, id: string, patch: { name?: string; particulars?: Record<string, string>; location?: string; condition?: string; notes?: string }) =>
+export const updateVesselAsset = (token: string, id: string, patch: { name?: string; particulars?: Record<string, string>; location?: string; condition?: string; notes?: string; image_url?: string | null; food_control_plan_id?: string | null }) =>
   req<{ asset: VesselAsset }>(`/vessel/assets/${id}`, { method: 'PATCH', body: patch, token });
+export const uploadVesselAssetImage = async (token: string, uri: string): Promise<string> => {
+  const filename = uri.split('/').pop() ?? 'image.jpg';
+  const form = new FormData();
+  if (typeof document !== 'undefined') {
+    // Web: uri is a blob: URL — fetch it to get a real Blob the browser can send.
+    const blob = await fetch(uri).then((r) => r.blob());
+    form.append('file', blob, filename);
+  } else {
+    form.append('file', { uri, name: filename, type: 'image/jpeg' } as unknown as Blob);
+  }
+  const res = await fetch(`${API}/vessel/documents/upload`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
+  return (json as { url: string }).url;
+};
 export const deleteVesselAsset = (token: string, id: string) =>
   req<void>(`/vessel/assets/${id}`, { method: 'DELETE', token });
 
@@ -294,7 +322,7 @@ export const updateComplianceRecord = (token: string, id: string, body: {
 export type NewSchedule = {
   record_type: string; label: string; site_id?: string | null; cadence: string;
   weekdays?: number[]; day_of_month?: number | null; interval_days?: number | null;
-  anchor_date?: string | null; times_per_day?: number;
+  anchor_date?: string | null; times_per_day?: number; plan_id?: string | null;
 };
 
 export const getSchedulesDue = (token: string, on: string) =>
@@ -327,6 +355,25 @@ export const discardCooling = (token: string, id: string, body: { reason?: strin
   req<{ batch: CoolingBatch; corrective_action: ComplianceRecord }>(
     `/compliance/cooling/${id}/discard`, { method: 'POST', body, token });
 
+// ── Food Control Plans ───────────────────────────────────────────────────────
+export const listPlans = (token: string) =>
+  req<{ plans: FoodControlPlan[] }>('/compliance/plans', { method: 'GET', token });
+
+export const createPlan = (token: string, body: { name: string; tier?: string }) =>
+  req<{ plan: FoodControlPlan }>('/compliance/plans', { method: 'POST', body, token });
+
+export const updatePlan = (token: string, id: string, body: { name?: string; tier?: string; active?: boolean }) =>
+  req<{ plan: FoodControlPlan }>(`/compliance/plans/${id}`, { method: 'PATCH', body, token });
+
+export const duplicatePlan = (token: string, id: string, name: string) =>
+  req<{ plan: FoodControlPlan }>(`/compliance/plans/${id}/duplicate`, { method: 'POST', body: { name }, token });
+
+export const assignPersonToPlan = (token: string, planId: string, personId: string) =>
+  req<void>(`/compliance/plans/${planId}/members/${personId}`, { method: 'PUT', token });
+
+export const removePersonFromPlan = (token: string, planId: string, personId: string) =>
+  req<void>(`/compliance/plans/${planId}/members/${personId}`, { method: 'DELETE', token });
+
 // ── Commerce admin (store) ────────────────────────────────────────────────────
 export const listAdminProducts = (token: string) =>
   req<{ products: Product[] }>('/commerce/admin/products', { method: 'GET', token });
@@ -355,8 +402,8 @@ export const uploadProductImage = async (token: string, file: File): Promise<{ u
 export const getFeed = (token: string) =>
   req<{ items: FeedItem[]; my_modules: string[]; available_modules: string[] }>('/feed', { method: 'GET', token });
 
-export const createFeedPost = (token: string, body: string, modules: string[], mentions: string[] = []) =>
-  req<{ post: FeedPost }>('/feed/posts', { method: 'POST', body: { body, modules, mentions }, token });
+export const createFeedPost = (token: string, body: string, modules: string[], mentions: string[] = [], expiresHours?: 12 | 24 | 48) =>
+  req<{ post: FeedPost }>('/feed/posts', { method: 'POST', body: { body, modules, mentions, ...(expiresHours ? { expires_hours: expiresHours } : {}) }, token });
 
 export const deleteFeedPost = (token: string, id: string) =>
   req<void>(`/feed/posts/${id}`, { method: 'DELETE', token });
