@@ -1,16 +1,30 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
+import multipart from '@fastify/multipart';
+import { v2 as cloudinary } from 'cloudinary';
 import { verifyBlnkAuth, requireRole } from '../blnk/auth';
 import { getAuthMe, setAuthName, getEmailConfig, setEmailConfig } from '../blnk/client';
 import {
-  getClientProfile, upsertClientProfile, getUserProfile, upsertUserProfile,
+  getClientProfile, upsertClientProfile, getUserProfile, upsertUserProfile, updateUserAvatar,
 } from '../db/queries/profile';
 import { getPersonByUserId, setPushToken } from '../db/queries/people';
+import { config } from '../config';
+import { Errors } from '../utils/errors';
 
 function bearer(req: FastifyRequest): string {
   return (req.headers.authorization ?? '').slice(7);
 }
 
+const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const MAX_BYTES = 5 * 1024 * 1024
+
 const profilePlugin: FastifyPluginAsync = async (fastify) => {
+  await fastify.register(multipart, { limits: { fileSize: MAX_BYTES, files: 1 } })
+
+  cloudinary.config({
+    cloud_name: config.cloudinary.cloudName,
+    api_key:    config.cloudinary.apiKey,
+    api_secret: config.cloudinary.apiSecret,
+  })
   // ── GET /profile ──────────────────────────────────────────────────────────
   // Assembles org + this user's profile (identity from blnk_auth, contact data
   // from here) + a derived onboarding state the app uses to route the wizard.
@@ -123,6 +137,31 @@ const profilePlugin: FastifyPluginAsync = async (fastify) => {
 
     return reply.status(200).send({ org, email });
   });
+  // ── POST /profile/me/avatar ───────────────────────────────────────────────
+  // Accepts a single image (multipart field: "file"), uploads to Cloudinary,
+  // persists the URL on user_profile, and returns it.
+  fastify.post('/profile/me/avatar', { preHandler: [verifyBlnkAuth] }, async (req, reply) => {
+    const data = await req.file()
+    if (!data) throw Errors.badRequest('no file received')
+    if (!ALLOWED_MIME.has(data.mimetype)) {
+      return reply.status(400).send({
+        error: { code: 'INVALID_FILE_TYPE', message: 'only jpeg, png, and webp are accepted', status: 400 },
+      })
+    }
+    const buffer = await data.toBuffer()
+    const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        { folder: `${config.tenantSlug}/avatars`, resource_type: 'image', transformation: [{ width: 256, height: 256, crop: 'fill', gravity: 'face' }] },
+        (err, res) => {
+          if (err || !res) return reject(err ?? new Error('cloudinary upload returned no result'))
+          resolve(res as { secure_url: string })
+        },
+      ).end(buffer)
+    })
+    const profile = await updateUserAvatar(req.user!.userId, result.secure_url)
+    return reply.status(200).send({ avatar_url: profile.avatar_url })
+  })
+
   // ── PATCH /profile/push-token ─────────────────────────────────────────────
   // Registers or clears the caller's Expo push token. Looks up their people row
   // and writes the token there — no-op if they have no person row yet.

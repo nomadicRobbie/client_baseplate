@@ -1,6 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify'
+import multipart from '@fastify/multipart'
+import { v2 as cloudinary } from 'cloudinary'
 import { verifyBlnkAuth, requireRole, requireModule } from '../../blnk/auth'
 import { Errors } from '../../utils/errors'
+import { config } from '../../config'
 import { evaluate } from './engine'
 import { isDueOn } from './schedule'
 import {
@@ -383,6 +386,31 @@ const compliancePlugin: FastifyPluginAsync = async (fastify) => {
     })
     const updated = await updateCoolingBatch(id, { status: 'discarded', record_id: ca.id })
     return reply.send({ batch: updated, corrective_action: ca })
+  })
+
+  // ── Plan image upload ──────────────────────────────────────────────────────
+  await fastify.register(async (sub) => {
+    await sub.register(multipart, { limits: { fileSize: 10 * 1024 * 1024, files: 1 } })
+    cloudinary.config({ cloud_name: config.cloudinary.cloudName, api_key: config.cloudinary.apiKey, api_secret: config.cloudinary.apiSecret })
+    sub.post('/compliance/plans/:id/image', {
+      preHandler: [verifyBlnkAuth, requireRole('admin', 'super')],
+    }, async (req, reply) => {
+      const { id } = req.params as { id: string }
+      const plan = await getPlan(id)
+      if (!plan) throw Errors.notFound('plan')
+      const data = await req.file()
+      if (!data) throw Errors.badRequest('no file received')
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(data.mimetype)) throw Errors.badRequest('only JPEG, PNG, and WebP images are accepted')
+      const buffer = await data.toBuffer()
+      const result = await new Promise<{ secure_url: string }>((resolve, reject) =>
+        cloudinary.uploader.upload_stream(
+          { folder: `${config.tenantSlug}/compliance-plans`, resource_type: 'image' },
+          (err, res) => err || !res ? reject(err ?? new Error('upload failed')) : resolve(res as { secure_url: string }),
+        ).end(buffer),
+      )
+      const updated = await updatePlan(id, { image_url: result.secure_url })
+      return reply.status(201).send({ plan: updated, url: result.secure_url })
+    })
   })
 }
 

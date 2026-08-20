@@ -43,14 +43,14 @@ const makeStyles = (t: ThemeT) => ({
   cardToggle: { gap: t.space.xs },
   cardToggleHeader: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, justifyContent: 'space-between' as const },
   chevronTop: { marginTop: 6 },
-  expandedContent: { borderTopWidth: 1, borderTopColor: t.color.border, paddingTop: t.space.md, gap: t.space.sm },
+  expandedContent: { paddingTop: t.space.md, gap: t.space.sm },
   itemLink: { gap: 2 },
   groupHeader: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const },
   scheduleRow: { flexDirection: 'row' as const, gap: t.space.sm, paddingVertical: t.space.xs },
   scheduleInfo: { flex: 1, gap: 2 },
   flex1: { flex: 1 },
-  addTypeSection: { gap: t.space.md, borderTopWidth: 1, borderTopColor: t.color.border, paddingTop: t.space.md },
-  addFieldSection: { gap: t.space.sm, borderTopWidth: 1, borderTopColor: t.color.border, paddingTop: t.space.md },
+  addTypeSection: { gap: t.space.md, paddingTop: t.space.md },
+  addFieldSection: { gap: t.space.sm, paddingTop: t.space.md },
   levelDot: (level: VesselUpcomingItem['level']) => ({
     width: 8, height: 8, borderRadius: 4, marginTop: 5,
     backgroundColor: level === 'over' ? t.color.danger : level === 'due' ? t.color.primary : t.color.border,
@@ -407,7 +407,7 @@ export default function AssetManager() {
       {addView === 'asset' && (
         <Card>
           {addMsg && <Notice message={addMsg.text} tone={addMsg.tone} />}
-          <TextField label="Name" value={assetName} onChangeText={setAssetName} placeholder="e.g. Yard Truck 1" autoCapitalize="sentences" />
+          <TextField label="Name" value={assetName} onChangeText={setAssetName} placeholder="Asset name" autoCapitalize="sentences" />
           <Text variant="label" muted>Type</Text>
           {types.length === 0
             ? <Text variant="small" muted>Add a type in the Types tab first.</Text>
@@ -442,7 +442,7 @@ export default function AssetManager() {
         ))}
         {showAddType ? (
           <View style={s.addTypeSection}>
-            <TextField label="Type name" value={newTypeName} onChangeText={setNewTypeName} placeholder="e.g. Watercraft, Tools" autoCapitalize="sentences" />
+            <TextField label="Type name" value={newTypeName} onChangeText={setNewTypeName} placeholder="Type name" autoCapitalize="sentences" />
             {draftFields.map((f, i) => (
               <View key={f.key} style={s.typeListRow}>
                 <View style={s.flex1}>
@@ -454,7 +454,7 @@ export default function AssetManager() {
             ))}
             <View style={s.addFieldSection}>
               <Text variant="label" muted>Add a field</Text>
-              <TextField label="Label" value={fieldLabel} onChangeText={setFieldLabel} placeholder="e.g. Registration plate" autoCapitalize="sentences" />
+              <TextField label="Label" value={fieldLabel} onChangeText={setFieldLabel} placeholder="Field label" autoCapitalize="sentences" />
               <View style={s.typeRow}>
                 {(['text', 'number', 'date', 'select'] as const).map((ft) => (
                   <Pressable key={ft} onPress={() => setFieldType(ft)} accessibilityRole="button" style={s.typeChip(fieldType === ft)}>
@@ -463,10 +463,10 @@ export default function AssetManager() {
                 ))}
               </View>
               {fieldType === 'number' && (
-                <TextField label="Unit (optional)" value={fieldUnit} onChangeText={setFieldUnit} placeholder="e.g. km, hrs, litres" autoCapitalize="none" />
+                <TextField label="Unit (optional)" value={fieldUnit} onChangeText={setFieldUnit} placeholder="Unit" autoCapitalize="none" />
               )}
               {fieldType === 'select' && (
-                <TextField label="Options (comma-separated)" value={fieldOptions} onChangeText={setFieldOptions} placeholder="e.g. Petrol, Diesel, Electric" autoCapitalize="sentences" />
+                <TextField label="Options (comma-separated)" value={fieldOptions} onChangeText={setFieldOptions} placeholder="Option 1, Option 2" autoCapitalize="sentences" />
               )}
               <Button label="Add field" variant="secondary" onPress={addField} />
             </View>

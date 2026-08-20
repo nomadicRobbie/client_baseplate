@@ -289,12 +289,14 @@ export async function scheduleDoneCounts(on: string): Promise<Record<string, num
 
 // ── Food Control Plans ────────────────────────────────────────────────────────
 // Admin sees all plans; members see only plans they're assigned to via person_plan.
+const assetImageSub = `(SELECT image_url FROM vessel_assets WHERE food_control_plan_id = fcp.id AND image_url IS NOT NULL LIMIT 1) AS asset_image_url`
+
 export async function listPlans(opts: { isAdmin: boolean; userId?: string | null }): Promise<FoodControlPlan[]> {
   if (opts.isAdmin) {
-    return query<FoodControlPlan>(`SELECT * FROM food_control_plans WHERE active = true ORDER BY name`, [])
+    return query<FoodControlPlan>(`SELECT fcp.*, ${assetImageSub} FROM food_control_plans fcp WHERE fcp.active = true ORDER BY fcp.name`, [])
   }
   return query<FoodControlPlan>(
-    `SELECT fcp.* FROM food_control_plans fcp
+    `SELECT fcp.*, ${assetImageSub} FROM food_control_plans fcp
      JOIN person_plan pp ON pp.plan_id = fcp.id
      JOIN people p ON p.user_id = $1 AND p.id = pp.person_id
      WHERE fcp.active = true ORDER BY fcp.name`,
@@ -318,16 +320,17 @@ export async function createPlan(p: { name: string; tier?: string; created_by?: 
 
 export async function updatePlan(
   id: string,
-  p: Partial<Pick<FoodControlPlan, 'name' | 'tier' | 'active'>>,
+  p: Partial<Pick<FoodControlPlan, 'name' | 'tier' | 'active' | 'image_url'>>,
 ): Promise<FoodControlPlan | null> {
   const rows = await query<FoodControlPlan>(
     `UPDATE food_control_plans SET
-       name   = COALESCE($2, name),
-       tier   = COALESCE($3, tier),
-       active = COALESCE($4, active),
+       name      = COALESCE($2, name),
+       tier      = COALESCE($3, tier),
+       active    = COALESCE($4, active),
+       image_url = COALESCE($5, image_url),
        updated_at = now()
      WHERE id = $1 RETURNING *`,
-    [id, p.name ?? null, p.tier ?? null, p.active ?? null],
+    [id, p.name ?? null, p.tier ?? null, p.active ?? null, p.image_url ?? null],
   )
   return rows[0] ?? null
 }

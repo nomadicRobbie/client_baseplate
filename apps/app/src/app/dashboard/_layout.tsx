@@ -33,7 +33,7 @@ type ThemeT = ReturnType<typeof useTheme>;
 const makeStyles = (t: ThemeT) => ({
   spinner: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const },
   sidebarContainer: { gap: t.space.xs },
-  mobileBar: { flexDirection: 'row' as const, justifyContent: 'space-around' as const, borderTopWidth: 1, borderTopColor: t.color.border },
+  mobileBar: { flexDirection: 'row' as const, justifyContent: 'space-around' as const },
   mobileTab: (active: boolean) => ({ flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: t.space.sm, minHeight: 52, backgroundColor: active ? t.color.surfaceAlt : 'transparent' }),
   brand: { gap: 2 },
   wideLayout: { flex: 1, flexDirection: 'row' as const },

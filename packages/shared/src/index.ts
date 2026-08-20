@@ -106,6 +106,8 @@ export interface FoodControlPlan {
   name: string
   tier: string          // FCP | NP1 | NP2 | NP3
   active: boolean
+  image_url: string | null
+  asset_image_url?: string | null  // populated by listPlans when an asset owns this plan
   created_by: string | null
   created_at: string
   updated_at: string
@@ -325,6 +327,7 @@ export interface MyUserProfile {
   phone: string | null
   preferred_contact: PreferredContact | null
   timezone: string | null
+  avatar_url: string | null
 }
 
 // Notification recipients — source of truth is blnk_api (tenants.email_config).
@@ -475,6 +478,7 @@ export interface FeedPost {
   id: string
   created_by: string      // blnk user_id
   author_name: string
+  author_image_url: string | null
   body: string
   modules: string[]       // [] = all staff; otherwise module keys the post is scoped to
   mentions: string[]      // person_ids tagged in the post

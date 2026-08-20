@@ -21,6 +21,7 @@ export interface UserProfile {
   phone: string | null;
   preferred_contact: string | null;
   timezone: string | null;
+  avatar_url: string | null;
   metadata: Record<string, unknown>;
   created_at: Date;
   updated_at: Date;
@@ -83,6 +84,17 @@ export async function upsertUserProfile(
        updated_at        = NOW()
      RETURNING *`,
     [userId, data.contact_email ?? null, data.phone ?? null, data.preferred_contact ?? null, data.timezone ?? null]
+  );
+  return rows[0];
+}
+
+export async function updateUserAvatar(userId: string, avatarUrl: string): Promise<UserProfile> {
+  const rows = await query<UserProfile>(
+    `INSERT INTO user_profile (user_id, avatar_url, updated_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (user_id) DO UPDATE SET avatar_url = EXCLUDED.avatar_url, updated_at = NOW()
+     RETURNING *`,
+    [userId, avatarUrl]
   );
   return rows[0];
 }

@@ -52,7 +52,7 @@ const feedPlugin: FastifyPluginAsync = async (fastify) => {
           body:         { type: 'string', minLength: 1, maxLength: 2000 },
           modules:      { type: 'array', items: { type: 'string' }, default: [] },
           mentions:     { type: 'array', items: { type: 'string' }, default: [] },
-          expires_hours: { type: 'number', enum: [12, 24, 48] },
+          expires_hours: { type: 'number', minimum: 0.1, maximum: 72 },
         },
       },
     },

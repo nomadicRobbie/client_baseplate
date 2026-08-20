@@ -190,7 +190,8 @@ export async function listFeedItems(opts: {
 
   // ── Posts (with comment count + latest comment preview) ───────────────────
   const posts = await query<FeedPost>(
-    `SELECT fp.id, fp.created_by, fp.author_name, fp.body, fp.modules, fp.mentions, fp.image_urls,
+    `SELECT fp.id, fp.created_by, fp.author_name, up.avatar_url AS author_image_url,
+            fp.body, fp.modules, fp.mentions, fp.image_urls,
             fp.created_at::text AS created_at,
             fp.expires_at::text AS expires_at,
             COUNT(fc.id)::int AS comment_count,
@@ -201,12 +202,13 @@ export async function listFeedItems(opts: {
               ORDER BY created_at DESC LIMIT 1
             ) c) AS latest_comment
      FROM feed_posts fp
+     LEFT JOIN user_profile up ON up.user_id = fp.created_by::uuid
      LEFT JOIN feed_post_comments fc ON fc.post_id = fp.id
      WHERE fp.deleted_at IS NULL
        AND fp.created_at > $1
        AND (fp.expires_at IS NULL OR fp.expires_at > now())
        AND ($2 OR fp.modules = '{}' OR fp.modules && $3)
-     GROUP BY fp.id
+     GROUP BY fp.id, up.avatar_url
      ORDER BY fp.created_at DESC
      LIMIT 30`,
     [cutoff, isAdmin, myModules],

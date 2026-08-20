@@ -124,6 +124,38 @@ export const updateOrg = (token: string, data: {
   notification_email?: string; backup_email?: string | null;
 }) => req('/profile/org', { method: 'PUT', body: data, token });
 
+export const uploadUserAvatar = async (token: string, uri: string): Promise<string> => {
+  const filename = uri.split('/').pop() ?? 'avatar.jpg';
+  const buildForm = async () => {
+    const form = new FormData();
+    if (typeof document !== 'undefined') {
+      const blob = await fetch(uri).then((r) => r.blob());
+      // Blob type can be empty for some blob: URIs; default to jpeg so the server accepts it.
+      const typed = blob.type ? blob : blob.slice(0, blob.size, 'image/jpeg');
+      form.append('file', typed, filename);
+    } else {
+      form.append('file', { uri, name: filename, type: 'image/jpeg' } as unknown as Blob);
+    }
+    return form;
+  };
+  const doUpload = async (tok: string) => fetch(`${API}/profile/me/avatar`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${tok}` },
+    body: await buildForm(),
+  });
+  let res = await doUpload(token);
+  if (res.status === 401) {
+    if (await trySilentRefresh()) {
+      res = await doUpload(getAccessToken() ?? token);
+    } else {
+      throw new Error('Your session expired — please sign in again.');
+    }
+  }
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
+  return (json as { avatar_url: string }).avatar_url;
+};
+
 // ── Team management ──────────────────────────────────────────────────────────
 export const listTeam = (token: string) =>
   req<{ users: TeamUser[] }>('/team', { method: 'GET', token });
@@ -175,19 +207,30 @@ export const updateVesselAsset = (token: string, id: string, patch: { name?: str
   req<{ asset: VesselAsset }>(`/vessel/assets/${id}`, { method: 'PATCH', body: patch, token });
 export const uploadVesselAssetImage = async (token: string, uri: string): Promise<string> => {
   const filename = uri.split('/').pop() ?? 'image.jpg';
-  const form = new FormData();
-  if (typeof document !== 'undefined') {
-    // Web: uri is a blob: URL — fetch it to get a real Blob the browser can send.
-    const blob = await fetch(uri).then((r) => r.blob());
-    form.append('file', blob, filename);
-  } else {
-    form.append('file', { uri, name: filename, type: 'image/jpeg' } as unknown as Blob);
-  }
-  const res = await fetch(`${API}/vessel/documents/upload`, {
+  const buildForm = async () => {
+    const form = new FormData();
+    if (typeof document !== 'undefined') {
+      const blob = await fetch(uri).then((r) => r.blob());
+      form.append('file', blob, filename);
+    } else {
+      form.append('file', { uri, name: filename, type: 'image/jpeg' } as unknown as Blob);
+    }
+    return form;
+  };
+  const doUpload = async (tok: string) => fetch(`${API}/vessel/documents/upload`, {
     method: 'POST',
-    headers: { authorization: `Bearer ${token}` },
-    body: form,
+    headers: { authorization: `Bearer ${tok}` },
+    body: await buildForm(),
   });
+  let res = await doUpload(token);
+  if (res.status === 401) {
+    if (await trySilentRefresh()) {
+      res = await doUpload(getAccessToken() ?? token);
+    } else {
+      redirectToLogin();
+      throw new Error('Your session expired — please sign in again.');
+    }
+  }
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
   return (json as { url: string }).url;
@@ -362,8 +405,39 @@ export const listPlans = (token: string) =>
 export const createPlan = (token: string, body: { name: string; tier?: string }) =>
   req<{ plan: FoodControlPlan }>('/compliance/plans', { method: 'POST', body, token });
 
-export const updatePlan = (token: string, id: string, body: { name?: string; tier?: string; active?: boolean }) =>
+export const updatePlan = (token: string, id: string, body: { name?: string; tier?: string; active?: boolean; image_url?: string | null }) =>
   req<{ plan: FoodControlPlan }>(`/compliance/plans/${id}`, { method: 'PATCH', body, token });
+
+export const uploadPlanImage = async (token: string, planId: string, uri: string): Promise<string> => {
+  const filename = uri.split('/').pop() ?? 'image.jpg';
+  const buildForm = async () => {
+    const form = new FormData();
+    if (typeof document !== 'undefined') {
+      const blob = await fetch(uri).then((r) => r.blob());
+      form.append('file', blob, filename);
+    } else {
+      form.append('file', { uri, name: filename, type: 'image/jpeg' } as unknown as Blob);
+    }
+    return form;
+  };
+  const doUpload = async (tok: string) => fetch(`${API}/compliance/plans/${planId}/image`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${tok}` },
+    body: await buildForm(),
+  });
+  let res = await doUpload(token);
+  if (res.status === 401) {
+    if (await trySilentRefresh()) {
+      res = await doUpload(getAccessToken() ?? token);
+    } else {
+      redirectToLogin();
+      throw new Error('Your session expired — please sign in again.');
+    }
+  }
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
+  return (json as { url: string }).url;
+};
 
 export const duplicatePlan = (token: string, id: string, name: string) =>
   req<{ plan: FoodControlPlan }>(`/compliance/plans/${id}/duplicate`, { method: 'POST', body: { name }, token });
@@ -402,7 +476,7 @@ export const uploadProductImage = async (token: string, file: File): Promise<{ u
 export const getFeed = (token: string) =>
   req<{ items: FeedItem[]; my_modules: string[]; available_modules: string[] }>('/feed', { method: 'GET', token });
 
-export const createFeedPost = (token: string, body: string, modules: string[], mentions: string[] = [], expiresHours?: 12 | 24 | 48) =>
+export const createFeedPost = (token: string, body: string, modules: string[], mentions: string[] = [], expiresHours?: number) =>
   req<{ post: FeedPost }>('/feed/posts', { method: 'POST', body: { body, modules, mentions, ...(expiresHours ? { expires_hours: expiresHours } : {}) }, token });
 
 export const deleteFeedPost = (token: string, id: string) =>

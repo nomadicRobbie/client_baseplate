@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { View, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Pressable, Image, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import type { PreferredContact } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { useProfile } from '@/lib/profile-context';
 import { visibleNav } from '@/lib/nav';
 import { useTheme, useColorSchemePref, type SchemePref } from '@/theme';
 import { Screen, Text, Card, Row, Button, TextField } from '@/ui/components';
-import { passkeyRegisterBegin, passkeyRegisterComplete, updateMyProfile } from '@/lib/api';
+import { passkeyRegisterBegin, passkeyRegisterComplete, updateMyProfile, uploadUserAvatar } from '@/lib/api';
 import { getAccessToken } from '@/lib/session';
 import { doRegister, passkeySupported } from '@/lib/passkey';
 
@@ -24,6 +25,9 @@ const makeStyles = (t: ThemeT) => ({
   contactRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
   contactBtn: (sel: boolean) => ({ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }),
   manageLabel: { flex: 1 },
+  avatarRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.md },
+  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: t.color.border },
+  avatarPlaceholder: { width: 64, height: 64, borderRadius: 32, backgroundColor: t.color.border, alignItems: 'center' as const, justifyContent: 'center' as const },
 });
 
 export default function Account() {
@@ -48,8 +52,24 @@ export default function Account() {
   const [phone, setPhone] = useState(me?.profile?.phone ?? '');
   const [contactEmail, setContactEmail] = useState(me?.profile?.contact_email ?? me?.email ?? '');
   const [preferred, setPreferred] = useState<string | null>(me?.profile?.preferred_contact ?? null);
+  const [avatarUri, setAvatarUri] = useState<string | null>(me?.profile?.avatar_url ?? null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<Msg | null>(null);
+
+  const pickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { setMsg({ text: 'Photo library access is required.', tone: 'error' }); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.8, allowsEditing: true, aspect: [1, 1] });
+    if (result.canceled) return;
+    const uri = result.assets[0].uri;
+    setBusy(true); setMsg(null);
+    try {
+      const url = await uploadUserAvatar(getAccessToken()!, uri);
+      setAvatarUri(url);
+      await refresh();
+      setMsg({ text: 'Avatar updated.', tone: 'success' });
+    } catch (e) { setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' }); } finally { setBusy(false); }
+  };
 
   const saveProfile = async () => {
     if (!name.trim()) { setMsg({ text: 'Name is required.', tone: 'error' }); return; }
@@ -80,6 +100,15 @@ export default function Account() {
 
       <Card>
         <Text variant="heading">Your details</Text>
+        <View style={s.avatarRow}>
+          <Pressable onPress={pickAvatar} accessibilityLabel="Change profile photo" accessibilityRole="button">
+            {avatarUri
+              ? <Image source={{ uri: avatarUri }} style={s.avatar} />
+              : <View style={s.avatarPlaceholder}><Ionicons name="person" size={28} color={t.color.textMuted} /></View>
+            }
+          </Pressable>
+          <Button label={avatarUri ? 'Change photo' : 'Add photo'} variant="secondary" onPress={pickAvatar} loading={busy} />
+        </View>
         <TextField label="Name" value={name} onChangeText={setName} placeholder="Full name" autoCapitalize="sentences" />
         <TextField label="Contact email" value={contactEmail} onChangeText={setContactEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" />
         <TextField label="Phone" value={phone} onChangeText={setPhone} placeholder="Optional" />

@@ -24,21 +24,20 @@ const makeStyles = (t: ThemeT) => ({
   urgencyGroup: { gap: 6 },
   urgencyRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
   urgencyBtn: (sel: boolean) => ({ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }),
-  pendingItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm, paddingVertical: t.space.sm, borderTopWidth: 1, borderTopColor: t.color.border },
+  pendingItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm, paddingVertical: t.space.sm },
   pendingInfo: { flex: 1, gap: 2 },
-  faultItem: { paddingVertical: t.space.sm, borderTopWidth: 1, borderTopColor: t.color.border, gap: t.space.sm },
+  faultItem: { paddingVertical: t.space.sm, gap: t.space.sm },
   faultHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
   faultInfo: { flex: 1, gap: 2 },
   faultFooter: { alignItems: 'flex-end' as const },
   stepsList: { gap: 2, paddingLeft: t.space.sm },
   actions: { gap: t.space.sm },
   actionRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
-  closedItem: { paddingVertical: t.space.sm, borderTopWidth: 1, borderTopColor: t.color.border, gap: 2 },
+  closedItem: { paddingVertical: t.space.sm, gap: 2 },
 });
 
 type Msg = { text: string; tone: 'success' | 'error' | 'info' };
 const URGENCIES = ['Low', 'Medium', 'High', 'Critical'];
-const today = () => new Date().toISOString().slice(0, 10);
 const tok = () => getAccessToken()!;
 
 export default function VesselFaults() {
@@ -109,21 +108,13 @@ export default function VesselFaults() {
     setNote(''); setActiveId(null); setPending(pendingCount());
     try { queued(await doSync(), 'Fault closed.'); } finally { setBusy(false); }
   };
-  // Close with a full maintenance record.
-  const closeWithMaintenance = async (f: VesselFault) => {
-    setBusy(true); setMsg(null);
-    enqueue('CompleteMaintenance', { asset_id: assetId, fault_id: f.id, resolves_fault: true, task_name: note.trim() || 'Repair', completed_date: today() });
-    setNote(''); setActiveId(null); setPending(pendingCount());
-    try { queued(await doSync(), 'Maintenance logged — fault closed.'); } finally { setBusy(false); }
-  };
-
   const open = faults.filter((f) => f.status !== 'closed');
   const closed = faults.filter((f) => f.status === 'closed');
   const pendingLogged = pendingCommands()
     .filter((c) => c.kind === 'LogFault' && (c.payload as { asset_id: string }).asset_id === assetId)
     .map((c) => ({ key: c.key, ...(c.payload as { name: string; description?: string; urgency?: string }) }));
   const pendingCloseIds = new Set(
-    pendingCommands().filter((c) => c.kind === 'CompleteMaintenance' || c.kind === 'CloseFault')
+    pendingCommands().filter((c) => c.kind === 'CloseFault')
       .map((c) => (c.payload as { fault_id?: string }).fault_id).filter((id): id is string => !!id),
   );
   const pendingStepsByFault: Record<string, string[]> = {};
@@ -148,7 +139,7 @@ export default function VesselFaults() {
       {/* Log a fault */}
       <Card>
         <Text variant="heading">Log a fault</Text>
-        <TextField label="Fault" value={fName} onChangeText={setFName} placeholder="e.g. Navigation light corrosion" autoCapitalize="sentences" />
+        <TextField label="Fault" value={fName} onChangeText={setFName} placeholder="Fault name" autoCapitalize="sentences" />
         <TextField label="Description" value={fDesc} onChangeText={setFDesc} placeholder="Optional" autoCapitalize="sentences" />
         <View style={s.urgencyGroup}>
           <Text variant="label" muted>Urgency</Text>
@@ -208,11 +199,10 @@ export default function VesselFaults() {
 
               {expanded ? (
                 <View style={s.actions}>
-                  <TextField label="Note (what was done, or the next step)" value={note} onChangeText={setNote} placeholder="e.g. Ordered replacement connector" autoCapitalize="sentences" />
+                  <TextField label="Note (what was done, or the next step)" value={note} onChangeText={setNote} placeholder="Ordered replacement" autoCapitalize="sentences" />
                   <View style={s.actionRow}>
                     <Button label="Add step" variant="secondary" onPress={() => addStep(f)} loading={busy} />
                     <Button label="Close with note" onPress={() => closeWithNote(f)} loading={busy} />
-                    <Button label="Log maintenance & close" onPress={() => closeWithMaintenance(f)} loading={busy} />
                     <Button label="Cancel" variant="ghost" onPress={() => { setActiveId(null); setNote(''); }} />
                   </View>
                 </View>

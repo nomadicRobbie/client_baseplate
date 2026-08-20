@@ -184,7 +184,7 @@ export default function Analytics() {
             {overview.top_pages.length === 0
               ? <Text muted>No page views yet.</Text>
               : overview.top_pages.map((p, i) => (
-                <View key={`${p.url}-${i}`} style={[s.listRow, { borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.color.border }]}>
+                <View key={`${p.url}-${i}`} style={s.listRow}>
                   <Text style={s.listRowText} numberOfLines={1}>{p.url}</Text>
                   <Text variant="mono" muted>{p.views}</Text>
                 </View>
@@ -196,7 +196,7 @@ export default function Analytics() {
             {overview.top_referrers.length === 0
               ? <Text muted>No referrers yet.</Text>
               : overview.top_referrers.map((r, i) => (
-                <View key={`${r.referrer}-${i}`} style={[s.listRow, { borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.color.border }]}>
+                <View key={`${r.referrer}-${i}`} style={s.listRow}>
                   <Text style={s.listRowText} numberOfLines={1}>{r.referrer}</Text>
                   <Text variant="mono" muted>{r.count}</Text>
                 </View>

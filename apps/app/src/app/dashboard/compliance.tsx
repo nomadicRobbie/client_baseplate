@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { View, Pressable, TextInput, StyleSheet } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import type { FoodControlPlan } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { listPlans, createPlan, updatePlan, duplicatePlan } from '@/lib/api';
+import { listPlans, createPlan, updatePlan, duplicatePlan, uploadPlanImage } from '@/lib/api';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, Row, Notice, Badge } from '@/ui/components';
 
@@ -55,6 +57,22 @@ export default function CompliancePlans() {
   // Duplicate form
   const [dupId, setDupId] = useState<string | null>(null);
   const [dupName, setDupName] = useState('');
+
+  // Image upload
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+
+  const pickImage = async (planId: string) => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { setMsg({ text: 'Photo library access is required.', tone: 'error' }); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.8 });
+    if (result.canceled || !result.assets[0]) return;
+    setUploadingId(planId);
+    try {
+      await uploadPlanImage(tok(), planId, result.assets[0].uri);
+      await load();
+    } catch (e) { setMsg({ text: e instanceof Error ? e.message : String(e), tone: 'error' }); }
+    finally { setUploadingId(null); }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -111,7 +129,13 @@ export default function CompliancePlans() {
           {plans.map((p) => (
             <View key={p.id}>
               <Row onPress={() => router.push({ pathname: '/dashboard/compliance/[planId]', params: { planId: p.id } })}>
-                <Ionicons name="clipboard-outline" size={22} color={t.color.text} />
+                <Pressable onPress={isAdmin ? () => void pickImage(p.id) : undefined}
+                  accessibilityLabel={isAdmin ? 'Change plan image' : undefined}
+                  style={{ width: 44, height: 44, borderRadius: 8, overflow: 'hidden', backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+                  {p.asset_image_url ?? p.image_url
+                    ? <Image source={{ uri: (p.asset_image_url ?? p.image_url)! }} style={{ width: 44, height: 44 }} contentFit="cover" />
+                    : <Ionicons name={uploadingId === p.id ? 'hourglass-outline' : 'clipboard-outline'} size={22} color={t.color.textMuted} />}
+                </Pressable>
                 <View style={s.planInfo}>
                   <Text>{p.name}</Text>
                   <Text variant="small" muted>Tier: {p.tier}</Text>
@@ -149,7 +173,7 @@ export default function CompliancePlans() {
           <Text variant="heading">New control plan</Text>
           <View style={s.fieldGroup}>
             <Text variant="label" muted>Name *</Text>
-            <TextInput value={newName} onChangeText={setNewName} placeholder="e.g. Main kitchen FCP" style={s.input} placeholderTextColor={t.color.textMuted} />
+            <TextInput value={newName} onChangeText={setNewName} placeholder="Plan name" style={s.input} placeholderTextColor={t.color.textMuted} />
           </View>
           <View style={s.fieldGroup}>
             <Text variant="label" muted>Tier</Text>

@@ -107,7 +107,7 @@ export default function Locations() {
         <Text variant="heading">Add location</Text>
         <TextInput
           style={s.input}
-          placeholder="Location name (e.g. Stroud Farmers Market)"
+          placeholder="Location name"
           placeholderTextColor={t.color.textMuted}
           value={location}
           onChangeText={setLocation}
@@ -132,7 +132,7 @@ export default function Locations() {
         </View>
         <TextInput
           style={s.input}
-          placeholder="Optional note (e.g. We'll be here 11am–3pm)"
+          placeholder="Optional note"
           placeholderTextColor={t.color.textMuted}
           value={note}
           onChangeText={setNote}

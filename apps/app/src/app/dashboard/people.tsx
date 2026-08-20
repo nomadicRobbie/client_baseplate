@@ -21,7 +21,7 @@ const makeStyles = (t: ThemeT) => ({
   roleSection: { gap: 6 },
   roleRow: { flexDirection: 'row' as const, gap: t.space.sm },
   roleBtn: (sel: boolean, disabled: boolean) => ({ opacity: disabled ? 0.4 : 1, paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }),
-  personItem: { paddingVertical: t.space.sm, borderTopWidth: 1, borderTopColor: t.color.border, gap: t.space.sm },
+  personItem: { paddingVertical: t.space.sm, gap: t.space.sm },
   personHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.md },
   personInfo: { flex: 1, gap: 2 },
   moduleRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.xs, alignItems: 'center' as const },

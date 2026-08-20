@@ -126,7 +126,7 @@ export function Onboarding({ onDone }: { onDone: () => Promise<void> | void }) {
         </Card>
       ) : step === 'org' ? (
         <Card>
-          <TextField label="Organisation name" value={orgName} onChangeText={setOrgName} placeholder="e.g. ting test studios" autoCapitalize="sentences" />
+          <TextField label="Organisation name" value={orgName} onChangeText={setOrgName} placeholder="Organisation name" autoCapitalize="sentences" />
           <View style={s.fieldGroup}>
             <Text variant="label" muted>Brand colour (optional)</Text>
             <Text variant="small" muted>Sets the app's accent for everyone. You can change or set this later in Settings.</Text>

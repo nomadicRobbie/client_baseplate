@@ -339,7 +339,7 @@ function AddProductForm({ onAdded, onCancel }: { onAdded: (p: Product) => void; 
 
       <View style={s.fieldGroup}>
         <Text variant="label" muted>TITLE</Text>
-        <TextInput value={title} onChangeText={setTitle} placeholder="e.g. T-shirt"
+        <TextInput value={title} onChangeText={setTitle} placeholder="Product name"
           placeholderTextColor={t.color.textMuted}
           style={s.textInput} />
       </View>
