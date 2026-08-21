@@ -63,17 +63,14 @@ export async function build(): Promise<typeof server> {
 
   // In-memory rate limiting — skipped in dev so rapid hot-reloads don't trip it.
   if (config.env === 'production') {
+    // No errorResponseBuilder: it returned a plain object, which setErrorHandler
+    // below can't read (it requires an Error with statusCode) — so every 429 went
+    // out as a 500 "internal server error". The plugin's own error is a proper
+    // Error, and setErrorHandler already wraps it in the same envelope.
+    // ponytail: one screen load fires ~6 requests; 100/15min tripped in minutes.
     await server.register(rateLimit, {
-      max: 100,
+      max: 1000,
       timeWindow: 15 * 60 * 1000,
-      errorResponseBuilder: (_req, ctx) => ({
-        error: {
-          code: 'RATE_LIMIT_EXCEEDED',
-          message: `Too many requests — retry after ${ctx.after}`,
-          status: 429,
-          request_id: _req.id,
-        },
-      }),
     })
   }
 

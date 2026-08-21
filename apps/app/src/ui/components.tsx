@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import {
   View, Text as RNText, Pressable, TextInput, ScrollView, ActivityIndicator, Animated, Easing,
+  KeyboardAvoidingView, Platform,
   type StyleProp, type ViewStyle, type TextStyle, type TextInput as RNTextInput,
   type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native';
@@ -18,6 +19,7 @@ function makeStyles(t: ReturnType<typeof useTheme>) {
     safeArea: { flex: 1, backgroundColor: t.color.bg },
     scrollView: { flex: 1 },
     scrollContent: { flexGrow: 1 },
+    keyboardAvoider: { flex: 1 },
     card: {
       backgroundColor: t.color.surface, borderRadius: t.radius.lg,
       borderWidth: 1, borderColor: t.color.border, padding: t.space.lg, gap: t.space.sm,
@@ -145,9 +147,30 @@ export function Screen({
   );
   return (
     <SafeAreaView style={s.safeArea}>
+      {/* Keyboard handling lives here so every screen gets it for free.
+          Scrolling screens: automaticallyAdjustKeyboardInsets is the native iOS
+          inset — the focused input scrolls clear of the keyboard on its own.
+          Non-scroll screens (login): KeyboardAvoidingView shrinks the frame.
+          Android needs neither — app.json's default adjustResize handles it. */}
       {scroll
-        ? <ScrollView ref={scrollRef} onScroll={onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" style={s.scrollView} contentContainerStyle={s.scrollContent}>{content}</ScrollView>
-        : content}
+        ? (
+          <ScrollView
+            ref={scrollRef}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
+            style={s.scrollView}
+            contentContainerStyle={s.scrollContent}
+          >{content}</ScrollView>
+        )
+        : (
+          <KeyboardAvoidingView
+            style={s.keyboardAvoider}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >{content}</KeyboardAvoidingView>
+        )}
       {toast && onDismissToast && <Toast msg={toast} onDismiss={onDismissToast} />}
     </SafeAreaView>
   );
