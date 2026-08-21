@@ -8,7 +8,7 @@ import { listAssetSchedules, createAssetMaintenanceLog, uploadAssetDocument } fr
 import { readThrough } from '@/lib/mirror';
 import { loadAsset } from '@/lib/asset-sync';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Button, TextField, Notice } from '@/ui/components';
+import { Screen, Text, Card, Button, TextField, Notice, YesNo, Checkbox } from '@/ui/components';
 import { DateField } from '@/ui/date-field';
 
 type ThemeT = ReturnType<typeof useTheme>;
@@ -18,69 +18,19 @@ const makeStyles = (t: ThemeT) => ({
   backBtn:     { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
   fieldBlock:  { gap: t.space.sm, paddingVertical: t.space.sm },
   label:       { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
-  boolRow:     { flexDirection: 'row' as const, gap: t.space.sm },
-  boolPill:    (sel: boolean, positive: boolean) => ({
-    flex: 1, paddingVertical: t.space.sm, alignItems: 'center' as const,
-    borderRadius: t.radius.md, borderWidth: 1,
-    borderColor: sel ? (positive ? t.color.primary : t.color.danger) : t.color.border,
-    backgroundColor: sel ? (positive ? t.color.primary : t.color.danger) : 'transparent' as const,
-  }),
-  checkRow:    { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
-  checkBox:    (checked: boolean) => ({
-    width: 22, height: 22, borderRadius: t.radius.sm, borderWidth: 1.5,
-    borderColor: checked ? t.color.primary : t.color.border,
-    backgroundColor: checked ? t.color.primary : 'transparent' as const,
-    alignItems: 'center' as const, justifyContent: 'center' as const,
-  }),
   docRow:      { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.xs },
   docChip:     { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingVertical: 4, paddingHorizontal: t.space.sm, borderRadius: t.radius.pill, backgroundColor: t.color.surfaceAlt },
   docName:     { maxWidth: 180 },
-  requiredStar:{ color: t.color.danger },
   errorText:   { color: t.color.danger },
 });
 
 // ── Field renderers ────────────────────────────────────────────────────────────
 
-function BooleanField({ field, value, onChange, s, t }: {
-  field: FormField; value: boolean | null;
-  onChange: (v: boolean) => void; s: ReturnType<typeof makeStyles>; t: ThemeT;
-}) {
-  return (
-    <View style={s.fieldBlock}>
-      <FieldLabel field={field} s={s} t={t} />
-      <View style={s.boolRow}>
-        <Pressable style={s.boolPill(value === true, true)} onPress={() => onChange(true)} accessibilityRole="button">
-          <Text variant="label" color={value === true ? t.color.primaryText : t.color.text}>Yes</Text>
-        </Pressable>
-        <Pressable style={s.boolPill(value === false, false)} onPress={() => onChange(false)} accessibilityRole="button">
-          <Text variant="label" color={value === false ? t.color.primaryText : t.color.text}>No</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function CheckboxField({ field, value, onChange, s, t }: {
-  field: FormField; value: boolean;
-  onChange: (v: boolean) => void; s: ReturnType<typeof makeStyles>; t: ThemeT;
-}) {
-  return (
-    <View style={s.fieldBlock}>
-      <Pressable style={s.checkRow} onPress={() => onChange(!value)} accessibilityRole="checkbox" accessibilityState={{ checked: value }}>
-        <View style={s.checkBox(value)}>
-          {value && <Ionicons name="checkmark" size={14} color={t.color.primaryText} />}
-        </View>
-        <Text>{field.label}{field.required && <Text style={s.requiredStar}> *</Text>}</Text>
-      </Pressable>
-    </View>
-  );
-}
-
 function FieldLabel({ field, s, t }: { field: FormField; s: ReturnType<typeof makeStyles>; t: ThemeT }) {
   return (
     <View style={s.label}>
       <Text variant="label">{field.label}</Text>
-      {field.required && <Text variant="label" style={s.requiredStar}>*</Text>}
+      {field.required && <Text variant="label" color={t.color.danger}>*</Text>}
     </View>
   );
 }
@@ -98,6 +48,7 @@ export default function CompleteTask() {
   const [loadError, setLoadError] = useState('');
   const [formData, setFormData] = useState<FormResponseData>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [certified, setCertified] = useState(false);
   const [attachments, setAttachments] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -143,7 +94,7 @@ export default function CompleteTask() {
     for (const f of fields) {
       if (!f.required) continue;
       const val = formData[f.id];
-      if (f.type === 'boolean' && val === null) errors[f.id] = 'Required';
+      if (f.type === 'boolean' && val === null) errors[f.id] = 'Select an answer';
       else if (f.type === 'checkbox' && val !== true) errors[f.id] = 'Must be checked';
       else if ((f.type === 'text' || f.type === 'date') && !String(val ?? '').trim()) errors[f.id] = 'Required';
       else if (f.type === 'number' && (val === '' || val === null || isNaN(Number(val)))) errors[f.id] = 'Required';
@@ -154,7 +105,8 @@ export default function CompleteTask() {
 
   const submit = async () => {
     const fields = schedule?.form_schema?.fields ?? [];
-    if (!validate(fields)) { setMsg({ text: 'Please fill in all required fields.', tone: 'error' }); return; }
+    if (!validate(fields)) return;
+    if (!certified) { setMsg({ text: 'Please confirm the task is complete.', tone: 'error' }); return; }
     setBusy(true); setMsg(null);
     try {
       // coerce number fields from string to number before storing
@@ -201,16 +153,24 @@ export default function CompleteTask() {
 
       {fields.length > 0 && (
         <Card>
+          {Object.keys(fieldErrors).length > 0 && (
+            <Notice message={`${Object.keys(fieldErrors).length} field${Object.keys(fieldErrors).length === 1 ? '' : 's'} need attention`} tone="error" />
+          )}
           {fields.map((f) => {
             const val = formData[f.id];
             const error = fieldErrors[f.id];
             return (
               <View key={f.id}>
                 {f.type === 'boolean' && (
-                  <BooleanField field={f} value={val as boolean | null} onChange={(v) => setField(f.id, v)} s={s} t={t} />
+                  <View style={s.fieldBlock}>
+                    <FieldLabel field={f} s={s} t={t} />
+                    <YesNo value={val as boolean | null} onChange={(v) => setField(f.id, v)} />
+                  </View>
                 )}
                 {f.type === 'checkbox' && (
-                  <CheckboxField field={f} value={!!val} onChange={(v) => setField(f.id, v)} s={s} t={t} />
+                  <View style={s.fieldBlock}>
+                    <Checkbox checked={!!val} onChange={(v) => setField(f.id, v)} label={f.label + (f.required ? ' *' : '')} />
+                  </View>
                 )}
                 {f.type === 'text' && (
                   <View style={s.fieldBlock}>
@@ -234,6 +194,7 @@ export default function CompleteTask() {
               </View>
             );
           })}
+          <Checkbox checked={certified} onChange={setCertified} label="Mark task complete" />
         </Card>
       )}
 
@@ -255,7 +216,10 @@ export default function CompleteTask() {
         <Button label={uploading ? 'Uploading…' : 'Attach file'} variant="secondary" onPress={pickFile} disabled={uploading} />
       </Card>
 
-      <Button label="Mark complete" onPress={submit} loading={busy} />
+      <Button label="Submit task" onPress={submit} loading={busy} />
+      {Object.keys(fieldErrors).length > 0 && (
+        <Text variant="small" style={s.errorText}>Fix {Object.keys(fieldErrors).length} field{Object.keys(fieldErrors).length === 1 ? '' : 's'} before submitting</Text>
+      )}
 
     </Screen>
   );

@@ -273,15 +273,26 @@ export async function deleteSchedule(id: string): Promise<boolean> {
 // Completions per schedule on a given local date (YYYY-MM-DD).
 // ponytail: compares in server time; swap to the business timezone if a client
 // spans midnight in a different zone than the server.
-export async function scheduleDoneCounts(on: string): Promise<Record<string, number>> {
-  const rows = await query<{ schedule_id: string; n: number }>(
-    `SELECT schedule_id, COUNT(*)::int AS n
-     FROM compliance_records
-     WHERE schedule_id IS NOT NULL AND voided_at IS NULL
-       AND datetime >= $1::date AND datetime < ($1::date + interval '1 day')
-     GROUP BY schedule_id`,
-    [on],
-  )
+export async function scheduleDoneCounts(on: string, from?: string, to?: string): Promise<Record<string, number>> {
+  // When the client supplies UTC boundaries for the local day, use them (fixes timezone offset for non-UTC users).
+  // Falls back to server-date range when not provided (e.g. direct API calls).
+  const rows = from && to
+    ? await query<{ schedule_id: string; n: number }>(
+        `SELECT schedule_id, COUNT(*)::int AS n
+         FROM compliance_records
+         WHERE schedule_id IS NOT NULL AND voided_at IS NULL
+           AND datetime >= $1::timestamptz AND datetime < $2::timestamptz
+         GROUP BY schedule_id`,
+        [from, to],
+      )
+    : await query<{ schedule_id: string; n: number }>(
+        `SELECT schedule_id, COUNT(*)::int AS n
+         FROM compliance_records
+         WHERE schedule_id IS NOT NULL AND voided_at IS NULL
+           AND datetime >= $1::date AND datetime < ($1::date + interval '1 day')
+         GROUP BY schedule_id`,
+        [on],
+      )
   const map: Record<string, number> = {}
   for (const r of rows) map[r.schedule_id] = r.n
   return map

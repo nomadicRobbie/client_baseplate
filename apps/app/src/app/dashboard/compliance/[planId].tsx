@@ -14,7 +14,8 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useProfile } from '@/lib/profile-context';
 import { evalLimit, describeLimit } from '@/lib/compliance';
-import { Screen, Text, Card, Button, Notice, Badge } from '@/ui/components';
+import { Screen, Text, Card, Button, Notice, Badge, Pill } from '@/ui/components';
+import { DateField } from '@/ui/date-field';
 import { recordIcon } from '@/ui/record-icon';
 import { useTheme } from '@/theme';
 
@@ -133,7 +134,6 @@ function makeStyles(t: ThemeT) {
     limitBox: { backgroundColor: soft.limitBg, borderWidth: 1, borderColor: soft.limitBorder, borderRadius: t.radius.md, padding: t.space.md },
     verdict: { borderRadius: t.radius.md, padding: t.space.md, flexDirection: 'row', alignItems: 'center', gap: t.space.sm },
     logItem: { flexDirection: 'row', alignItems: 'center', gap: t.space.md, paddingVertical: t.space.sm },
-    pill: { paddingHorizontal: t.space.md, paddingVertical: t.space.sm, borderRadius: t.radius.md, borderWidth: 1, minHeight: 40, justifyContent: 'center' },
     failBadge: { backgroundColor: t.color.danger, paddingHorizontal: 8, paddingVertical: 2, borderRadius: t.radius.sm },
     caBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: t.space.sm, paddingVertical: 6, borderRadius: t.radius.sm, borderWidth: 1 },
     formHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -177,16 +177,6 @@ function IconChip({ code, category, size = 44 }: { code: string; category?: stri
     </View>
   );
 }
-function Pill({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  const t = useTheme();
-  const { s } = useStyles();
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: active }}
-      style={[s.pill, { borderColor: active ? t.color.primary : t.color.border, backgroundColor: active ? t.color.primary : t.color.surface }]}>
-      <Text variant="small" color={active ? t.color.primaryText : t.color.text}>{label}</Text>
-    </Pressable>
-  );
-}
 function TypeTile({ type, onPress }: { type: ComplianceRecordType; onPress: () => void }) {
   const t = useTheme();
   const { s } = useStyles();
@@ -210,8 +200,8 @@ function Field({ spec, value, onChange }: {
       <Text variant="label" muted>{label}</Text>
       {spec.type === 'bool' ? (
         <View style={s.rowWrap}>
-          <Pill label="Yes" active={value === true} onPress={() => onChange(true)} />
-          <Pill label="No" active={value === false} onPress={() => onChange(false)} />
+          <Pill label="Pass" active={value === true} onPress={() => onChange(true)} />
+          <Pill label="Fail" active={value === false} onPress={() => onChange(false)} />
         </View>
       ) : spec.type === 'enum' ? (
         <View style={s.rowWrap}>
@@ -227,10 +217,12 @@ function Field({ spec, value, onChange }: {
             return <Pill key={o} label={o} active={on} onPress={() => onChange(on ? arr.filter((x) => x !== o) : [...arr, o])} />;
           })}
         </View>
+      ) : spec.type === 'date' ? (
+        <DateField label="" value={value as string} onChange={onChange} />
       ) : (
         <TextInput value={value as string} onChangeText={onChange}
           keyboardType={spec.type === 'number' ? 'numeric' : 'default'}
-          placeholder={spec.type === 'date' ? 'YYYY-MM-DD' : ''} placeholderTextColor={t.color.textMuted} style={s.input} />
+          placeholderTextColor={t.color.textMuted} style={s.input} />
       )}
     </View>
   );
@@ -280,11 +272,22 @@ function ScheduleEditor({ types, edit, defaultPlanId, onSaved, onCancel }: {
 
       <View style={s.fieldGroup}>
         <Text variant="label" muted>Check type *</Text>
-        <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
-          <View style={s.rowWrap}>
-            {types.map((ty) => <Pill key={ty.code} label={ty.label} active={recordType === ty.code} onPress={() => setRecordType(ty.code)} />)}
+        {Object.entries(
+          types.reduce<Record<string, ComplianceRecordType[]>>((g, ty) => {
+            (g[ty.category ?? 'Other'] ??= []).push(ty);
+            return g;
+          }, {})
+        ).map(([cat, list]) => (
+          <View key={cat} style={s.categoryGroup}>
+            <View style={s.rowWrap}>
+              <Text variant="small" muted style={s.categoryLabel}>{cat}</Text>
+              <Badge label={String(list.length)} tone="neutral" />
+            </View>
+            <View style={s.rowWrap}>
+              {list.map((ty) => <Pill key={ty.code} label={ty.label} active={recordType === ty.code} onPress={() => setRecordType(ty.code)} />)}
+            </View>
           </View>
-        </ScrollView>
+        ))}
       </View>
 
       <View style={s.fieldGroup}>

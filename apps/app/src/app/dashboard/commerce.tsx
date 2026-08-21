@@ -6,8 +6,9 @@ import type { Product } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
 import { listAdminProducts, createProduct, updateProduct, uploadProductImage } from '@/lib/api';
-import { Screen, Text, Card, Button, Notice } from '@/ui/components';
+import { Screen, Text, Card, Button, Notice, Toggle, Pill, Stepper } from '@/ui/components';
 import { useTheme } from '@/theme';
+import { useProfile } from '@/lib/profile-context';
 
 function fmt(cents: number) {
   return (cents / 100).toFixed(2);
@@ -40,16 +41,8 @@ function StockEditor({ sizes, stockLevel, onChange }: {
     <View style={s.stockContainer}>
       {sizes.map(size => (
         <View key={size} style={s.stockRow}>
-          <Text variant="small" style={s.stockSize}>{size}</Text>
-          <View style={s.stockControls}>
-            <Pressable onPress={() => set(size, Math.max(0, get(size) - 1))} style={s.stockButton}>
-              <Ionicons name="remove-circle-outline" size={20} color={t.color.textMuted} />
-            </Pressable>
-            <Text variant="label" style={s.stockValue}>{get(size)}</Text>
-            <Pressable onPress={() => set(size, get(size) + 1)} style={s.stockButton}>
-              <Ionicons name="add-circle-outline" size={20} color={t.color.primary} />
-            </Pressable>
-          </View>
+          <Text variant="label" style={s.stockSize}>{size.toUpperCase()}</Text>
+          <Stepper value={get(size)} onChange={(v) => set(size, v)} min={0} />
         </View>
       ))}
     </View>
@@ -57,8 +50,9 @@ function StockEditor({ sizes, stockLevel, onChange }: {
 }
 
 // ── Edit sheet ────────────────────────────────────────────────────────────────
-function EditSheet({ product, onSaved, onClose }: {
+function EditSheet({ product, currency, onSaved, onClose }: {
   product: Product;
+  currency: string;
   onSaved: (p: Product) => void;
   onClose: () => void;
 }) {
@@ -100,79 +94,84 @@ function EditSheet({ product, onSaved, onClose }: {
   };
 
   return (
-    <Card>
-      <View style={s.editHeader}>
-        <Text variant="heading">{product.title}</Text>
-        <Pressable onPress={onClose} style={s.editClose}>
-          <Ionicons name="close" size={20} color={t.color.textMuted} />
-        </Pressable>
-      </View>
+    <>
+      <Card>
+        <View style={s.editHeader}>
+          <Text variant="heading">Edit product</Text>
+          <Pressable onPress={onClose} style={s.editClose}>
+            <Ionicons name="close" size={20} color={t.color.textMuted} />
+          </Pressable>
+        </View>
 
-      <View style={s.imageContainer}>
-        {draft.image_url ? (
-          <Image source={{ uri: draft.image_url }} style={s.editImage} resizeMode="cover" />
-        ) : (
-          <View style={s.imagePlaceholder}>
-            <Ionicons name="image-outline" size={28} color={t.color.textMuted} />
+        <View style={s.fieldGroup}>
+          <Text variant="label" muted>Product name *</Text>
+          <TextInput value={draft.title} onChangeText={v => setDraft(d => ({ ...d, title: v }))} style={s.textInput} />
+        </View>
+
+        <View style={s.fieldGroup}>
+          <Text variant="label" muted>Price *</Text>
+          <View style={s.priceRow}>
+            <Text variant="label" muted>{currency}</Text>
+            <TextInput
+              value={fmt(draft.price_cents)}
+              onChangeText={v => { const n = parseFloat(v); if (!isNaN(n)) setDraft(d => ({ ...d, price_cents: Math.round(n * 100) })); }}
+              keyboardType="decimal-pad"
+              style={[s.textInput, s.flex1]} />
+          </View>
+        </View>
+
+        {draft.sizes.length > 0 && (
+          <View style={s.fieldGroup}>
+            <Text variant="label" muted>Sizes *</Text>
+            <View style={s.sizeGrid}>
+              {draft.sizes.map(sz => <Pill key={sz} label={sz.toUpperCase()} active onPress={() => {}} />)}
+            </View>
           </View>
         )}
-        {Platform.OS === 'web' && (
-          <Button label={uploading ? 'Uploading…' : 'Change image'} variant="secondary" onPress={pickImage} disabled={uploading} />
-        )}
-      </View>
 
-      <View style={s.fieldGroup}>
-        <Text variant="label" muted>TITLE</Text>
-        <TextInput value={draft.title} onChangeText={v => setDraft(d => ({ ...d, title: v }))}
-          style={s.textInput} />
-      </View>
+        <View style={s.fieldGroup}>
+          <Text variant="label" muted>Stock per size</Text>
+          {draft.sizes.length > 0 ? (
+            <StockEditor sizes={draft.sizes} stockLevel={draft.stock_level as Record<string, number>}
+              onChange={sl => setDraft(d => ({ ...d, stock_level: sl }))} />
+          ) : (
+            <TextInput
+              value={String(Object.values(draft.stock_level as Record<string, number>).reduce((a, b) => a + b, 0))}
+              onChangeText={v => { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0) setDraft(d => ({ ...d, stock_level: { total: n } })); }}
+              keyboardType="number-pad"
+              style={[s.textInput, { width: 100 }]} />
+          )}
+        </View>
+      </Card>
 
-      <View style={s.fieldGroup}>
-        <Text variant="label" muted>PRICE ($)</Text>
-        <TextInput
-          value={fmt(draft.price_cents)}
-          onChangeText={v => { const n = parseFloat(v); if (!isNaN(n)) setDraft(d => ({ ...d, price_cents: Math.round(n * 100) })); }}
-          keyboardType="decimal-pad"
-          style={s.textInput} />
-      </View>
-
-      <View style={s.fieldGroup}>
-        <Text variant="label" muted>STOCK</Text>
-        {product.sizes.length > 0 ? (
-          <StockEditor sizes={draft.sizes} stockLevel={draft.stock_level as Record<string, number>}
-            onChange={sl => setDraft(d => ({ ...d, stock_level: sl }))} />
-        ) : (
-          <TextInput
-            value={String(Object.values(draft.stock_level as Record<string, number>).reduce((a, b) => a + b, 0))}
-            onChangeText={v => {
-              const n = parseInt(v, 10);
-              if (!isNaN(n) && n >= 0) setDraft(d => ({ ...d, stock_level: { total: n } }));
-            }}
-            keyboardType="number-pad"
-            style={[s.textInput, { width: 100 }]}
-          />
-        )}
-      </View>
-
-      <View style={s.togglesContainer}>
-        {[{ key: 'is_new', label: 'New badge' }, { key: 'postable', label: 'Postable' }].map(({ key, label }) => (
-          <Pressable key={key} onPress={() => setDraft(d => ({ ...d, [key]: !d[key as keyof Product] }))}
-            style={s.toggleRow}>
-            <View style={[s.toggleTrack, { backgroundColor: draft[key as keyof Product] ? t.color.primary : t.color.border }]}>
-              <View style={[s.toggleThumb, { alignSelf: draft[key as keyof Product] ? 'flex-end' : 'flex-start' }]} />
+      <Card>
+        <Text variant="heading">Cover</Text>
+        <View style={s.coverSection}>
+          {draft.image_url ? (
+            <Image source={{ uri: draft.image_url }} style={s.coverImage} resizeMode="cover" />
+          ) : (
+            <View style={s.coverPlaceholder}>
+              <Ionicons name="image-outline" size={40} color={t.color.textMuted} />
             </View>
-            <Text variant="small">{label}</Text>
-          </Pressable>
-        ))}
-      </View>
+          )}
+          {Platform.OS === 'web' && (
+            <Button label={uploading ? 'Uploading…' : 'Add'} variant="secondary" onPress={pickImage} disabled={uploading} />
+          )}
+        </View>
+
+        <View style={s.togglesContainer}>
+          <Toggle value={!!draft.postable} onChange={() => setDraft(d => ({ ...d, postable: !d.postable }))} label="Postable" />
+          <Toggle value={!!draft.active} onChange={() => setDraft(d => ({ ...d, active: !d.active }))} label="Visible in shop" />
+        </View>
+      </Card>
 
       {msg && <Notice message={msg.text} tone={msg.tone} />}
 
       <View style={s.buttonRow}>
-        <Button label="Save changes" onPress={save} loading={busy} disabled={!dirty} style={s.flex1} />
+        <Button label="Save product" onPress={save} loading={busy} disabled={!dirty} style={s.flex1} />
         <Button label="Discard" variant="ghost" onPress={() => { setDraft(product); setMsg(null); }} disabled={!dirty || busy} />
       </View>
-    </Card>
+    </>
   );
 }
 
@@ -236,23 +235,18 @@ const makeStyles = (t: ReturnType<typeof useTheme>) => ({
   // Stock editor
   stockContainer: { gap: t.space.xs } as const,
   stockRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
-  stockSize: { textTransform: 'uppercase' as const, minWidth: 48 },
-  stockControls: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
-  stockButton: { padding: t.space.sm },
-  stockValue: { minWidth: 28, textAlign: 'center' as const },
+  stockSize: { minWidth: 48 },
 
   // Edit sheet
   editHeader: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const },
   editClose: { padding: t.space.sm },
-  imageContainer: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.md },
-  editImage: { width: 80, height: 80, borderRadius: t.radius.md },
-  imagePlaceholder: { width: 80, height: 80, borderRadius: t.radius.md, backgroundColor: t.color.surfaceAlt, alignItems: 'center' as const, justifyContent: 'center' as const },
+  coverSection: { gap: t.space.sm },
+  coverImage: { width: '100%' as const, aspectRatio: 4 / 3, borderRadius: t.radius.md, backgroundColor: t.color.surfaceAlt },
+  coverPlaceholder: { width: '100%' as const, aspectRatio: 4 / 3, borderRadius: t.radius.md, backgroundColor: t.color.surfaceAlt, alignItems: 'center' as const, justifyContent: 'center' as const },
+  priceRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
   fieldGroup: { gap: t.space.xs },
   textInput: { backgroundColor: t.color.surfaceAlt, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.md, color: t.color.text, fontSize: 14 },
-  togglesContainer: { flexDirection: 'row' as const, gap: t.space.lg, flexWrap: 'wrap' as const },
-  toggleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
-  toggleTrack: { width: 36, height: 20, borderRadius: 10, justifyContent: 'center' as const, paddingHorizontal: 2 },
-  toggleThumb: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#fff' },
+  togglesContainer: { gap: t.space.xs },
   buttonRow: { flexDirection: 'row' as const, gap: t.space.md },
 
   // Product card
@@ -266,11 +260,7 @@ const makeStyles = (t: ReturnType<typeof useTheme>) => ({
   cardFooter: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
 
   // Add product form
-  imageRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.md },
-  thumbnailImage: { width: 72, height: 72, borderRadius: t.radius.md },
   sizeGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
-  sizeButton: { paddingVertical: t.space.xs, paddingHorizontal: t.space.md, borderRadius: t.radius.md, borderWidth: 1 },
-  sizeButtonText: { textTransform: 'uppercase' as const },
 
   // Main screen
   screenHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
@@ -285,19 +275,29 @@ const makeStyles = (t: ReturnType<typeof useTheme>) => ({
 // ── Add product form ──────────────────────────────────────────────────────────
 const COMMON_SIZES = ['xs', 's', 'm', 'l', 'xl', 'xxl', 'one-size'];
 
-function AddProductForm({ onAdded, onCancel }: { onAdded: (p: Product) => void; onCancel: () => void }) {
+function AddProductForm({ currency, onAdded, onCancel }: { currency: string; onAdded: (p: Product) => void; onCancel: () => void }) {
   const t = useTheme();
   const s = makeStyles(t);
-  const [title, setTitle]         = useState('');
-  const [price, setPrice]         = useState('');
-  const [imageUrl, setImageUrl]   = useState('');
-  const [sizes, setSizes]         = useState<string[]>([]);
-  const [postable, setPostable]   = useState(true);
-  const [busy, setBusy]           = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [err, setErr]             = useState<string | null>(null);
+  const [title, setTitle]               = useState('');
+  const [price, setPrice]               = useState('');
+  const [imageUrl, setImageUrl]         = useState('');
+  const [sizes, setSizes]               = useState<string[]>([]);
+  const [stockLevel, setStockLevel]     = useState<Record<string, number>>({});
+  const [postable, setPostable]         = useState(true);
+  const [active, setActive]             = useState(true);
+  const [busy, setBusy]                 = useState(false);
+  const [uploading, setUploading]       = useState(false);
+  const [err, setErr]                   = useState<string | null>(null);
 
-  const toggleSize = (sz: string) => setSizes(prev => prev.includes(sz) ? prev.filter(x => x !== sz) : [...prev, sz]);
+  const toggleSize = (sz: string) => {
+    if (sizes.includes(sz)) {
+      setSizes(prev => prev.filter(x => x !== sz));
+      setStockLevel(prev => { const next = { ...prev }; delete next[sz]; return next; });
+    } else {
+      setSizes(prev => [...prev, sz]);
+      setStockLevel(prev => ({ ...prev, [sz]: 0 }));
+    }
+  };
 
   const pickImage = async () => {
     if (Platform.OS !== 'web') return;
@@ -319,13 +319,11 @@ function AddProductForm({ onAdded, onCancel }: { onAdded: (p: Product) => void; 
     if (isNaN(priceCents) || priceCents < 0) { setErr('Enter a valid price'); return; }
     setBusy(true); setErr(null);
     try {
-      const stockLevel: Record<string, number> = {};
-      sizes.forEach(sz => { stockLevel[sz] = 0; });
       const { product } = await createProduct(getAccessToken()!, {
         title: title.trim(), description: '', desc_points: [], price_cents: priceCents,
         image_url: imageUrl || null, images: imageUrl ? [imageUrl] : [],
         sizes, stock_level: stockLevel, postable, is_new: false,
-        model_size: false, model_details: [], active: true,
+        model_size: false, model_details: [], active,
       });
       onAdded(product);
     } catch (e) {
@@ -334,58 +332,63 @@ function AddProductForm({ onAdded, onCancel }: { onAdded: (p: Product) => void; 
   };
 
   return (
-    <Card>
-      <Text variant="heading">New product</Text>
+    <>
+      <Card>
+        <Text variant="heading">New product</Text>
 
-      <View style={s.fieldGroup}>
-        <Text variant="label" muted>TITLE</Text>
-        <TextInput value={title} onChangeText={setTitle} placeholder="Product name"
-          placeholderTextColor={t.color.textMuted}
-          style={s.textInput} />
-      </View>
+        <View style={s.fieldGroup}>
+          <Text variant="label" muted>Product name *</Text>
+          <TextInput value={title} onChangeText={setTitle} placeholder="Product name"
+            placeholderTextColor={t.color.textMuted} style={s.textInput} />
+        </View>
 
-      <View style={s.fieldGroup}>
-        <Text variant="label" muted>PRICE ($)</Text>
-        <TextInput value={price} onChangeText={setPrice} placeholder="0.00" keyboardType="decimal-pad"
-          placeholderTextColor={t.color.textMuted}
-          style={s.textInput} />
-      </View>
-
-      <View style={s.fieldGroup}>
-        <Text variant="label" muted>IMAGE</Text>
-        {imageUrl ? (
-          <View style={s.imageRow}>
-            <Image source={{ uri: imageUrl }} style={s.thumbnailImage} resizeMode="cover" />
-            <Button label="Change" variant="ghost" onPress={pickImage} />
+        <View style={s.fieldGroup}>
+          <Text variant="label" muted>Price *</Text>
+          <View style={s.priceRow}>
+            <Text variant="label" muted>{currency}</Text>
+            <TextInput value={price} onChangeText={setPrice} placeholder="0.00" keyboardType="decimal-pad"
+              placeholderTextColor={t.color.textMuted} style={[s.textInput, s.flex1]} />
           </View>
-        ) : (
-          <Button label={uploading ? 'Uploading…' : 'Upload image'} variant="secondary" onPress={pickImage} disabled={uploading} />
+        </View>
+
+        <View style={s.fieldGroup}>
+          <Text variant="label" muted>Sizes *</Text>
+          <View style={s.sizeGrid}>
+            {COMMON_SIZES.map(sz => (
+              <Pill key={sz} label={sz.toUpperCase()} active={sizes.includes(sz)} onPress={() => toggleSize(sz)} />
+            ))}
+          </View>
+        </View>
+
+        {sizes.length > 0 && (
+          <View style={s.fieldGroup}>
+            <Text variant="label" muted>Stock per size</Text>
+            <StockEditor sizes={sizes} stockLevel={stockLevel}
+              onChange={setStockLevel} />
+          </View>
         )}
-      </View>
+      </Card>
 
-      <View style={s.fieldGroup}>
-        <Text variant="label" muted>SIZES</Text>
-        <View style={s.sizeGrid}>
-          {COMMON_SIZES.map(sz => (
-            <Pressable key={sz} onPress={() => toggleSize(sz)} style={[
-              s.sizeButton,
-              {
-                borderColor: sizes.includes(sz) ? t.color.primary : t.color.border,
-                backgroundColor: sizes.includes(sz) ? t.color.primary : 'transparent',
-              }
-            ]}>
-              <Text variant="small" color={sizes.includes(sz) ? t.color.primaryText : t.color.text} style={s.sizeButtonText}>{sz}</Text>
-            </Pressable>
-          ))}
+      <Card>
+        <Text variant="heading">Cover</Text>
+        <View style={s.coverSection}>
+          {imageUrl ? (
+            <Image source={{ uri: imageUrl }} style={s.coverImage} resizeMode="cover" />
+          ) : (
+            <View style={s.coverPlaceholder}>
+              <Ionicons name="image-outline" size={40} color={t.color.textMuted} />
+            </View>
+          )}
+          {Platform.OS === 'web' && (
+            <Button label={uploading ? 'Uploading…' : 'Add'} variant="secondary" onPress={pickImage} disabled={uploading} />
+          )}
         </View>
-      </View>
 
-      <Pressable onPress={() => setPostable(p => !p)} style={s.toggleRow}>
-        <View style={[s.toggleTrack, { backgroundColor: postable ? t.color.primary : t.color.border }]}>
-          <View style={[s.toggleThumb, { alignSelf: postable ? 'flex-end' : 'flex-start' }]} />
+        <View style={s.togglesContainer}>
+          <Toggle value={postable} onChange={setPostable} label="Postable" />
+          <Toggle value={active} onChange={setActive} label="Visible in shop" />
         </View>
-        <Text variant="small">Postable</Text>
-      </Pressable>
+      </Card>
 
       {err && <Notice message={err} tone="error" />}
 
@@ -393,7 +396,7 @@ function AddProductForm({ onAdded, onCancel }: { onAdded: (p: Product) => void; 
         <Button label="Add product" onPress={submit} loading={busy} style={s.flex1} />
         <Button label="Cancel" variant="ghost" onPress={onCancel} disabled={busy} />
       </View>
-    </Card>
+    </>
   );
 }
 
@@ -404,6 +407,8 @@ export default function Commerce() {
   const t = useTheme();
   const s = makeStyles(t);
   const { features } = useAuth();
+  const { data: profile } = useProfile();
+  const currency = profile?.org?.currency ?? 'USD';
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading]   = useState(true);
   const [err, setErr]           = useState<string | null>(null);
@@ -463,7 +468,7 @@ export default function Commerce() {
         </View>
       </View>
 
-      {adding && <AddProductForm onAdded={handleAdded} onCancel={() => setAdding(false)} />}
+      {adding && <AddProductForm currency={currency} onAdded={handleAdded} onCancel={() => setAdding(false)} />}
 
       {loading ? (
         <Text muted>Loading products…</Text>
@@ -477,6 +482,7 @@ export default function Commerce() {
                 <EditSheet
                   key={selectedProduct.id}
                   product={selectedProduct}
+                  currency={currency}
                   onSaved={handleSaved}
                   onClose={() => setSelectedId(null)}
                 />

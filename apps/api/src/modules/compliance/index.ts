@@ -272,10 +272,10 @@ const compliancePlugin: FastifyPluginAsync = async (fastify) => {
   // What's due on a given local date (?on=YYYY-MM-DD, defaults to server today),
   // with how many of each are already done that day.
   fastify.get('/compliance/schedules/due', { preHandler: [verifyBlnkAuth, requireModule('compliance')] }, async (req, reply) => {
-    const { on } = req.query as { on?: string }
+    const { on, from, to } = req.query as { on?: string; from?: string; to?: string }
     const dateStr = on ?? new Date().toISOString().slice(0, 10)
     const date = new Date(dateStr + 'T00:00:00')
-    const [schedules, done] = await Promise.all([listActiveSchedules(), scheduleDoneCounts(dateStr)])
+    const [schedules, done] = await Promise.all([listActiveSchedules(), scheduleDoneCounts(dateStr, from, to)])
     const due = schedules
       .filter((sc) => isDueOn(sc, date))
       .map((sc) => {

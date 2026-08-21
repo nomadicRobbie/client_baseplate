@@ -23,10 +23,10 @@ function addInterval(fromISO: string, type: string | null, value: string | null)
   if (isNaN(d.getTime())) return null
   const n = Number(value) || 0
   switch ((type ?? '').toLowerCase()) {
-    case 'days':   d.setUTCDate(d.getUTCDate() + n); return d
-    case 'weeks':  d.setUTCDate(d.getUTCDate() + n * 7); return d
-    case 'months': d.setUTCMonth(d.getUTCMonth() + n); return d
-    case 'years':  d.setUTCFullYear(d.getUTCFullYear() + n); return d
+    case 'day': case 'days':   d.setUTCDate(d.getUTCDate() + n); return d
+    case 'week': case 'weeks':  d.setUTCDate(d.getUTCDate() + n * 7); return d
+    case 'month': case 'months': d.setUTCMonth(d.getUTCMonth() + n); return d
+    case 'year': case 'years':  d.setUTCFullYear(d.getUTCFullYear() + n); return d
     default: return null   // hours/usage-based — not date-derivable yet
   }
 }

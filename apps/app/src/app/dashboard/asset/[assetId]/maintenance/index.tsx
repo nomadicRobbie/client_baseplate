@@ -11,40 +11,28 @@ import { readThrough } from '@/lib/mirror';
 import { loadAsset } from '@/lib/asset-sync';
 import { formatDMY } from '@/lib/format';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Button, TextField, Badge } from '@/ui/components';
+import { Screen, Text, Card, Button, TextField, Badge, Pill, Stepper, Toggle } from '@/ui/components';
 import { DateField } from '@/ui/date-field';
 import { StatusBadge, OfflineBanner } from '@/ui/status';
 
 type Msg = { text: string; tone: 'success' | 'error' | 'info' };
 type ThemeT = ReturnType<typeof useTheme>;
-const INTERVALS = ['Days', 'Weeks', 'Months', 'Years'];
-const UNITS: AssetScheduleAlert['unit'][] = ['hours', 'days', 'weeks'];
+const INTERVALS = ['Day', 'Week', 'Month', 'Year'];
 const tok = () => getAccessToken()!;
 
-const makePillStyles = (t: ThemeT) => ({
-  pill: (sel: boolean) => ({ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }),
-});
-
-const Pill = ({ label, sel, onPress, t }: { label: string; sel: boolean; onPress: () => void; t: ThemeT }) => {
-  const pillStyles = makePillStyles(t);
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" style={pillStyles.pill(sel)}>
-      <Text variant="label" color={sel ? t.color.primaryText : t.color.text}>{label}</Text>
-    </Pressable>
-  );
-};
 
 const makeStyles = (t: ThemeT) => ({
   backBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
   section: { gap: 6 },
   sectionHeader: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const },
   intervalRow: { flexDirection: 'row' as const, gap: t.space.sm, alignItems: 'center' as const },
-  intervalInput: { width: 72 },
   intervalPills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm, flex: 1 },
   alertRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.xs },
   alertBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingVertical: 4, paddingHorizontal: t.space.sm, borderRadius: t.radius.pill, backgroundColor: t.color.surfaceAlt },
   addAlertRow: { flexDirection: 'row' as const, gap: t.space.sm, alignItems: 'center' as const },
-  alertInput: { width: 64 },
+  dropZone: { borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.lg, alignItems: 'center' as const, gap: t.space.xs },
+  docEntry: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm, paddingVertical: 4 },
+  flex1: { flex: 1 },
   scheduleItem: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: t.space.sm, paddingVertical: t.space.sm },
   scheduleInfo: { flex: 1, gap: 2 },
   scheduleAlerts: { gap: t.space.xs, marginTop: 2 },
@@ -78,12 +66,12 @@ export default function AssetMaintenance() {
   const [msg, setMsg] = useState<Msg | null>(null);
   // add-schedule form
   const [task, setTask] = useState('');
-  const [intervalType, setIntervalType] = useState('Months');
+  const [intervalType, setIntervalType] = useState('Month');
   const [intervalValue, setIntervalValue] = useState('1');
   const [dueDate, setDueDate] = useState('');
   const [alerts, setAlerts] = useState<AssetScheduleAlert[]>([{ value: 7, unit: 'days' }]);
   const [aVal, setAVal] = useState('1');
-  const [aUnit, setAUnit] = useState<AssetScheduleAlert['unit']>('days');
+  const [notifyManager, setNotifyManager] = useState(false);
   const [docUrls, setDocUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
 
@@ -113,7 +101,7 @@ export default function AssetMaintenance() {
 
   if (features && !features.asset) return <Redirect href="/dashboard" />;
 
-  const addAlert = () => { const v = Number(aVal); if (v > 0) setAlerts([...alerts, { value: v, unit: aUnit }]); };
+  const addAlert = () => { const v = Number(aVal); if (v > 0) setAlerts([...alerts, { value: v, unit: 'days' }]); };
   const removeAlert = (i: number) => setAlerts(alerts.filter((_, x) => x !== i));
 
   const markDone = async (sc: AssetMaintenanceSchedule) => {
@@ -248,60 +236,75 @@ export default function AssetMaintenance() {
       </Card>
 
       {isAdmin && (
-        <Card>
-          <Text variant="heading">Schedule a task</Text>
-          <TextField label="Task" value={task} onChangeText={setTask} placeholder="Weekly inspection" autoCapitalize="sentences" />
-          <View style={s.section}>
-            <Text variant="label" muted>Every</Text>
-            <View style={s.intervalRow}>
-              <View style={s.intervalInput}><TextField label="" value={intervalValue} onChangeText={setIntervalValue} placeholder="1" keyboardType="number-pad" /></View>
+        <>
+          <Card>
+            <Text variant="heading">Schedule a task</Text>
+            <TextField label="Asset name" value={task} onChangeText={setTask} placeholder="Weekly inspection" autoCapitalize="sentences" />
+
+            <View style={s.section}>
+              <Text variant="label" muted>Repeat every *</Text>
               <View style={s.intervalPills}>
-                {INTERVALS.map((iv) => <Pill key={iv} label={iv} sel={intervalType === iv} onPress={() => setIntervalType(iv)} t={t} />)}
+                {INTERVALS.map((iv) => <Pill key={iv} label={iv} active={intervalType === iv} onPress={() => setIntervalType(iv)} />)}
               </View>
-            </View>
-          </View>
-
-          <DateField label="First due date" value={dueDate} onChange={setDueDate} placeholder="Select date" />
-
-          {/* Multiple reminder alerts (e.g. 7 days / 1 day / 1 hour before) */}
-          <View style={s.section}>
-            <Text variant="label" muted>Alerts before due</Text>
-            <View style={s.alertRow}>
-              {alerts.length === 0 && <Text variant="small" muted>No alerts.</Text>}
-              {alerts.map((a, i) => (
-                <Pressable key={i} onPress={() => removeAlert(i)} accessibilityRole="button" accessibilityLabel={`Remove ${a.value} ${a.unit} alert`}
-                  style={s.alertBadge}>
-                  <Text variant="small">{a.value} {a.unit} before</Text>
-                  <Text variant="small" muted>✕</Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={s.addAlertRow}>
-              <View style={s.alertInput}><TextField label="" value={aVal} onChangeText={setAVal} placeholder="1" keyboardType="number-pad" /></View>
-              {UNITS.map((u) => <Pill key={u} label={u} sel={aUnit === u} onPress={() => setAUnit(u)} t={t} />)}
-              <Button label="Add" variant="secondary" onPress={addAlert} />
-            </View>
-          </View>
-
-          {docUrls.length > 0 && (
-            <View style={s.docRow}>
-              {docUrls.map((url, i) => (
-                <View key={i} style={s.docChip}>
-                  <Text variant="small" numberOfLines={1} style={s.docName}>{url.split('/').pop()}</Text>
-                  <Pressable onPress={() => setDocUrls((prev) => prev.filter((_, x) => x !== i))} accessibilityRole="button" accessibilityLabel="Remove document">
-                    <Text variant="small" muted>✕</Text>
-                  </Pressable>
+              {intervalType === 'Day' && (
+                <View style={s.addAlertRow}>
+                  <Text variant="label" muted style={s.flex1}>Custom interval (days)</Text>
+                  <Stepper value={Number(intervalValue) || 1} onChange={(v) => setIntervalValue(String(v))} min={1} />
                 </View>
-              ))}
+              )}
             </View>
-          )}
+
+            <DateField label="Starts *" value={dueDate} onChange={setDueDate} placeholder="Select date" />
+
+            <View style={s.section}>
+              <Text variant="label" muted>Alerts</Text>
+              {alerts.length > 0 && (
+                <View style={s.alertRow}>
+                  {alerts.map((a, i) => (
+                    <Pressable key={i} onPress={() => removeAlert(i)} accessibilityRole="button"
+                      accessibilityLabel={`Remove ${a.value} ${a.unit} alert`} style={s.alertBadge}>
+                      <Text variant="small">{a.value} {a.unit} before</Text>
+                      <Text variant="small" muted>✕</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+              <View style={s.addAlertRow}>
+                <Text variant="label" muted style={s.flex1}>Days before due</Text>
+                <Stepper value={Number(aVal) || 1} onChange={(v) => setAVal(String(v))} min={1} />
+              </View>
+              <Button label="+ Add alert condition" variant="ghost" onPress={addAlert} />
+              <Toggle value={notifyManager} onChange={setNotifyManager} label="Also notify manager" />
+            </View>
+          </Card>
+
+          <Card>
+            <Text variant="heading">Documents</Text>
+            {docUrls.map((url, i) => (
+              <View key={i} style={s.docEntry}>
+                <Ionicons name="document-outline" size={18} color={t.color.primary} />
+                <Text variant="small" numberOfLines={1} style={s.flex1}>{url.split('/').pop()}</Text>
+                <Pressable onPress={() => setDocUrls((prev) => prev.filter((_, x) => x !== i))}
+                  accessibilityRole="button" accessibilityLabel="Remove document">
+                  <Ionicons name="close" size={18} color={t.color.textMuted} />
+                </Pressable>
+              </View>
+            ))}
+            <Pressable onPress={pickDocument} style={s.dropZone} accessibilityRole="button"
+              disabled={uploading}>
+              <Ionicons name="cloud-upload-outline" size={28} color={t.color.textMuted} />
+              <View style={s.alertRow}>
+                <Text variant="small" muted>Drop photos or</Text>
+                <Text variant="small" color={t.color.primary}>{uploading ? 'Uploading…' : 'browse'}</Text>
+              </View>
+            </Pressable>
+          </Card>
 
           <View style={s.taskDetailsRow}>
-            <Button label={uploading ? 'Uploading…' : 'Attach file'} variant="secondary" onPress={pickDocument} disabled={uploading} />
-            <Button label="Build form" variant="secondary" onPress={addScheduleAndBuildForm} loading={busy} />
-            <Button label="Add schedule" onPress={addSchedule} loading={busy} />
+            <Button label="Build form" variant="secondary" onPress={addScheduleAndBuildForm} loading={busy} style={s.flex1} />
+            <Button label="Create schedule" onPress={addSchedule} loading={busy} style={s.flex1} />
           </View>
-        </Card>
+        </>
       )}
 
     </Screen>

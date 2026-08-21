@@ -8,7 +8,7 @@ import { listAssetSchedules, updateAssetSchedule } from '@/lib/api';
 import { readThrough } from '@/lib/mirror';
 import { loadAsset } from '@/lib/asset-sync';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Button, TextField, Badge, Notice } from '@/ui/components';
+import { Screen, Text, Card, Button, TextField, Badge, Notice, Pill, Toggle } from '@/ui/components';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' };
@@ -32,30 +32,10 @@ const FIELD_TYPE_LABELS: Record<FormFieldType, string> = {
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
-const makePillStyle = (t: ThemeT, sel: boolean) => ({
-  paddingVertical: t.space.sm,
-  paddingHorizontal: t.space.md,
-  borderRadius: t.radius.pill,
-  borderWidth: 1,
-  borderColor: sel ? t.color.primary : t.color.border,
-  backgroundColor: sel ? t.color.primary : 'transparent' as const,
-});
-
 const makeStyles = (t: ThemeT) => ({
   backBtn:    { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
   typeRow:    { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
   addRow:     { gap: t.space.sm },
-  reqRow:     { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
-  toggle:     (on: boolean) => ({
-    width: 44, height: 26, borderRadius: 13,
-    backgroundColor: on ? t.color.primary : t.color.border,
-    justifyContent: 'center' as const, paddingHorizontal: 3,
-  }),
-  toggleKnob: (on: boolean) => ({
-    width: 20, height: 20, borderRadius: 10,
-    backgroundColor: t.color.primaryText,
-    alignSelf: on ? 'flex-end' as const : 'flex-start' as const,
-  }),
   fieldRow:   { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm, paddingVertical: t.space.sm },
   fieldInfo:  { flex: 1, gap: 2 },
   fieldMeta:  { flexDirection: 'row' as const, gap: t.space.xs, alignItems: 'center' as const },
@@ -160,18 +140,11 @@ export default function FormBuilder() {
           <Text variant="label" muted>Field type</Text>
           <View style={s.typeRow}>
             {FIELD_TYPES.map(({ type, label }) => (
-              <Pressable key={type} onPress={() => setNewType(type)} accessibilityRole="button" style={makePillStyle(t, newType === type)}>
-                <Text variant="label" color={newType === type ? t.color.primaryText : t.color.text}>{label}</Text>
-              </Pressable>
+              <Pill key={type} label={label} active={newType === type} onPress={() => setNewType(type)} />
             ))}
           </View>
           <TextField label="Label" value={newLabel} onChangeText={setNewLabel} placeholder="Field label" autoCapitalize="sentences" />
-          <View style={s.reqRow}>
-            <Text variant="label">Required</Text>
-            <Pressable onPress={() => setNewRequired((v) => !v)} accessibilityRole="switch" accessibilityState={{ checked: newRequired }} style={s.toggle(newRequired)}>
-              <View style={s.toggleKnob(newRequired)} />
-            </Pressable>
-          </View>
+          <Toggle value={newRequired} onChange={setNewRequired} label="Required" />
           <Button label="Add field" variant="secondary" onPress={addField} />
         </View>
       </Card>

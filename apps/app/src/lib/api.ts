@@ -368,8 +368,12 @@ export type NewSchedule = {
   anchor_date?: string | null; times_per_day?: number; plan_id?: string | null;
 };
 
-export const getSchedulesDue = (token: string, on: string) =>
-  req<{ due: ScheduleDue[] }>(`/compliance/schedules/due?on=${on}`, { method: 'GET', token });
+export const getSchedulesDue = (token: string, on: string) => {
+  // Pass local-day boundaries as UTC so the server counts records correctly regardless of server timezone.
+  const from = new Date(on + 'T00:00:00').toISOString();
+  const end = new Date(on + 'T00:00:00'); end.setDate(end.getDate() + 1);
+  return req<{ due: ScheduleDue[] }>(`/compliance/schedules/due?on=${on}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(end.toISOString())}`, { method: 'GET', token });
+};
 
 export const listSchedules = (token: string) =>
   req<{ schedules: ComplianceSchedule[] }>('/compliance/schedules', { method: 'GET', token });

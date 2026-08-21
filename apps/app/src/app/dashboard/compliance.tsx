@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
 import { listPlans, createPlan, updatePlan, duplicatePlan, uploadPlanImage } from '@/lib/api';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Button, Row, Notice, Badge } from '@/ui/components';
+import { Screen, Text, Card, Button, Row, Notice, Badge, Pill } from '@/ui/components';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' | 'info' } | null;
@@ -20,21 +20,10 @@ const makeStyles = (t: ThemeT) => StyleSheet.create({
   input:      { backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.md, minHeight: 44, fontSize: t.size.md, color: t.color.text },
   fieldGroup: { gap: t.space.xs },
   flexGrow1:  { flexGrow: 1 },
-  pill:       { paddingHorizontal: t.space.md, paddingVertical: t.space.sm, borderRadius: t.radius.md, borderWidth: 1, minHeight: 40, justifyContent: 'center' as const },
   planInfo:   { flex: 1 },
   actions:    { flexDirection: 'row', gap: t.space.sm, alignItems: 'center' },
 });
 
-function Pill({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  const t = useTheme();
-  const s = makeStyles(t);
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: active }}
-      style={[s.pill, { borderColor: active ? t.color.primary : t.color.border, backgroundColor: active ? t.color.primary : t.color.surface }]}>
-      <Text variant="small" color={active ? t.color.primaryText : t.color.text}>{label}</Text>
-    </Pressable>
-  );
-}
 
 export default function CompliancePlans() {
   const t = useTheme();
