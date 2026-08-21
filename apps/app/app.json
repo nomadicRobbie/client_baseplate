@@ -1,11 +1,11 @@
 {
   "expo": {
     "name": "Ting Test",
-    "slug": "app",
+    "slug": "ting-test",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "app",
+    "scheme": "tingtest",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/images/icon.png",
@@ -49,10 +49,7 @@
       "reactCompiler": true
     },
     "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "0210289e-da81-4f10-bca7-711260ac9fff"
-      }
+      "router": {}
     },
     "owner": "exponomads"
   }

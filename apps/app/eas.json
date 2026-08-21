@@ -9,10 +9,18 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://baseplate-api.blnk.nz",
+        "EXPO_PUBLIC_TENANT_SLUG": "ting-test"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://baseplate-api.blnk.nz",
+        "EXPO_PUBLIC_TENANT_SLUG": "ting-test"
+      }
     }
   },
   "submit": {

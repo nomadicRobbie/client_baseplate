@@ -1,8 +1,10 @@
 packages:
   - "apps/*"
   - "packages/*"
-onlyBuiltDependencies:
-  - "@parcel/watcher"
-  - esbuild
-  - msgpackr-extract
-  - unrs-resolver
+# pnpm 11 reads `allowBuilds`, not `onlyBuiltDependencies`. Without this,
+# install exits 1 under CI=1 (which EAS Build sets) — ERR_PNPM_IGNORED_BUILDS.
+allowBuilds:
+  "@parcel/watcher": true
+  esbuild: true
+  msgpackr-extract: true
+  unrs-resolver: true
