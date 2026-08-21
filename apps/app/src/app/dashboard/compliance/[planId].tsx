@@ -280,9 +280,11 @@ function ScheduleEditor({ types, edit, defaultPlanId, onSaved, onCancel }: {
 
       <View style={s.fieldGroup}>
         <Text variant="label" muted>Check type *</Text>
-        <View style={s.rowWrap}>
-          {types.map((ty) => <Pill key={ty.code} label={ty.label} active={recordType === ty.code} onPress={() => setRecordType(ty.code)} />)}
-        </View>
+        <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
+          <View style={s.rowWrap}>
+            {types.map((ty) => <Pill key={ty.code} label={ty.label} active={recordType === ty.code} onPress={() => setRecordType(ty.code)} />)}
+          </View>
+        </ScrollView>
       </View>
 
       <View style={s.fieldGroup}>

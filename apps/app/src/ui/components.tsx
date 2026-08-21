@@ -80,7 +80,7 @@ export function Text({
     title: { fontSize: t.size.xxl, fontWeight: '700', fontFamily: t.font.mono, letterSpacing: -0.5 },
     heading: { fontSize: t.size.lg, fontWeight: '700', letterSpacing: -0.2 },
     body: { fontSize: t.size.md, fontWeight: '400', lineHeight: t.size.md * 1.5 },
-    label: { fontSize: t.size.sm, fontWeight: '600' },
+    label: { fontSize: t.size.sm, fontWeight: '600', lineHeight: t.size.sm * 1.4 },
     mono: { fontSize: t.size.sm, fontFamily: t.font.mono },
     small: { fontSize: t.size.xs, lineHeight: t.size.xs * 1.4 },
   };
@@ -238,14 +238,18 @@ export function Button({
 // ── TextField ──────────────────────────────────────────────────────────────────
 export function TextField({
   label, value, onChangeText, placeholder, keyboardType, secureTextEntry, autoCapitalize, autoComplete, autoFocus, inputRef, multiline,
+  error, disabled,
 }: {
   label?: string; value: string; onChangeText: (v: string) => void; placeholder?: string;
   keyboardType?: 'default' | 'email-address' | 'number-pad'; secureTextEntry?: boolean;
   autoCapitalize?: 'none' | 'sentences'; autoComplete?: 'email' | 'off'; autoFocus?: boolean; inputRef?: React.Ref<RNTextInput>;
-  multiline?: boolean;
+  multiline?: boolean; error?: string; disabled?: boolean;
 }) {
   const t = useTheme();
   const s = makeStyles(t);
+  const [focused, setFocused] = useState(false);
+  const borderColor = error ? t.color.danger : focused ? t.color.primary : t.color.border;
+  const bg = error ? t.color.dangerMuted : disabled ? t.color.surfaceAlt : t.color.surface;
   return (
     <View style={s.fieldWrapper}>
       {!!label && <Text variant="label" muted>{label}</Text>}
@@ -261,9 +265,13 @@ export function TextField({
         autoComplete={autoComplete}
         autoFocus={autoFocus}
         multiline={multiline}
+        editable={!disabled}
         accessibilityLabel={label}
-        style={[s.input, multiline && { minHeight: 80, textAlignVertical: 'top' }]}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        style={[s.input, { borderColor, backgroundColor: bg }, multiline && { minHeight: 80, textAlignVertical: 'top' }, disabled && { opacity: 0.6 }]}
       />
+      {!!error && <Text variant="small" color={t.color.danger}>{error}</Text>}
     </View>
   );
 }
@@ -309,10 +317,21 @@ export function Badge({ label, tone = 'neutral' }: { label: string; tone?: 'neut
 }
 
 // ── Inline status message (info / success / error) ──────────────────────────────
-export function Notice({ message, tone = 'info' }: { message: string; tone?: 'info' | 'success' | 'error' }) {
+export function Notice({ message, tone = 'info', title }: { message: string; tone?: 'info' | 'success' | 'error'; title?: string }) {
   const t = useTheme();
   const color = tone === 'error' ? t.color.danger : tone === 'success' ? t.color.success : t.color.textMuted;
-  return <Text variant="small" color={color}>{message}</Text>;
+  const bg = tone === 'error' ? t.color.dangerMuted : tone === 'success' ? t.color.successMuted : t.color.surfaceAlt;
+  const borderColor = tone === 'error' ? t.color.danger : tone === 'success' ? t.color.success : t.color.border;
+  const icon: React.ComponentProps<typeof Ionicons>['name'] = tone === 'error' ? 'warning' : tone === 'success' ? 'checkmark-circle' : 'information-circle';
+  return (
+    <View style={{ flexDirection: 'row', gap: t.space.sm, padding: t.space.md, borderRadius: t.radius.md, backgroundColor: bg, borderWidth: 1, borderColor }}>
+      <Ionicons name={icon} size={18} color={color} style={{ marginTop: 1 }} />
+      <View style={{ flex: 1 }}>
+        {!!title && <Text variant="label" color={color}>{title}</Text>}
+        <Text variant="small" color={color}>{message}</Text>
+      </View>
+    </View>
+  );
 }
 
 // ── ColorPicker ────────────────────────────────────────────────────────────────
@@ -383,6 +402,122 @@ export function ColorPicker({ value, onChange, nullable = false }: {
           <Text variant="small" color={t.color.textMuted}>Clear colour</Text>
         </Pressable>
       )}
+    </View>
+  );
+}
+
+// ── Pill / Chip selector ──────────────────────────────────────────────────────
+export function Pill({ label, active, onPress, disabled }: {
+  label: string; active: boolean; onPress: () => void; disabled?: boolean;
+}) {
+  const t = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      style={{
+        minHeight: 40, paddingHorizontal: t.space.lg, justifyContent: 'center',
+        borderRadius: t.radius.pill, borderWidth: 1,
+        borderColor: active ? t.color.primary : t.color.border,
+        backgroundColor: active ? t.color.primary : t.color.surface,
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      <Text variant="small" style={{ fontWeight: '600' }} color={active ? t.color.primaryText : t.color.text}>{label}</Text>
+    </Pressable>
+  );
+}
+
+// ── Yes / No pair ─────────────────────────────────────────────────────────────
+export function YesNo({ value, onChange }: {
+  value: boolean | null; onChange: (v: boolean | null) => void;
+}) {
+  const t = useTheme();
+  const yesActive = value === true;
+  const noActive = value === false;
+  const pill = (yes: boolean, active: boolean): ViewStyle => ({
+    flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center',
+    borderRadius: t.radius.pill, borderWidth: 1,
+    borderColor: active ? (yes ? t.color.primary : t.color.danger) : t.color.border,
+    backgroundColor: active ? (yes ? t.color.primary : t.color.danger) : t.color.surface,
+  });
+  const toggle = (yes: boolean) => {
+    const isActive = yes ? yesActive : noActive;
+    onChange(isActive ? null : yes);
+  };
+  return (
+    <View style={{ flexDirection: 'row', gap: t.space.sm }}>
+      <Pressable onPress={() => toggle(true)} accessibilityRole="button" accessibilityState={{ selected: yesActive }} style={pill(true, yesActive)}>
+        <Text variant="label" color={yesActive ? '#fff' : t.color.primary}>Yes</Text>
+      </Pressable>
+      <Pressable onPress={() => toggle(false)} accessibilityRole="button" accessibilityState={{ selected: noActive }} style={pill(false, noActive)}>
+        <Text variant="label" color={noActive ? '#fff' : t.color.danger}>No</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// ── Checkbox ──────────────────────────────────────────────────────────────────
+export function Checkbox({ checked, onChange, label, error }: {
+  checked: boolean; onChange: (v: boolean) => void; label?: string; error?: boolean;
+}) {
+  const t = useTheme();
+  const borderColor = error ? t.color.danger : checked ? t.color.primary : t.color.border;
+  const bg = error ? t.color.dangerMuted : checked ? t.color.primary : t.color.surface;
+  return (
+    <Pressable
+      onPress={() => onChange(!checked)}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm, minHeight: 44 }}
+    >
+      <View style={{ width: 22, height: 22, borderRadius: t.radius.sm, borderWidth: 1.5, borderColor, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
+        {checked && <Ionicons name="checkmark" size={14} color="#fff" />}
+      </View>
+      {!!label && <Text variant="label" style={{ flex: 1 }}>{label}</Text>}
+    </Pressable>
+  );
+}
+
+// ── Toggle switch ─────────────────────────────────────────────────────────────
+export function Toggle({ value, onChange, label }: {
+  value: boolean; onChange: (v: boolean) => void; label?: string;
+}) {
+  const t = useTheme();
+  return (
+    <Pressable
+      onPress={() => onChange(!value)}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
+      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 }}
+    >
+      {!!label && <Text variant="label" style={{ flex: 1 }}>{label}</Text>}
+      <View style={{ width: 44, height: 26, borderRadius: t.radius.pill, backgroundColor: value ? t.color.primary : t.color.border, justifyContent: 'center' }}>
+        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', marginLeft: value ? 21 : 3, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 }} />
+      </View>
+    </Pressable>
+  );
+}
+
+// ── Stepper ───────────────────────────────────────────────────────────────────
+export function Stepper({ value, onChange, min = 0 }: {
+  value: number; onChange: (v: number) => void; min?: number;
+}) {
+  const t = useTheme();
+  const btn: ViewStyle = { width: 44, height: 44, borderRadius: t.radius.md, borderWidth: 1, borderColor: t.color.border, backgroundColor: t.color.surface, alignItems: 'center', justifyContent: 'center' };
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}>
+      <Pressable onPress={() => onChange(Math.max(min, value - 1))} accessibilityRole="button" accessibilityLabel="Decrease" style={btn}>
+        <Text variant="heading">−</Text>
+      </Pressable>
+      <View style={{ width: 44, alignItems: 'center' }}>
+        <Text variant="heading">{value}</Text>
+      </View>
+      <Pressable onPress={() => onChange(value + 1)} accessibilityRole="button" accessibilityLabel="Increase" style={btn}>
+        <Text variant="heading">+</Text>
+      </Pressable>
     </View>
   );
 }

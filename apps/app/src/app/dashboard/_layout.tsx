@@ -3,7 +3,7 @@ import { Slot, Redirect, usePathname, useRouter } from 'expo-router';
 import { View, Pressable, useWindowDimensions, ActivityIndicator, Platform, StyleSheet } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { FeatureFlags } from '@blnk/shared';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
@@ -108,6 +108,7 @@ function MobileTabBar() {
   const pathname = usePathname();
   const { pinned } = usePins();
   const { hasUnseen } = useFeedBadge();
+  const insets = useSafeAreaInsets();
 
   const tabs: { label: string; href: NavHref; icon: IconName }[] = [
     { label: 'Library', href: HOME_HREF, icon: 'library-outline' },
@@ -117,7 +118,7 @@ function MobileTabBar() {
   ];
 
   return (
-    <View style={[s.mobileBar, { backgroundColor: t.color.surface }]}>
+    <View style={[s.mobileBar, { backgroundColor: t.color.surface, paddingBottom: insets.bottom }]}>
       {tabs.map((tab) => {
         const active = pathname === tab.href;
         return (
@@ -209,10 +210,10 @@ function Shell() {
   }
 
   return (
-    <SafeAreaView style={[s.content, { backgroundColor: t.color.bg }]} edges={['bottom']}>
+    <View style={[s.content, { backgroundColor: t.color.bg }]}>
       <View style={s.content}><Slot /></View>
       <MobileTabBar />
-    </SafeAreaView>
+    </View>
   );
 }
 

@@ -6,6 +6,7 @@ import type { FormField, FormResponseData, AssetMaintenanceSchedule } from '@bln
 import { getAccessToken } from '@/lib/session';
 import { listAssetSchedules, createAssetMaintenanceLog, uploadAssetDocument } from '@/lib/api';
 import { readThrough } from '@/lib/mirror';
+import { loadAsset } from '@/lib/asset-sync';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, TextField, Notice } from '@/ui/components';
 import { DateField } from '@/ui/date-field';
@@ -92,6 +93,7 @@ export default function CompleteTask() {
   const router = useRouter();
   const { assetId, scheduleId } = useLocalSearchParams<{ assetId: string; scheduleId: string }>();
 
+  const [assetName, setAssetName] = useState('');
   const [schedule, setSchedule] = useState<AssetMaintenanceSchedule | null>(null);
   const [loadError, setLoadError] = useState('');
   const [formData, setFormData] = useState<FormResponseData>({});
@@ -102,12 +104,12 @@ export default function CompleteTask() {
   const [msg, setMsg] = useState<Msg | null>(null);
 
   useEffect(() => {
+    loadAsset(assetId).then(({ asset }) => setAssetName(asset?.name ?? ''));
     readThrough('asset:schedules:' + assetId, () => listAssetSchedules(getAccessToken()!, assetId))
       .then(({ value }) => {
         const sc = value.schedules.find((s) => s.id === scheduleId);
         if (!sc) { setLoadError('Schedule not found.'); return; }
         setSchedule(sc);
-        // seed boolean fields as null (unanswered), rest empty
         const initial: FormResponseData = {};
         for (const f of sc.form_schema?.fields ?? []) {
           initial[f.id] = f.type === 'boolean' ? null : f.type === 'checkbox' ? false : '';
@@ -178,7 +180,7 @@ export default function CompleteTask() {
     <Screen>
       <Pressable onPress={goBack} accessibilityRole="button" style={s.backBtn}>
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
-        <Text variant="label" color={t.color.primary}>Maintenance</Text>
+        <Text variant="label" color={t.color.primary}>{assetName || 'Maintenance'}</Text>
       </Pressable>
       <Notice message={loadError} tone="error" />
     </Screen>
@@ -190,10 +192,10 @@ export default function CompleteTask() {
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
       <Pressable onPress={goBack} accessibilityRole="button" style={s.backBtn}>
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
-        <Text variant="label" color={t.color.primary}>Maintenance</Text>
+        <Text variant="label" color={t.color.primary}>{assetName || 'Maintenance'}</Text>
       </Pressable>
       <Text variant="title">Complete task</Text>
-      {!!schedule?.task_name && <Text variant="label" muted>{schedule.task_name}</Text>}
+      {!!schedule?.task_name && <Text variant="label" muted>{schedule.task_name}{assetName ? ` · ${assetName}` : ''}</Text>}
 
       {schedule === null && !loadError && <Text muted>Loading…</Text>}
 

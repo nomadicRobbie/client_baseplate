@@ -6,6 +6,7 @@ import type { FormField, FormFieldType } from '@blnk/shared';
 import { getAccessToken } from '@/lib/session';
 import { listAssetSchedules, updateAssetSchedule } from '@/lib/api';
 import { readThrough } from '@/lib/mirror';
+import { loadAsset } from '@/lib/asset-sync';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, TextField, Badge, Notice } from '@/ui/components';
 
@@ -67,6 +68,7 @@ export default function FormBuilder() {
   const router = useRouter();
   const { assetId, scheduleId } = useLocalSearchParams<{ assetId: string; scheduleId: string }>();
 
+  const [assetName, setAssetName] = useState('');
   const [fields, setFields] = useState<FormField[] | null>(null);
   const [taskName, setTaskName] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -79,6 +81,7 @@ export default function FormBuilder() {
   const [newRequired, setNewRequired] = useState(false);
 
   useEffect(() => {
+    loadAsset(assetId).then(({ asset }) => setAssetName(asset?.name ?? ''));
     readThrough('asset:schedules:' + assetId, () => listAssetSchedules(getAccessToken()!, assetId))
       .then(({ value }) => {
         const sc = value.schedules.find((s) => s.id === scheduleId);
@@ -114,7 +117,7 @@ export default function FormBuilder() {
     <Screen>
       <Pressable onPress={goBack} accessibilityRole="button" style={s.backBtn}>
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
-        <Text variant="label" color={t.color.primary}>Maintenance</Text>
+        <Text variant="label" color={t.color.primary}>{assetName || 'Maintenance'}</Text>
       </Pressable>
       <Notice message={loadError} tone="error" />
     </Screen>
@@ -124,10 +127,10 @@ export default function FormBuilder() {
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
       <Pressable onPress={goBack} accessibilityRole="button" style={s.backBtn}>
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
-        <Text variant="label" color={t.color.primary}>Maintenance</Text>
+        <Text variant="label" color={t.color.primary}>{assetName || 'Maintenance'}</Text>
       </Pressable>
       <Text variant="title">Task form</Text>
-      {!!taskName && <Text variant="label" muted>{taskName}</Text>}
+      {!!taskName && <Text variant="label" muted>{taskName}{assetName ? ` · ${assetName}` : ''}</Text>}
 
       {/* Existing fields */}
       <Card>
