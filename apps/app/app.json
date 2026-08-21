@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "app",
+    "name": "Ting Test",
     "slug": "app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,8 +8,11 @@
     "scheme": "app",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/blnk_icon.icon",
-      "bundleIdentifier": "com.exporobbie.app"
+      "icon": "./assets/images/icon.png",
+      "bundleIdentifier": "nz.tingtest.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +22,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.exporobbie.app"
+      "package": "nz.tingtest.app"
     },
     "web": {
       "output": "static",
