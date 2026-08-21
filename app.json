@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "61ff15b7-b774-44b7-8e8c-77dbd1371a71"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "nz.tingtest.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}
