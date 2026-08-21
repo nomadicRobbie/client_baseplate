@@ -54,6 +54,12 @@
         "projectId": "a33613b7-aa17-4bf7-8ebb-3331538e0cf5"
       }
     },
-    "owner": "exponomads"
+    "owner": "exponomads",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a33613b7-aa17-4bf7-8ebb-3331538e0cf5"
+    }
   }
 }

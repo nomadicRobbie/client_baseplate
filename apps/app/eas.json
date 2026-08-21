@@ -6,21 +6,24 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://baseplate-api.blnk.nz",
         "EXPO_PUBLIC_TENANT_SLUG": "ting-test"
-      }
+      },
+      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://baseplate-api.blnk.nz",
         "EXPO_PUBLIC_TENANT_SLUG": "ting-test"
-      }
+      },
+      "channel": "production"
     }
   },
   "submit": {
