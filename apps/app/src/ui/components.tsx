@@ -94,6 +94,8 @@ export function Text({
 // ── Toast ────────────────────────────────────────────────────────────────────
 export type ToastMsg = { text: string; tone: 'success' | 'error' | 'info' };
 
+const IS_DEV = process.env.EXPO_PUBLIC_ENV === 'dev';
+
 function Toast({ msg, onDismiss }: { msg: ToastMsg; onDismiss: () => void }) {
   const t = useTheme();
   const x = useRef(new Animated.Value(340)).current;
@@ -101,6 +103,7 @@ function Toast({ msg, onDismiss }: { msg: ToastMsg; onDismiss: () => void }) {
   useEffect(() => {
     x.setValue(340);
     Animated.timing(x, { toValue: 0, duration: 220, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+    if (IS_DEV) return;
     const timer = setTimeout(() => {
       Animated.timing(x, { toValue: 340, duration: 180, useNativeDriver: true }).start(onDismiss);
     }, 3500);
@@ -112,7 +115,7 @@ function Toast({ msg, onDismiss }: { msg: ToastMsg; onDismiss: () => void }) {
   const textColor = msg.tone === 'error' ? t.color.danger : msg.tone === 'success' ? t.color.success : t.color.textMuted;
 
   return (
-    <Animated.View style={{
+    <Animated.View onTouchEnd={IS_DEV ? onDismiss : undefined} style={{
       position: 'absolute', right: 16, bottom: 88, zIndex: 1000, maxWidth: 320,
       transform: [{ translateX: x }],
       backgroundColor: bg, borderWidth: 1, borderColor, borderRadius: t.radius.md,
@@ -146,7 +149,7 @@ export function Screen({
     </View>
   );
   return (
-    <SafeAreaView style={s.safeArea}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={s.safeArea}>
       {/* Keyboard handling lives here so every screen gets it for free.
           Scrolling screens: automaticallyAdjustKeyboardInsets is the native iOS
           inset — the focused input scrolls clear of the keyboard on its own.

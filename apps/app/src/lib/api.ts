@@ -124,17 +124,25 @@ export const updateOrg = (token: string, data: {
   notification_email?: string; backup_email?: string | null;
 }) => req('/profile/org', { method: 'PUT', body: data, token });
 
-export const uploadUserAvatar = async (token: string, uri: string): Promise<string> => {
-  const filename = uri.split('/').pop() ?? 'avatar.jpg';
+export const uploadUserAvatar = async (
+  token: string,
+  uri: string,
+  asset?: { mimeType?: string; file?: File; fileName?: string | null },
+): Promise<string> => {
+  const filename = asset?.fileName ?? uri.split('/').pop() ?? 'avatar.jpg';
   const buildForm = async () => {
     const form = new FormData();
     if (typeof document !== 'undefined') {
-      const blob = await fetch(uri).then((r) => r.blob());
-      // Blob type can be empty for some blob: URIs; default to jpeg so the server accepts it.
-      const typed = blob.type ? blob : blob.slice(0, blob.size, 'image/jpeg');
-      form.append('file', typed, filename);
+      // On web, prefer the File object (correct name + MIME type) over fetching the blob URL.
+      if (asset?.file) {
+        form.append('file', asset.file, asset.file.name || filename);
+      } else {
+        const blob = await fetch(uri).then((r) => r.blob());
+        const typed = blob.type ? blob : blob.slice(0, blob.size, 'image/jpeg');
+        form.append('file', typed, filename);
+      }
     } else {
-      form.append('file', { uri, name: filename, type: 'image/jpeg' } as unknown as Blob);
+      form.append('file', { uri, name: filename, type: asset?.mimeType ?? 'image/jpeg' } as unknown as Blob);
     }
     return form;
   };

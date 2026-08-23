@@ -61,10 +61,10 @@ export default function Account() {
     if (status !== 'granted') { setMsg({ text: 'Photo library access is required.', tone: 'error' }); return; }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.8, allowsEditing: true, aspect: [1, 1] });
     if (result.canceled) return;
-    const uri = result.assets[0].uri;
+    const asset = result.assets[0];
     setBusy(true); setMsg(null);
     try {
-      const url = await uploadUserAvatar(getAccessToken()!, uri);
+      const url = await uploadUserAvatar(getAccessToken()!, asset.uri, { mimeType: asset.mimeType, file: asset.file, fileName: asset.fileName });
       setAvatarUri(url);
       await refresh();
       setMsg({ text: 'Avatar updated.', tone: 'success' });
