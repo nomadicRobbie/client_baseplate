@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Pressable, Image, useWindowDimensions } from 'react-native';
+import { View, Pressable, Image, useWindowDimensions, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -148,13 +148,15 @@ export default function Account() {
       <Card>
         <Text variant="heading">Security</Text>
         <Text muted>
-          {typeof window !== 'undefined' && window.location.hostname === 'localhost'
-            ? 'Passkeys are disabled in local development — deploy to your domain to enrol.'
-            : passkeySupported
-              ? 'Add a passkey for faster, phishing-resistant sign-in on this device.'
-              : 'Passkeys are available on the web app today; native support is coming.'}
+          {Platform.OS !== 'web'
+            ? 'Passkeys are available on the web app today; native support is coming.'
+            : window.location.hostname === 'localhost'
+              ? 'Passkeys are disabled in local development — deploy to your domain to enrol.'
+              : passkeySupported
+                ? 'Add a passkey for faster, phishing-resistant sign-in on this device.'
+                : 'Passkeys are available on the web app today; native support is coming.'}
         </Text>
-        {passkeySupported && typeof window !== 'undefined' && window.location.hostname !== 'localhost' && (
+        {Platform.OS === 'web' && passkeySupported && window.location.hostname !== 'localhost' && (
           <Button label="Enrol a passkey" variant="secondary" onPress={enrolPasskey} loading={busy} />
         )}
       </Card>
