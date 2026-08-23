@@ -1,6 +1,8 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+node-linker: hoisted
 # pnpm 11 reads `allowBuilds`, not `onlyBuiltDependencies`. Without this,
 # install exits 1 under CI=1 (which EAS Build sets) — ERR_PNPM_IGNORED_BUILDS.
 allowBuilds:
