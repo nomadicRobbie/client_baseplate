@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { View, Platform } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { View, Platform, Pressable, useWindowDimensions } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import type { ClientSubscription } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
@@ -27,6 +28,9 @@ async function goToCheckout(url: string) {
 }
 
 export default function Billing() {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const wide = width >= 900;
   const { features, user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'super';
   const params = useLocalSearchParams<{ billing?: string }>();
@@ -88,6 +92,13 @@ export default function Billing() {
 
   return (
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
+      {!wide && (
+        <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back"
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginBottom: -4 }}>
+          <Ionicons name="chevron-back" size={20} color="#9a9590" />
+          <Text variant="label" muted>Account</Text>
+        </Pressable>
+      )}
       <Text variant="title">Billing</Text>
 
       <Card>

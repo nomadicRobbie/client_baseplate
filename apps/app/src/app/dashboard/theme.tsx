@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, ScrollView, Pressable, TextInput, Animated, Platform } from 'react-native';
+import { View, ScrollView, Pressable, TextInput, Animated, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Redirect } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useProfile } from '@/lib/profile-context';
 import { getAccessToken } from '@/lib/session';
@@ -66,7 +66,7 @@ function MiniPreview({ pt }: { pt: PT }) {
   return (
     <View style={{ backgroundColor: pt.bg, borderRadius: 14, padding: 12, gap: 10, borderWidth: 1, borderColor: '#303030', overflow: 'hidden' }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text variant="label" color={pt.text}>Library</Text>
+        <Text variant="label" color={pt.text}>Preview</Text>
         <View style={{ backgroundColor: pt.accent, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 9 }}>
           <Text variant="small" color={textOn(pt.accent)}>Due</Text>
         </View>
@@ -143,6 +143,9 @@ function BrightnessSlider({ value, maxColor, onChange }: { value: number; maxCol
 // ── Main page ─────────────────────────────────────────────────────────────────
 // Theme / appearance. Admin-only; brand colours apply to everyone.
 export default function Theme() {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const wide = width >= 900;
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { data, refresh } = useProfile();
@@ -274,6 +277,15 @@ export default function Theme() {
         {/* ── Fixed header ── */}
         <View style={{ backgroundColor: t.color.bg, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, gap: 12 }}>
 
+          {/* Back link (mobile only) */}
+          {!wide && (
+            <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back"
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginBottom: -4 }}>
+              <Ionicons name="chevron-back" size={20} color={t.color.textMuted} />
+              <Text variant="label" muted>Account</Text>
+            </Pressable>
+          )}
+
           {/* Title + scheme toggle */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <Text variant="title" style={{ flex: 1 }}>Theme</Text>
@@ -300,15 +312,11 @@ export default function Theme() {
             </View>
           </View>
 
-          {/* Preview label */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Ionicons name="eye-outline" size={14} color={t.color.textMuted} />
-            <Text variant="small" color={t.color.textMuted} style={{ fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase' as const }}>Preview</Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: t.color.border }} />
-            <Text variant="small" color={t.color.textMuted}>{dirty ? 'unsaved' : 'not yet saved'}</Text>
+          {/* Preview label flush against the preview box */}
+          <View style={{ gap: 0 }}>
+            <Text variant="small" color={t.color.textMuted} style={{ fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase' as const, textAlign: 'right' }}>Preview</Text>
+            <MiniPreview pt={pt} />
           </View>
-
-          <MiniPreview pt={pt} />
         </View>
 
         {/* ── Scrollable picker ── */}

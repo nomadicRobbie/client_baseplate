@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
-import { Redirect } from 'expo-router';
+import { View, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { Redirect, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import type { Person, TeamUser } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { useProfile } from '@/lib/profile-context';
@@ -33,6 +34,9 @@ const makeStyles = (t: ThemeT) => ({
 // app access (a blnk_auth login, created here and linked via person.user_id). This
 // screen replaces the old Team surface: inviting a user is now "give app access".
 export default function People() {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const wide = width >= 900;
   const t = useTheme();
   const s = makeStyles(t);
   const { features } = useAuth();
@@ -138,6 +142,13 @@ export default function People() {
 
   return (
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
+      {!wide && (
+        <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back"
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginBottom: -4 }}>
+          <Ionicons name="chevron-back" size={20} color={t.color.textMuted} />
+          <Text variant="label" muted>Account</Text>
+        </Pressable>
+      )}
       <Text variant="title">People</Text>
 
       {/* Add a person — roster only, or with app access (creates a login) */}
