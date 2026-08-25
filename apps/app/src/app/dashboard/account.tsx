@@ -1,8 +1,10 @@
 import { useState, useRef } from 'react';
 import {
   View, Pressable, Image, useWindowDimensions, Platform,
-  TextInput, Animated, Easing,
+  TextInput, LayoutAnimation, UIManager,
 } from 'react-native';
+
+if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true);
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -25,83 +27,54 @@ const CONTACT_OPTS: { key: PreferredContact; label: string }[] = [
 const SCHEME_OPTS: { key: SchemePref; label: string }[] = [
   { key: 'light', label: 'Light' }, { key: 'os', label: 'System' }, { key: 'dark', label: 'Dark' },
 ];
-const EASE = Easing.bezier(0.2, 0.8, 0.2, 1);
-
-// Tap to expand in-place — label shrinks to caption, value becomes input, chevron rotates.
+// Tap to expand — LayoutAnimation drives the height natively, no JS-on-scroll-frame loop.
 function ExpandableRow({ label, value, onChange, onSave, placeholder, last }: {
   label: string; value: string; onChange: (v: string) => void;
   onSave: () => void; placeholder?: string; last?: boolean;
 }) {
   const t = useTheme();
   const [open, setOpen] = useState(false);
-  const openRef = useRef(false);
-  const anim = useRef(new Animated.Value(0)).current;
   const inputRef = useRef<TextInput>(null);
 
-  const animate = (to: number, cb?: () => void) =>
-    Animated.timing(anim, { toValue: to, duration: to ? 300 : 240, easing: EASE, useNativeDriver: false }).start(cb);
-
   const toggle = () => {
-    const next = !openRef.current;
-    openRef.current = next;
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    const next = !open;
     setOpen(next);
-    animate(next ? 1 : 0, next ? () => inputRef.current?.focus() : undefined);
+    if (next) setTimeout(() => inputRef.current?.focus(), 320);
   };
 
   const save = () => {
-    openRef.current = false;
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setOpen(false);
-    animate(0);
     onSave();
   };
 
-  const h = anim.interpolate({ inputRange: [0, 1], outputRange: [56, 112] });
-  const labelTop = anim.interpolate({ inputRange: [0, 1], outputRange: [19, 12] });
-  const labelSize = anim.interpolate({ inputRange: [0, 1], outputRange: [14, 12] });
-  const dispOp = anim.interpolate({ inputRange: [0, 0.25, 1], outputRange: [1, 0, 0] });
-  const editOp = anim.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 0, 1] });
-  const chevRot = anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });
-
   return (
-    <Animated.View style={{
-      height: h, overflow: 'hidden', position: 'relative',
-      borderBottomWidth: last ? 0 : 1, borderColor: t.color.border,
-    }}>
+    <View style={{ borderBottomWidth: last ? 0 : 1, borderColor: t.color.border }}>
       <Pressable onPress={toggle} accessibilityRole="button" accessibilityLabel={`Edit ${label}`}
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
-
-      <Animated.Text style={{ position: 'absolute', left: 16, top: labelTop, fontSize: labelSize, fontWeight: '600', color: open ? t.color.textMuted : t.color.text }}>
-        {label}
-      </Animated.Text>
-
-      <Animated.Text numberOfLines={1} style={{ position: 'absolute', right: 42, top: 19, maxWidth: 200, fontSize: 15, opacity: dispOp, color: value ? t.color.textMuted : t.color.primary }}>
-        {value || 'Add'}
-      </Animated.Text>
-
-      <Animated.View style={{ position: 'absolute', right: 14, top: 19, transform: [{ rotate: chevRot }] }}>
-        <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
-      </Animated.View>
-
-      <Animated.View pointerEvents={open ? 'auto' : 'none'} style={{ position: 'absolute', left: 16, right: 56, bottom: 14, opacity: editOp }}>
-        <TextInput
-          ref={inputRef}
-          value={value}
-          onChangeText={onChange}
-          placeholder={placeholder}
-          placeholderTextColor={t.color.textMuted}
-          style={{ fontSize: 17, color: t.color.text, borderBottomWidth: 1, borderBottomColor: t.color.primary, paddingBottom: 4 }}
-          editable={open}
-          returnKeyType="done"
-          onSubmitEditing={save}
-        />
-      </Animated.View>
-
-      <Animated.View pointerEvents={open ? 'auto' : 'none'} style={{ position: 'absolute', right: 14, bottom: 14, opacity: editOp }}>
-        <Pressable onPress={save} hitSlop={8} accessibilityRole="button" accessibilityLabel="Save">
-          <Ionicons name="checkmark" size={22} color={t.color.textMuted} />
-        </Pressable>
-      </Animated.View>
-    </Animated.View>
+        style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingHorizontal: 16, gap: 8 }}>
+        <Text variant="label" style={{ flex: 1 }}>{label}</Text>
+        <Text variant="body" muted numberOfLines={1} style={{ maxWidth: 200, color: value ? t.color.textMuted : t.color.primary }}>{value || 'Add'}</Text>
+        <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={18} color={t.color.textMuted} />
+      </Pressable>
+      {open && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 14, gap: 8 }}>
+          <TextInput
+            ref={inputRef}
+            value={value}
+            onChangeText={onChange}
+            placeholder={placeholder}
+            placeholderTextColor={t.color.textMuted}
+            style={{ flex: 1, fontSize: 17, color: t.color.text, borderBottomWidth: 1, borderBottomColor: t.color.primary, paddingBottom: 4 }}
+            returnKeyType="done"
+            onSubmitEditing={save}
+          />
+          <Pressable onPress={save} hitSlop={8} accessibilityRole="button" accessibilityLabel="Save">
+            <Ionicons name="checkmark" size={22} color={t.color.textMuted} />
+          </Pressable>
+        </View>
+      )}
+    </View>
   );
 }
 
