@@ -217,6 +217,14 @@ function Shell() {
   );
 }
 
+function contrastText(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum > 0.179 ? '#0e0e0e' : '#ffffff';
+}
+
 // Applies the client's brand colour as a theme override, then gates onboarding.
 function Themed() {
   const { data, loading, refresh } = useProfile();
@@ -225,7 +233,7 @@ function Themed() {
 
   const colorOverride: Record<string, string> = {
     ...data?.org?.custom_colors,
-    ...(data?.org?.brand_color ? { primary: data.org.brand_color } : {}),
+    ...(data?.org?.brand_color ? { primary: data.org.brand_color, primaryText: contrastText(data.org.brand_color) } : {}),
     ...(data?.org?.accent_color ? { accent: data.org.accent_color } : {}),
   };
   const theme = Object.keys(colorOverride).length ? { color: colorOverride } : undefined;

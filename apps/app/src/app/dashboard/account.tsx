@@ -9,7 +9,7 @@ import { useProfile } from '@/lib/profile-context';
 import { visibleNav } from '@/lib/nav';
 import { useTheme, useColorSchemePref, type SchemePref } from '@/theme';
 import { Screen, Text, Card, Row, Button, TextField } from '@/ui/components';
-import { passkeyRegisterBegin, passkeyRegisterComplete, updateMyProfile, uploadUserAvatar } from '@/lib/api';
+import { passkeyRegisterBegin, passkeyRegisterComplete, updateMyProfile, uploadUserAvatar, updateOrg } from '@/lib/api';
 import { getAccessToken } from '@/lib/session';
 import { doRegister, passkeySupported } from '@/lib/passkey';
 
@@ -56,6 +56,10 @@ export default function Account() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<Msg | null>(null);
 
+  const [orgName, setOrgName] = useState(data?.org?.org_name ?? '');
+  const [supportEmail, setSupportEmail] = useState(data?.org?.support_email ?? '');
+  const [orgBusy, setOrgBusy] = useState(false);
+
   const pickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') { setMsg({ text: 'Photo library access is required.', tone: 'error' }); return; }
@@ -82,6 +86,16 @@ export default function Account() {
       await refresh();
       setMsg({ text: 'Profile saved.', tone: 'success' });
     } catch (e) { setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' }); } finally { setBusy(false); }
+  };
+
+  const saveOrg = async () => {
+    if (!orgName.trim()) { setMsg({ text: 'Organisation name is required.', tone: 'error' }); return; }
+    setOrgBusy(true); setMsg(null);
+    try {
+      await updateOrg(getAccessToken()!, { org_name: orgName.trim(), support_email: supportEmail || undefined });
+      await refresh();
+      setMsg({ text: 'Organisation saved.', tone: 'success' });
+    } catch (e) { setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' }); } finally { setOrgBusy(false); }
   };
 
   const enrolPasskey = async () => {
@@ -128,6 +142,15 @@ export default function Account() {
         </View>
         <Button label="Save profile" onPress={saveProfile} loading={busy} />
       </Card>
+
+      {isAdmin && (
+        <Card>
+          <Text variant="heading">Organisation</Text>
+          <TextField label="Organisation name" value={orgName} onChangeText={setOrgName} placeholder="Organisation name" autoCapitalize="sentences" />
+          <TextField label="Support email" value={supportEmail} onChangeText={setSupportEmail} placeholder="support@example.com" keyboardType="email-address" autoCapitalize="none" />
+          <Button label="Save organisation" onPress={saveOrg} loading={orgBusy} />
+        </Card>
+      )}
 
       <Card>
         <Text variant="heading">Appearance</Text>

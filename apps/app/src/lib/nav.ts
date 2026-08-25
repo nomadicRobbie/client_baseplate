@@ -15,7 +15,7 @@ export type NavGroup = 'home' | 'module' | 'account' | 'admin';
 
 export type NavHref =
   | '/dashboard' | '/dashboard/feed' | '/dashboard/account' | '/dashboard/billing' | '/dashboard/people'
-  | '/dashboard/settings' | '/dashboard/analytics' | '/dashboard/locations' | '/dashboard/compliance'
+  | '/dashboard/theme' | '/dashboard/analytics' | '/dashboard/locations' | '/dashboard/compliance'
   | '/dashboard/commerce' | '/dashboard/asset';
 
 export type NavItem = {
@@ -38,7 +38,7 @@ export const NAV: NavItem[] = [
   { label: 'Billing', href: '/dashboard/billing', icon: 'card-outline', group: 'admin', adminOnly: true, feature: 'stripe' },
   { label: 'Account', href: '/dashboard/account', icon: 'person-outline', group: 'account' },
   { label: 'People', href: '/dashboard/people', icon: 'people-outline', group: 'account', adminOnly: true },
-  { label: 'Settings', href: '/dashboard/settings', icon: 'settings-outline', group: 'admin', adminOnly: true },
+  { label: 'Theme', href: '/dashboard/theme', icon: 'color-palette-outline', group: 'admin', adminOnly: true },
 ];
 
 // Items this user is allowed to see (role + enabled feature flags + module access).
