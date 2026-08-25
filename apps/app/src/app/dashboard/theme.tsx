@@ -215,16 +215,6 @@ export default function Theme() {
         ? `Body text sits at ${bodyContrast.toFixed(1)}:1 on this surface — below the 4.5:1 minimum.`
         : null;
 
-  // Animated save bar (slides up when dirty)
-  const saveBarAnim = useRef(new Animated.Value(80)).current;
-  useEffect(() => {
-    Animated.spring(saveBarAnim, {
-      toValue: dirty ? 0 : 80,
-      useNativeDriver: false,
-      tension: 80, friction: 12,
-    }).start();
-  }, [dirty, saveBarAnim]);
-
   // Toast (fades out after save)
   const toastAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -442,13 +432,12 @@ export default function Theme() {
 
         </ScrollView>
 
-        {/* ── Floating save bar ── */}
-        <Animated.View style={{
+        {/* ── Save bar ── */}
+        <View style={{
           position: 'absolute', left: 0, right: 0, bottom: insets.bottom,
           flexDirection: 'row', alignItems: 'center', gap: 6,
           paddingHorizontal: 16, paddingVertical: 12,
           backgroundColor: t.color.surface, borderTopWidth: 1, borderTopColor: t.color.border,
-          transform: [{ translateY: saveBarAnim }],
         }}>
           <Text variant="small" color={t.color.textMuted} style={{ flex: 1 }}>Applies to everyone in {orgName}</Text>
           <Pressable
@@ -460,13 +449,13 @@ export default function Theme() {
           </Pressable>
           <Pressable
             onPress={save}
-            disabled={busy}
+            disabled={!dirty || busy}
             accessibilityRole="button"
-            style={{ minHeight: 40, paddingHorizontal: 18, justifyContent: 'center', backgroundColor: t.color.success, borderRadius: 10, opacity: busy ? 0.7 : 1 }}
+            style={{ minHeight: 40, paddingHorizontal: 18, justifyContent: 'center', backgroundColor: t.color.success, borderRadius: 10, opacity: (!dirty || busy) ? 0.4 : 1 }}
           >
             <Text variant="label" color={textOn(t.color.success)}>{busy ? 'Saving…' : 'Save'}</Text>
           </Pressable>
-        </Animated.View>
+        </View>
 
         {/* ── Toast ── */}
         <Animated.View style={{
