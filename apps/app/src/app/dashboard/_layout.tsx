@@ -34,7 +34,7 @@ const makeStyles = (t: ThemeT) => ({
   spinner: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const },
   sidebarContainer: { gap: t.space.xs },
   mobileBar: { flexDirection: 'row' as const, justifyContent: 'space-around' as const },
-  mobileTab: (active: boolean) => ({ flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: t.space.sm, minHeight: 52, backgroundColor: active ? t.color.surfaceAlt : 'transparent' }),
+  mobileTab: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: t.space.sm, minHeight: 52 },
   brand: { gap: 2 },
   wideLayout: { flex: 1, flexDirection: 'row' as const },
   sidebar: { width: 248, borderRightWidth: 1, borderRightColor: t.color.border, padding: t.space.lg, justifyContent: 'space-between' as const },
@@ -86,7 +86,7 @@ function Sidebar({ isAdmin, features, myModules }: { isAdmin: boolean; features:
                 flexDirection: 'row', alignItems: 'center', gap: t.space.md,
                 paddingVertical: t.space.md, paddingHorizontal: t.space.md,
                 borderRadius: t.radius.md, minHeight: 44,
-                backgroundColor: active || pressed ? t.color.surfaceAlt : hovered ? t.color.bg : 'transparent',
+                backgroundColor: pressed ? t.color.surfaceAlt : hovered ? t.color.bg : 'transparent',
               };
             }}
           >
@@ -128,7 +128,7 @@ function MobileTabBar() {
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
             accessibilityLabel={tab.label}
-            style={s.mobileTab(active)}
+            style={s.mobileTab}
           >
             <View style={{ alignItems: 'center' }}>
               <Ionicons name={tab.icon} size={24} color={active ? t.color.primary : t.color.textMuted} />
