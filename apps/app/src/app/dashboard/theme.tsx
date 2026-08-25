@@ -41,18 +41,6 @@ function blendHex(from: string, to: string, t: number): string {
   return '#' + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + bl.toString(16).padStart(2, '0');
 }
 
-function contrastRatio(hex1: string, hex2: string): number {
-  const lum = (hex: string) => {
-    const n = parseInt(hex.slice(1), 16);
-    return [0.2126, 0.7152, 0.0722].reduce((acc, w, i) => {
-      const v = ((n >> ((2 - i) * 8)) & 255) / 255;
-      return acc + w * (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
-    }, 0);
-  };
-  const l1 = lum(hex1), l2 = lum(hex2);
-  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
-}
-
 function textOn(hex: string): string {
   const n = parseInt(hex.slice(1), 16);
   const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
@@ -205,16 +193,6 @@ export default function Theme() {
     accent: colors.accent ?? base.accent,
   };
 
-  // Contrast warnings
-  const primaryContrast = contrastRatio(pt.primary, textOn(pt.primary));
-  const bodyContrast = contrastRatio(pt.text, pt.surface);
-  const warn =
-    primaryContrast < 3
-      ? `Button text contrast is low (${primaryContrast.toFixed(1)}:1). Try a different shade.`
-      : bodyContrast < 4.5
-        ? `Body text sits at ${bodyContrast.toFixed(1)}:1 on this surface — below the 4.5:1 minimum.`
-        : null;
-
   // Toast (fades out after save)
   const toastAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -331,14 +309,6 @@ export default function Theme() {
           </View>
 
           <MiniPreview pt={pt} />
-
-          {/* Contrast warning */}
-          {!!warn && (
-            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', padding: 10, borderRadius: 10, backgroundColor: t.color.warningMuted, borderWidth: 1, borderColor: t.color.warning }}>
-              <Ionicons name="warning" size={16} color={t.color.warning} style={{ marginTop: 1 }} />
-              <Text variant="small" color={t.color.warning} style={{ flex: 1 }}>{warn}</Text>
-            </View>
-          )}
         </View>
 
         {/* ── Scrollable picker ── */}
@@ -346,7 +316,7 @@ export default function Theme() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           automaticallyAdjustKeyboardInsets
-          contentContainerStyle={{ padding: 20, gap: 18, paddingBottom: 120 }}
+          contentContainerStyle={{ padding: 20, gap: 18, paddingBottom: 20 }}
         >
 
           {/* Tabs */}
@@ -420,25 +390,21 @@ export default function Theme() {
           )}
           {hexErr && <Text variant="small" color={t.color.danger}>Enter a valid hex colour, e.g. #2a7f62</Text>}
 
-          {/* Reset */}
+        </ScrollView>
+
+        {/* ── Save bar — in-flow below scroll, above tab bar ── */}
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', gap: 6,
+          paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12 + insets.bottom,
+          backgroundColor: t.color.surface, borderTopWidth: 1, borderTopColor: t.color.border,
+        }}>
           <Pressable
             onPress={reset}
             accessibilityRole="button"
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, alignSelf: 'flex-start' }}
+            style={{ minHeight: 40, paddingHorizontal: 4, justifyContent: 'center' }}
           >
-            <Ionicons name="refresh" size={16} color={t.color.accent} />
-            <Text variant="label" color={t.color.accent}>Reset all four colours to defaults</Text>
+            <Ionicons name="refresh" size={18} color={t.color.textMuted} />
           </Pressable>
-
-        </ScrollView>
-
-        {/* ── Save bar ── */}
-        <View style={{
-          position: 'absolute', left: 0, right: 0, bottom: insets.bottom,
-          flexDirection: 'row', alignItems: 'center', gap: 6,
-          paddingHorizontal: 16, paddingVertical: 12,
-          backgroundColor: t.color.surface, borderTopWidth: 1, borderTopColor: t.color.border,
-        }}>
           <Text variant="small" color={t.color.textMuted} style={{ flex: 1 }}>Applies to everyone in {orgName}</Text>
           <Pressable
             onPress={discard}
@@ -459,7 +425,7 @@ export default function Theme() {
 
         {/* ── Toast ── */}
         <Animated.View style={{
-          position: 'absolute', right: 16, bottom: insets.bottom + 72,
+          position: 'absolute', right: 16, bottom: insets.bottom + 80,
           flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: 320,
           backgroundColor: t.color.successMuted, borderWidth: 1, borderColor: t.color.success,
           borderRadius: 10, padding: 12,
