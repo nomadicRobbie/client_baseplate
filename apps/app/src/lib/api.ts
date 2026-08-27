@@ -132,17 +132,11 @@ export const uploadUserAvatar = async (
   const filename = asset?.fileName ?? uri.split('/').pop() ?? 'avatar.jpg';
   const buildForm = async () => {
     const form = new FormData();
-    if (typeof document !== 'undefined') {
-      // On web, prefer the File object (correct name + MIME type) over fetching the blob URL.
-      if (asset?.file) {
-        form.append('file', asset.file, asset.file.name || filename);
-      } else {
-        const blob = await fetch(uri).then((r) => r.blob());
-        const typed = blob.type ? blob : blob.slice(0, blob.size, 'image/jpeg');
-        form.append('file', typed, filename);
-      }
+    if (asset?.file) {
+      form.append('file', asset.file, asset.file.name || filename);
     } else {
-      form.append('file', { uri, name: filename, type: asset?.mimeType ?? 'image/jpeg' } as unknown as Blob);
+      const blob = await fetch(uri).then((r) => r.blob());
+      form.append('file', blob, filename);
     }
     return form;
   };
@@ -217,12 +211,8 @@ export const uploadAssetImage = async (token: string, uri: string): Promise<stri
   const filename = uri.split('/').pop() ?? 'image.jpg';
   const buildForm = async () => {
     const form = new FormData();
-    if (typeof document !== 'undefined') {
-      const blob = await fetch(uri).then((r) => r.blob());
-      form.append('file', blob, filename);
-    } else {
-      form.append('file', { uri, name: filename, type: 'image/jpeg' } as unknown as Blob);
-    }
+    const blob = await fetch(uri).then((r) => r.blob());
+    form.append('file', blob, filename);
     return form;
   };
   const doUpload = async (tok: string) => fetch(`${API}/asset/documents/upload`, {
@@ -424,12 +414,8 @@ export const uploadPlanImage = async (token: string, planId: string, uri: string
   const filename = uri.split('/').pop() ?? 'image.jpg';
   const buildForm = async () => {
     const form = new FormData();
-    if (typeof document !== 'undefined') {
-      const blob = await fetch(uri).then((r) => r.blob());
-      form.append('file', blob, filename);
-    } else {
-      form.append('file', { uri, name: filename, type: 'image/jpeg' } as unknown as Blob);
-    }
+    const blob = await fetch(uri).then((r) => r.blob());
+    form.append('file', blob, filename);
     return form;
   };
   const doUpload = async (tok: string) => fetch(`${API}/compliance/plans/${planId}/image`, {
