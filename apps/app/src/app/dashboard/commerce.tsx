@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { View, Pressable, Image, TextInput, Platform, ScrollView } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
 import { Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { Product } from '@blnk/shared';
@@ -52,12 +51,14 @@ function StockEditor({ sizes, stockLevel, onChange }: {
 }
 
 async function compressForUpload(uri: string): Promise<string> {
-  const result = await ImageManipulator.manipulateAsync(
-    uri,
-    [{ resize: { width: 1920 } }],
-    { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG },
-  );
-  return result.uri;
+  try {
+    // ponytail: lazy require so a missing native module doesn't crash at import time
+    const { manipulateAsync, SaveFormat } = require('expo-image-manipulator') as typeof import('expo-image-manipulator');
+    const result = await manipulateAsync(uri, [{ resize: { width: 1920 } }], { compress: 0.75, format: SaveFormat.JPEG });
+    return result.uri;
+  } catch {
+    return uri;
+  }
 }
 
 // ── Image row ────────────────────────────────────────────────────────────────
