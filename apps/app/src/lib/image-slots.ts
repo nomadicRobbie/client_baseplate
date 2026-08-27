@@ -55,7 +55,12 @@ export function useImageSlots(initialUrls: string[] = []) {
           const localUri = URL.createObjectURL(file);
           const id = nextId();
           setSlots(prev => [...prev, { id, status: 'uploading', localUri }]);
-          compressForUpload(file).then(blob => _run(id, localUri, fn, blob));
+          compressForUpload(file)
+            .then(blob => _run(id, localUri, fn, blob))
+            .catch((e: unknown) => {
+              const error = e instanceof Error ? e.message : 'Compression failed';
+              setSlots(prev => prev.map(s => s.id === id ? { id, status: 'error', localUri, error } : s));
+            });
           resolve();
         };
         input.click();
