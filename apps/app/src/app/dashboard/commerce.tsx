@@ -60,8 +60,6 @@ function ImageRow({ slots, onAdd, onRetry }: {
   const t = useTheme();
   const s = makeStyles(t);
   return (
-    {/* ponytail: explicit height bounds the inner scroll so the outer Screen ScrollView
-        can't miscompute its content size when slots change (upload → error state). */}
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 80 }}>
       <View style={s.thumbRow}>
         {slots.map(slot => (
