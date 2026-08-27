@@ -108,7 +108,7 @@ function EditSheet({ product, currency, onSaved, onClose, onToast }: {
     [product.id],
   );
   const uploadFn: UploadFn = (f) => uploadProductImage(getAccessToken()!, f);
-  const { slots, pick, retrySlot, doneUrls, isUploading } = useImageSlots(initialImages);
+  const { slots, pick, retrySlot, doneUrls, isUploading } = useImageSlots(initialImages, (msg) => onToast(msg, 'error'));
 
   const fieldsDirty = draft.title !== product.title ||
     draft.price_cents !== product.price_cents ||
@@ -324,7 +324,7 @@ function AddProductForm({ currency, onAdded, onCancel, onToast }: { currency: st
   const [busy, setBusy]             = useState(false);
 
   const uploadFn: UploadFn = (f) => uploadProductImage(getAccessToken()!, f);
-  const { slots, pick, retrySlot, doneUrls, isUploading } = useImageSlots();
+  const { slots, pick, retrySlot, doneUrls, isUploading } = useImageSlots([], (msg) => onToast(msg, 'error'));
 
   const toggleSize = (sz: string) => {
     if (sizes.includes(sz)) {

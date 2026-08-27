@@ -27,7 +27,7 @@ function compressForUpload(file: File): Promise<Blob> {
   });
 }
 
-export function useImageSlots(initialUrls: string[] = []) {
+export function useImageSlots(initialUrls: string[] = [], onUploadError?: (msg: string) => void) {
   const [slots, setSlots] = useState<ImageSlot[]>(() =>
     initialUrls.map(url => ({ id: nextId(), status: 'done' as const, localUri: url, url }))
   );
@@ -40,6 +40,7 @@ export function useImageSlots(initialUrls: string[] = []) {
       .catch((e: unknown) => {
         const error = e instanceof Error ? e.message : 'Upload failed';
         setSlots(prev => prev.map(s => s.id === id ? { id, status: 'error', localUri, error } : s));
+        onUploadError?.(error);
       });
   };
 
