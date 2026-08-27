@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Pressable, Image, TextInput, Platform, StyleSheet } from 'react-native';
+import { View, Pressable, Image, TextInput, Platform, StyleSheet, ScrollView } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,6 +50,24 @@ function StockEditor({ sizes, stockLevel, onChange }: {
   );
 }
 
+// ── Image row ────────────────────────────────────────────────────────────────
+function ImageRow({ images, onAdd, uploading }: { images: string[]; onAdd: () => void; uploading: boolean }) {
+  const t = useTheme();
+  const s = makeStyles(t);
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <View style={s.thumbRow}>
+        {images.map((uri, i) => (
+          <Image key={i} source={{ uri }} style={s.thumb} resizeMode="cover" />
+        ))}
+        <Pressable onPress={onAdd} disabled={uploading} accessibilityRole="button" accessibilityLabel="Add image" style={s.thumbAdd}>
+          <Ionicons name="add" size={28} color={t.color.textMuted} />
+        </Pressable>
+      </View>
+    </ScrollView>
+  );
+}
+
 // ── Edit sheet ────────────────────────────────────────────────────────────────
 function EditSheet({ product, currency, onSaved, onClose }: {
   product: Product;
@@ -59,7 +77,10 @@ function EditSheet({ product, currency, onSaved, onClose }: {
 }) {
   const t = useTheme();
   const s = makeStyles(t);
-  const [draft, setDraft] = useState(product);
+  const [draft, setDraft] = useState({
+    ...product,
+    images: product.images.length ? product.images : product.image_url ? [product.image_url] : [],
+  });
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [msg, setMsg] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
@@ -71,7 +92,8 @@ function EditSheet({ product, currency, onSaved, onClose }: {
     try {
       const { product: updated } = await updateProduct(getAccessToken()!, product.id, {
         title: draft.title, price_cents: draft.price_cents, stock_level: draft.stock_level,
-        active: draft.active, is_new: draft.is_new, postable: draft.postable, image_url: draft.image_url,
+        active: draft.active, is_new: draft.is_new, postable: draft.postable,
+        image_url: draft.images[0] ?? null, images: draft.images,
       });
       onSaved(updated);
       setMsg({ text: 'Saved', tone: 'success' });
@@ -87,7 +109,10 @@ function EditSheet({ product, currency, onSaved, onClose }: {
       input.onchange = async () => {
         const file = input.files?.[0]; if (!file) return;
         setUploading(true);
-        try { const { url } = await uploadProductImage(getAccessToken()!, file); setDraft(d => ({ ...d, image_url: url })); }
+        try {
+          const { url } = await uploadProductImage(getAccessToken()!, file);
+          setDraft(d => { const imgs = [...d.images, url]; return { ...d, images: imgs, image_url: imgs[0] }; });
+        }
         catch (e) { setMsg({ text: e instanceof Error ? e.message : 'Upload failed', tone: 'error' }); }
         finally { setUploading(false); }
       };
@@ -98,7 +123,10 @@ function EditSheet({ product, currency, onSaved, onClose }: {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.8 });
       if (result.canceled) return;
       setUploading(true);
-      try { const { url } = await uploadProductImage(getAccessToken()!, result.assets[0].uri); setDraft(d => ({ ...d, image_url: url })); }
+      try {
+        const { url } = await uploadProductImage(getAccessToken()!, result.assets[0].uri);
+        setDraft(d => { const imgs = [...d.images, url]; return { ...d, images: imgs, image_url: imgs[0] }; });
+      }
       catch (e) { setMsg({ text: e instanceof Error ? e.message : 'Upload failed', tone: 'error' }); }
       finally { setUploading(false); }
     }
@@ -156,18 +184,7 @@ function EditSheet({ product, currency, onSaved, onClose }: {
 
       <Card>
         <Text variant="heading">Cover</Text>
-        <View style={s.coverSection}>
-          <Pressable onPress={pickImage} disabled={uploading} accessibilityRole="button" accessibilityLabel="Add cover image">
-            {draft.image_url ? (
-              <Image source={{ uri: draft.image_url }} style={s.coverImage} resizeMode="cover" />
-            ) : (
-              <View style={s.coverPlaceholder}>
-                <Ionicons name="image-outline" size={40} color={t.color.textMuted} />
-              </View>
-            )}
-          </Pressable>
-          <Button label={uploading ? 'Uploading…' : draft.image_url ? 'Change' : 'Add'} variant="secondary" onPress={pickImage} disabled={uploading} />
-        </View>
+        <ImageRow images={draft.images} onAdd={pickImage} uploading={uploading} />
 
         <View style={s.togglesContainer}>
           <Toggle value={!!draft.postable} onChange={() => setDraft(d => ({ ...d, postable: !d.postable }))} label="Postable" />
@@ -250,9 +267,6 @@ const makeStyles = (t: ReturnType<typeof useTheme>) => ({
   // Edit sheet
   editHeader: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const },
   editClose: { padding: t.space.sm },
-  coverSection: { gap: t.space.sm },
-  coverImage: { width: '100%' as const, aspectRatio: 4 / 3, borderRadius: t.radius.md, backgroundColor: t.color.surfaceAlt },
-  coverPlaceholder: { width: '100%' as const, aspectRatio: 4 / 3, borderRadius: t.radius.md, backgroundColor: t.color.surfaceAlt, alignItems: 'center' as const, justifyContent: 'center' as const },
   priceRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
   fieldGroup: { gap: t.space.xs },
   textInput: { backgroundColor: t.color.surfaceAlt, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.md, color: t.color.text, fontSize: 14 },
@@ -268,6 +282,11 @@ const makeStyles = (t: ReturnType<typeof useTheme>) => ({
   activeDotInner: { width: 8, height: 8, borderRadius: 4 },
   cardInfo: { gap: 2 },
   cardFooter: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
+
+  // Image row
+  thumbRow: { flexDirection: 'row' as const, gap: t.space.sm },
+  thumb: { width: 80, height: 80, borderRadius: t.radius.md } as const,
+  thumbAdd: { width: 80, height: 80, borderRadius: t.radius.md, backgroundColor: t.color.surfaceAlt, alignItems: 'center' as const, justifyContent: 'center' as const },
 
   // Add product form
   sizeGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
@@ -290,7 +309,7 @@ function AddProductForm({ currency, onAdded, onCancel }: { currency: string; onA
   const s = makeStyles(t);
   const [title, setTitle]               = useState('');
   const [price, setPrice]               = useState('');
-  const [imageUrl, setImageUrl]         = useState('');
+  const [images, setImages]             = useState<string[]>([]);
   const [sizes, setSizes]               = useState<string[]>([]);
   const [stockLevel, setStockLevel]     = useState<Record<string, number>>({});
   const [postable, setPostable]         = useState(true);
@@ -316,7 +335,7 @@ function AddProductForm({ currency, onAdded, onCancel }: { currency: string; onA
       input.onchange = async () => {
         const file = input.files?.[0]; if (!file) return;
         setUploading(true);
-        try { const { url } = await uploadProductImage(getAccessToken()!, file); setImageUrl(url); }
+        try { const { url } = await uploadProductImage(getAccessToken()!, file); setImages(prev => [...prev, url]); }
         catch (e) { setErr(e instanceof Error ? e.message : 'Upload failed'); }
         finally { setUploading(false); }
       };
@@ -327,7 +346,7 @@ function AddProductForm({ currency, onAdded, onCancel }: { currency: string; onA
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.8 });
       if (result.canceled) return;
       setUploading(true);
-      try { const { url } = await uploadProductImage(getAccessToken()!, result.assets[0].uri); setImageUrl(url); }
+      try { const { url } = await uploadProductImage(getAccessToken()!, result.assets[0].uri); setImages(prev => [...prev, url]); }
       catch (e) { setErr(e instanceof Error ? e.message : 'Upload failed'); }
       finally { setUploading(false); }
     }
@@ -341,7 +360,7 @@ function AddProductForm({ currency, onAdded, onCancel }: { currency: string; onA
     try {
       const { product } = await createProduct(getAccessToken()!, {
         title: title.trim(), description: '', desc_points: [], price_cents: priceCents,
-        image_url: imageUrl || null, images: imageUrl ? [imageUrl] : [],
+        image_url: images[0] ?? null, images,
         sizes, stock_level: stockLevel, postable, is_new: false,
         model_size: false, model_details: [], active,
       });
@@ -390,18 +409,7 @@ function AddProductForm({ currency, onAdded, onCancel }: { currency: string; onA
 
       <Card>
         <Text variant="heading">Cover</Text>
-        <View style={s.coverSection}>
-          <Pressable onPress={pickImage} disabled={uploading} accessibilityRole="button" accessibilityLabel="Add cover image">
-            {imageUrl ? (
-              <Image source={{ uri: imageUrl }} style={s.coverImage} resizeMode="cover" />
-            ) : (
-              <View style={s.coverPlaceholder}>
-                <Ionicons name="image-outline" size={40} color={t.color.textMuted} />
-              </View>
-            )}
-          </Pressable>
-          <Button label={uploading ? 'Uploading…' : imageUrl ? 'Change' : 'Add'} variant="secondary" onPress={pickImage} disabled={uploading} />
-        </View>
+        <ImageRow images={images} onAdd={pickImage} uploading={uploading} />
 
         <View style={s.togglesContainer}>
           <Toggle value={postable} onChange={setPostable} label="Postable" />
