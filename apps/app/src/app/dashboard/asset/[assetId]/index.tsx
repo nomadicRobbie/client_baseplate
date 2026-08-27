@@ -66,6 +66,7 @@ export default function AssetHome() {
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [uploadingIcon, setUploadingIcon] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; tone: 'error' } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -128,13 +129,19 @@ export default function AssetHome() {
     if (!asset || !isAdmin) return;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') return;
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.8 });
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.5,
+      preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+    });
     if (result.canceled || !result.assets[0]) return;
     setUploadingIcon(true);
     try {
       const url = await uploadAssetImage(tok(), result.assets[0].uri);
       const { asset: updated } = await updateAsset(tok(), asset.id, { image_url: url });
       setAsset(updated);
+    } catch (e) {
+      setMsg({ text: e instanceof Error ? e.message : 'Upload failed', tone: 'error' });
     } finally { setUploadingIcon(false); }
   };
 
@@ -153,7 +160,7 @@ export default function AssetHome() {
   };
 
   return (
-    <Screen>
+    <Screen toast={msg} onDismissToast={() => setMsg(null)}>
       <Pressable onPress={() => router.push('/dashboard/asset')} accessibilityRole="button" style={s.backBtn}>
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
         <Text variant="label" color={t.color.primary}>Assets</Text>
