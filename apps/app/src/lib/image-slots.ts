@@ -50,7 +50,14 @@ export function useImageSlots(initialUrls: string[] = [], onUploadError?: (msg: 
     } else {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') { onPermissionError('Photo library access is required.'); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6, allowsEditing: false });
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.5,
+        allowsEditing: false,
+        // ponytail: forces iOS to transcode HEIC→JPEG at pick time so quality applies.
+        // Without this, raw HEIC bypasses compression and hits the server 413 limit.
+        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+      });
       if (result.canceled) return;
       const localUri = result.assets[0].uri;
       const id = nextId();
