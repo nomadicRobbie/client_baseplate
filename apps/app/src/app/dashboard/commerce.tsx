@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { View, Pressable, Image, TextInput, Platform, ScrollView } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { Product } from '@blnk/shared';
@@ -48,6 +49,15 @@ function StockEditor({ sizes, stockLevel, onChange }: {
       ))}
     </View>
   );
+}
+
+async function compressForUpload(uri: string): Promise<string> {
+  const result = await ImageManipulator.manipulateAsync(
+    uri,
+    [{ resize: { width: 1920 } }],
+    { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG },
+  );
+  return result.uri;
 }
 
 // ── Image row ────────────────────────────────────────────────────────────────
@@ -120,11 +130,12 @@ function EditSheet({ product, currency, onSaved, onClose, onToast }: {
     } else {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') { onToast('Photo library access is required.', 'error'); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.6 });
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.9});
       if (result.canceled) return;
       setUploading(true);
       try {
-        const { url } = await uploadProductImage(getAccessToken()!, result.assets[0].uri);
+        const compressed = await compressForUpload(result.assets[0].uri);
+        const { url } = await uploadProductImage(getAccessToken()!, compressed);
         setDraft(d => { const imgs = [...d.images, url]; return { ...d, images: imgs, image_url: imgs[0] }; });
       }
       catch (e) { onToast(e instanceof Error ? e.message : 'Upload failed', 'error'); }
@@ -340,10 +351,14 @@ function AddProductForm({ currency, onAdded, onCancel, onToast }: { currency: st
     } else {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') { onToast('Photo library access is required.', 'error'); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.6 });
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.9});
       if (result.canceled) return;
       setUploading(true);
-      try { const { url } = await uploadProductImage(getAccessToken()!, result.assets[0].uri); setImages(prev => [...prev, url]); }
+      try {
+        const compressed = await compressForUpload(result.assets[0].uri);
+        const { url } = await uploadProductImage(getAccessToken()!, compressed);
+        setImages(prev => [...prev, url]);
+      }
       catch (e) { onToast(e instanceof Error ? e.message : 'Upload failed', 'error'); }
       finally { setUploading(false); }
     }
