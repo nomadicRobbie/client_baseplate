@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { View, Pressable, Image, TextInput, Platform, StyleSheet } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { Product } from '@blnk/shared';
@@ -80,17 +81,27 @@ function EditSheet({ product, currency, onSaved, onClose }: {
   };
 
   const pickImage = async () => {
-    if (Platform.OS !== 'web') return;
-    const input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
-    input.onchange = async () => {
-      const file = input.files?.[0]; if (!file) return;
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
+      input.onchange = async () => {
+        const file = input.files?.[0]; if (!file) return;
+        setUploading(true);
+        try { const { url } = await uploadProductImage(getAccessToken()!, file); setDraft(d => ({ ...d, image_url: url })); }
+        catch (e) { setMsg({ text: e instanceof Error ? e.message : 'Upload failed', tone: 'error' }); }
+        finally { setUploading(false); }
+      };
+      input.click();
+    } else {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') { setMsg({ text: 'Photo library access is required.', tone: 'error' }); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.8 });
+      if (result.canceled) return;
       setUploading(true);
-      try { const { url } = await uploadProductImage(getAccessToken()!, file); setDraft(d => ({ ...d, image_url: url })); }
+      try { const { url } = await uploadProductImage(getAccessToken()!, result.assets[0].uri); setDraft(d => ({ ...d, image_url: url })); }
       catch (e) { setMsg({ text: e instanceof Error ? e.message : 'Upload failed', tone: 'error' }); }
       finally { setUploading(false); }
-    };
-    input.click();
+    }
   };
 
   return (
@@ -299,17 +310,27 @@ function AddProductForm({ currency, onAdded, onCancel }: { currency: string; onA
   };
 
   const pickImage = async () => {
-    if (Platform.OS !== 'web') return;
-    const input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
-    input.onchange = async () => {
-      const file = input.files?.[0]; if (!file) return;
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
+      input.onchange = async () => {
+        const file = input.files?.[0]; if (!file) return;
+        setUploading(true);
+        try { const { url } = await uploadProductImage(getAccessToken()!, file); setImageUrl(url); }
+        catch (e) { setErr(e instanceof Error ? e.message : 'Upload failed'); }
+        finally { setUploading(false); }
+      };
+      input.click();
+    } else {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') { setErr('Photo library access is required.'); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.8 });
+      if (result.canceled) return;
       setUploading(true);
-      try { const { url } = await uploadProductImage(getAccessToken()!, file); setImageUrl(url); }
+      try { const { url } = await uploadProductImage(getAccessToken()!, result.assets[0].uri); setImageUrl(url); }
       catch (e) { setErr(e instanceof Error ? e.message : 'Upload failed'); }
       finally { setUploading(false); }
-    };
-    input.click();
+    }
   };
 
   const submit = async () => {
