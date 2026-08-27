@@ -157,16 +157,16 @@ function EditSheet({ product, currency, onSaved, onClose }: {
       <Card>
         <Text variant="heading">Cover</Text>
         <View style={s.coverSection}>
-          {draft.image_url ? (
-            <Image source={{ uri: draft.image_url }} style={s.coverImage} resizeMode="cover" />
-          ) : (
-            <View style={s.coverPlaceholder}>
-              <Ionicons name="image-outline" size={40} color={t.color.textMuted} />
-            </View>
-          )}
-          {Platform.OS === 'web' && (
-            <Button label={uploading ? 'Uploading…' : 'Add'} variant="secondary" onPress={pickImage} disabled={uploading} />
-          )}
+          <Pressable onPress={pickImage} disabled={uploading} accessibilityRole="button" accessibilityLabel="Add cover image">
+            {draft.image_url ? (
+              <Image source={{ uri: draft.image_url }} style={s.coverImage} resizeMode="cover" />
+            ) : (
+              <View style={s.coverPlaceholder}>
+                <Ionicons name="image-outline" size={40} color={t.color.textMuted} />
+              </View>
+            )}
+          </Pressable>
+          <Button label={uploading ? 'Uploading…' : draft.image_url ? 'Change' : 'Add'} variant="secondary" onPress={pickImage} disabled={uploading} />
         </View>
 
         <View style={s.togglesContainer}>
@@ -391,16 +391,16 @@ function AddProductForm({ currency, onAdded, onCancel }: { currency: string; onA
       <Card>
         <Text variant="heading">Cover</Text>
         <View style={s.coverSection}>
-          {imageUrl ? (
-            <Image source={{ uri: imageUrl }} style={s.coverImage} resizeMode="cover" />
-          ) : (
-            <View style={s.coverPlaceholder}>
-              <Ionicons name="image-outline" size={40} color={t.color.textMuted} />
-            </View>
-          )}
-          {Platform.OS === 'web' && (
-            <Button label={uploading ? 'Uploading…' : 'Add'} variant="secondary" onPress={pickImage} disabled={uploading} />
-          )}
+          <Pressable onPress={pickImage} disabled={uploading} accessibilityRole="button" accessibilityLabel="Add cover image">
+            {imageUrl ? (
+              <Image source={{ uri: imageUrl }} style={s.coverImage} resizeMode="cover" />
+            ) : (
+              <View style={s.coverPlaceholder}>
+                <Ionicons name="image-outline" size={40} color={t.color.textMuted} />
+              </View>
+            )}
+          </Pressable>
+          <Button label={uploading ? 'Uploading…' : imageUrl ? 'Change' : 'Add'} variant="secondary" onPress={pickImage} disabled={uploading} />
         </View>
 
         <View style={s.togglesContainer}>
