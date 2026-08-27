@@ -1,8 +1,21 @@
+import type { ComponentProps } from 'react';
 import { View, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { AssetFieldDef } from '@blnk/shared';
 import { useTheme } from '@/theme';
 import { Text, TextField } from './components';
 import { DateField } from './date-field';
+
+type IoniconName = ComponentProps<typeof Ionicons>['name'];
+
+export function assetTypeIcon(typeName: string | null | undefined): IoniconName {
+  const n = (typeName ?? '').toLowerCase();
+  if (n.includes('vessel') || n.includes('boat') || n.includes('ship') || n.includes('marine')) return 'boat-outline';
+  if (n.includes('vehicle') || n.includes('car') || n.includes('truck') || n.includes('van')) return 'car-outline';
+  if (n.includes('facilit') || n.includes('building') || n.includes('site')) return 'business-outline';
+  if (n.includes('hardware') || n.includes('computer') || n.includes('server') || n.includes('network')) return 'desktop-outline';
+  return 'cube-outline';
+}
 
 type ThemeT = ReturnType<typeof useTheme>;
 

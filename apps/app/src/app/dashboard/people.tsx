@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Pressable, useWindowDimensions, TextInput } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { Person, TeamUser } from '@blnk/shared';
@@ -9,25 +9,30 @@ import { availableModules } from '@/lib/nav';
 import { getAccessToken } from '@/lib/session';
 import { listPeople, createPerson, updatePerson, listTeam, addTeamUser, setTeamUserActive, setPersonModule, removePersonModule } from '@/lib/api';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Button, TextField, Badge } from '@/ui/components';
+import { Screen, Text, GroupedCard, GRow, SectionLabel, Button, FieldRow, Badge, Checkbox } from '@/ui/components';
 
 type Msg = { text: string; tone: 'success' | 'error' };
 type ThemeT = ReturnType<typeof useTheme>;
 const ROLES: ('member' | 'admin')[] = ['member', 'admin'];
 
 const makeStyles = (t: ThemeT) => ({
-  checkbox: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm, paddingVertical: t.space.xs },
-  sectionHeader: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const },
-  checkboxBox: (checked: boolean) => ({ width: 20, height: 20, borderRadius: t.radius.sm, borderWidth: 1, borderColor: checked ? t.color.primary : t.color.border, backgroundColor: checked ? t.color.primary : 'transparent', alignItems: 'center' as const, justifyContent: 'center' as const }),
-  roleSection: { gap: 6 },
+  input: { backgroundColor: t.color.surfaceAlt, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.md, color: t.color.text, fontSize: 14 },
+  backBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, alignSelf: 'flex-start' as const, marginBottom: -4 },
+  section: { gap: 8 },
   roleRow: { flexDirection: 'row' as const, gap: t.space.sm },
+  roleSection: { paddingHorizontal: t.space.lg, paddingVertical: t.space.md, gap: t.space.sm },
   roleBtn: (sel: boolean, disabled: boolean) => ({ opacity: disabled ? 0.4 : 1, paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }),
-  personItem: { paddingVertical: t.space.sm, gap: t.space.sm },
-  personHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.md },
+  checkboxRow: { paddingHorizontal: t.space.lg },
+  personRow: { borderBottomWidth: 1, borderColor: t.color.border },
+  personRowLast: { borderBottomWidth: 0 },
+  personAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: t.color.surfaceAlt, alignItems: 'center' as const, justifyContent: 'center' as const },
   personInfo: { flex: 1, gap: 2 },
-  moduleRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.xs, alignItems: 'center' as const },
-  moduleBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingVertical: 4, paddingHorizontal: t.space.sm, borderRadius: t.radius.pill, backgroundColor: t.color.surfaceAlt },
-  moduleAdd: { paddingVertical: 4, paddingHorizontal: t.space.sm, borderRadius: t.radius.pill, borderWidth: 1, borderStyle: 'dashed' as const, borderColor: t.color.border },
+  personAccess: { alignItems: 'center' as const, gap: t.space.md },
+  badgeRow: { flexDirection: 'row' as const, gap: 4 },
+  modulePad: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6, paddingHorizontal: 16, paddingBottom: 10 },
+  subPad: { paddingHorizontal: 16, paddingBottom: 10 },
+  moduleBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 999, backgroundColor: t.color.surfaceAlt },
+  moduleAdd: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 999, borderWidth: 1, borderStyle: 'dashed' as const, borderColor: t.color.border },
 });
 
 // People — the canonical roster. A person may be "roster only" (no login) or have
@@ -144,117 +149,124 @@ export default function People() {
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
       {!wide && (
         <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back"
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginBottom: -4 }}>
+          style={s.backBtn}>
           <Ionicons name="chevron-back" size={20} color={t.color.textMuted} />
           <Text variant="label" muted>Account</Text>
         </Pressable>
       )}
-      <Text variant="title">People</Text>
-
       {/* Add a person — roster only, or with app access (creates a login) */}
-      <Card>
-        <Text variant="heading">Add a person</Text>
-        <TextField label="Name" value={name} onChangeText={setName} placeholder="Full name" autoCapitalize="sentences" />
-        <TextField label="Email" value={email} onChangeText={setEmail} placeholder="Optional (required for app access)" keyboardType="email-address" autoCapitalize="none" />
-        <TextField label="Phone" value={phone} onChangeText={setPhone} placeholder="Optional" />
-
-        <Pressable onPress={() => setGiveAccess((v) => !v)} accessibilityRole="checkbox" accessibilityState={{ checked: giveAccess }}
-          style={s.checkbox}>
-          <View style={s.checkboxBox(giveAccess)}>
-            {giveAccess && <Text variant="small" color={t.color.primaryText}>✓</Text>}
-          </View>
-          <Text variant="label">Give app access (creates a sign-in)</Text>
-        </Pressable>
-
-        {giveAccess && (
-          <View style={s.roleSection}>
-            <Text variant="label" muted>Role</Text>
-            <View style={s.roleRow}>
-              {ROLES.map((r) => {
-                const disabled = r === 'admin' && !isSuper;
-                const sel = role === r;
-                return (
-                  <Pressable key={r} onPress={() => !disabled && setRole(r)} accessibilityRole="button" disabled={disabled}
-                    style={s.roleBtn(sel, disabled)}>
-                    <Text variant="label" color={sel ? t.color.primaryText : t.color.text}>{r}</Text>
-                  </Pressable>
-                );
-              })}
+      <View style={s.section}>
+        <SectionLabel>Add a person</SectionLabel>
+        <GroupedCard>
+          <FieldRow label="Name" displayValue={name}>
+            <TextInput value={name} onChangeText={setName} placeholder="Full name"
+              autoCapitalize="sentences" placeholderTextColor={t.color.textMuted} style={s.input} />
+          </FieldRow>
+          <FieldRow label="Email" displayValue={email}>
+            <TextInput value={email} onChangeText={setEmail} placeholder="Optional (required for app access)"
+              keyboardType="email-address" autoCapitalize="none" placeholderTextColor={t.color.textMuted} style={s.input} />
+          </FieldRow>
+          <FieldRow label="Phone" displayValue={phone} last={!giveAccess}>
+            <TextInput value={phone} onChangeText={setPhone} placeholder="Optional"
+              keyboardType="phone-pad" placeholderTextColor={t.color.textMuted} style={s.input} />
+          </FieldRow>
+          {giveAccess && (
+            <View style={s.roleSection}>
+              <Text variant="label" muted>Role</Text>
+              <View style={s.roleRow}>
+                {ROLES.map((r) => {
+                  const disabled = r === 'admin' && !isSuper;
+                  const sel = role === r;
+                  return (
+                    <Pressable key={r} onPress={() => !disabled && setRole(r)} accessibilityRole="button" disabled={disabled}
+                      style={s.roleBtn(sel, disabled)}>
+                      <Text variant="label" color={sel ? t.color.primaryText : t.color.text}>{r}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {!isSuper && <Text variant="small" muted>Only super users can add admins.</Text>}
             </View>
-            {!isSuper && <Text variant="small" muted>Only super users can add admins.</Text>}
-          </View>
-        )}
+          )}
+        </GroupedCard>
+        <View style={s.checkboxRow}>
+          <Checkbox checked={giveAccess} onChange={setGiveAccess} label="Give app access (creates a sign-in)" />
+        </View>
         <Button label="Add person" onPress={add} loading={busy} />
-      </Card>
+      </View>
 
       {/* Roster */}
-      <Card>
-        <View style={s.sectionHeader}>
-          <Text variant="heading">Roster</Text>
-          {people.length > 0 && <Text variant="small" muted>{people.length}</Text>}
-        </View>
-        {loading ? <Text muted>Loading…</Text> : people.length === 0 ? <Text muted>No people yet.</Text> : people.map((p) => {
-          const login = p.user_id ? teamUsers.find((u) => u.id === p.user_id) : undefined;
-          const isSelf = !!p.user_id && p.user_id === meId;
-          const unassigned = assignableModules.filter((em) => !p.modules.some((m) => m.module === em.feature));
-          return (
-            <View key={p.id} style={s.personItem}>
-              <View style={s.personHeader}>
-                <View style={s.personInfo}>
-                  <Text>{p.name}</Text>
-                  {!!(p.email || p.phone) && <Text variant="small" muted>{[p.email, p.phone].filter(Boolean).join(' · ')}</Text>}
-                </View>
-
-                {/* App-access state + controls */}
-                {p.user_id ? (
-                  <>
-                    <Badge label={login?.role ?? 'app access'} tone={login?.role === 'super' ? 'accent' : 'neutral'} />
-                    {login && !login.active && <Badge label="disabled" tone="neutral" />}
-                    {login && !isSelf && login.role !== 'super' && (
-                      <Pressable onPress={() => toggleLogin(p.user_id!, !login.active)} accessibilityRole="button">
-                        <Text variant="small" color={login.active ? t.color.accent : t.color.success}>{login.active ? 'Disable' : 'Enable'}</Text>
+      <View style={s.section}>
+        <SectionLabel right={people.length > 0 ? <Text variant="small" muted>{people.length}</Text> : undefined}>Roster</SectionLabel>
+        {loading ? <Text muted>Loading…</Text> : people.length === 0 ? <Text muted>No people yet.</Text> : (
+          <GroupedCard>
+            {people.map((p, idx) => {
+              const login = p.user_id ? teamUsers.find((u) => u.id === p.user_id) : undefined;
+              const isSelf = !!p.user_id && p.user_id === meId;
+              const unassigned = assignableModules.filter((em) => !p.modules.some((m) => m.module === em.feature));
+              const isLast = idx === people.length - 1;
+              const isAdminUser = p.user_id && (login?.role === 'admin' || login?.role === 'super');
+              return (
+                <View key={p.id} style={[s.personRow, isLast && s.personRowLast]}>
+                  <GRow last>
+                    <View style={s.personAvatar}>
+                      <Ionicons name="person-outline" size={18} color={t.color.textMuted} />
+                    </View>
+                    <View style={s.personInfo}>
+                      <Text variant="label">{p.name}</Text>
+                      {!!(p.email || p.phone) && <Text variant="small" muted>{[p.email, p.phone].filter(Boolean).join(' · ')}</Text>}
+                    </View>
+                    {p.user_id ? (
+                      <View style={s.personAccess}>
+                        <View style={s.badgeRow}>
+                          <Badge label={login?.role ?? 'app access'} tone={login?.role === 'super' ? 'accent' : 'neutral'} />
+                          {login && !login.active && <Badge label="disabled" tone="neutral" />}
+                        </View>
+                        {login && !isSelf && login.role !== 'super' && (
+                          <Pressable onPress={() => toggleLogin(p.user_id!, !login.active)} accessibilityRole="button">
+                            <Text variant="small" color={login.active ? t.color.accent : t.color.success}>{login.active ? 'Disable' : 'Enable'}</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    ) : (
+                      <Pressable onPress={() => giveAppAccess(p)} accessibilityRole="button" disabled={busy}>
+                        <Text variant="small" color={t.color.primary}>Give access</Text>
                       </Pressable>
                     )}
-                  </>
-                ) : (
-                  <Pressable onPress={() => giveAppAccess(p)} accessibilityRole="button" disabled={busy}>
-                    <Text variant="small" color={t.color.primary}>Give app access</Text>
-                  </Pressable>
-                )}
-              </View>
-
-              {/* Module access belongs with app access: only people who can sign in
-                  get the editor. Admins bypass module gating (full access), so chips
-                  are noise for them. A login-less person is just a roster name — if they
-                  carry stray assignments, nudge to give them a login to activate them. */}
-              {p.user_id && (login?.role === 'admin' || login?.role === 'super') ? (
-                <Text variant="small" muted>Full access — admins see every module.</Text>
-              ) : p.user_id ? (
-                <View style={s.moduleRow}>
-                  {p.modules.map((m) => (
-                    <Pressable key={m.module} onPress={() => unassign(p, m.module)} accessibilityRole="button" accessibilityLabel={`Remove ${moduleLabel(m.module)}`}
-                      style={s.moduleBadge}>
-                      <Text variant="small">{moduleLabel(m.module)}</Text>
-                      <Text variant="small" muted>✕</Text>
-                    </Pressable>
-                  ))}
-                  {unassigned.map((em) => (
-                    <Pressable key={em.feature} onPress={() => assign(p, em.feature as string)} accessibilityRole="button" accessibilityLabel={`Assign ${em.label}`}
-                      style={[s.moduleAdd, { borderColor: t.color.border }]}>
-                      <Text variant="small" muted>+ {em.label}</Text>
-                    </Pressable>
-                  ))}
-                  {assignableModules.length === 0
-                    ? <Text variant="small" muted>No assignable modules in this deploy.</Text>
-                    : p.modules.length === 0 && <Text variant="small" muted>No modules yet — signs in to an empty app.</Text>}
+                  </GRow>
+                  {isAdminUser ? (
+                    <View style={s.subPad}>
+                      <Text variant="small" muted>Full access — admins see every module.</Text>
+                    </View>
+                  ) : p.user_id ? (
+                    <View style={s.modulePad}>
+                      {p.modules.map((m) => (
+                        <Pressable key={m.module} onPress={() => unassign(p, m.module)} accessibilityRole="button" accessibilityLabel={`Remove ${moduleLabel(m.module)}`}
+                          style={s.moduleBadge}>
+                          <Text variant="small">{moduleLabel(m.module)}</Text>
+                          <Text variant="small" muted>✕</Text>
+                        </Pressable>
+                      ))}
+                      {unassigned.map((em) => (
+                        <Pressable key={em.feature} onPress={() => assign(p, em.feature as string)} accessibilityRole="button" accessibilityLabel={`Assign ${em.label}`}
+                          style={s.moduleAdd}>
+                          <Text variant="small" muted>+ {em.label}</Text>
+                        </Pressable>
+                      ))}
+                      {assignableModules.length === 0 && <Text variant="small" muted>No assignable modules.</Text>}
+                      {assignableModules.length > 0 && p.modules.length === 0 && <Text variant="small" muted>No modules — signs in to an empty app.</Text>}
+                    </View>
+                  ) : p.modules.length > 0 ? (
+                    <View style={s.subPad}>
+                      <Text variant="small" muted>{p.modules.map((m) => moduleLabel(m.module)).join(', ')} · give access to activate</Text>
+                    </View>
+                  ) : null}
                 </View>
-              ) : p.modules.length > 0 ? (
-                <Text variant="small" muted>{p.modules.map((m) => moduleLabel(m.module)).join(', ')} · give app access to activate</Text>
-              ) : null}
-            </View>
-          );
-        })}
-      </Card>
+              );
+            })}
+          </GroupedCard>
+        )}
+      </View>
 
     </Screen>
   );

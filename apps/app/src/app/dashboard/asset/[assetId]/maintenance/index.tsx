@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Pressable, Platform, TextInput } from 'react-native';
 import { Redirect, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { Asset, AssetFault, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert } from '@blnk/shared';
@@ -11,7 +11,7 @@ import { readThrough } from '@/lib/mirror';
 import { loadAsset } from '@/lib/asset-sync';
 import { formatDMY } from '@/lib/format';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Button, TextField, Badge, Pill, Stepper, Toggle } from '@/ui/components';
+import { Screen, Text, GroupedCard, SectionLabel, Button, FieldRow, Badge, Pill, Stepper, Toggle } from '@/ui/components';
 import { DateField } from '@/ui/date-field';
 import { StatusBadge, OfflineBanner } from '@/ui/status';
 
@@ -20,12 +20,12 @@ type ThemeT = ReturnType<typeof useTheme>;
 const INTERVALS = ['Day', 'Week', 'Month', 'Year'];
 const tok = () => getAccessToken()!;
 
-
 const makeStyles = (t: ThemeT) => ({
+  input: { backgroundColor: t.color.surfaceAlt, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.md, color: t.color.text, fontSize: 14 },
   backBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
-  section: { gap: 6 },
-  sectionHeader: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const },
-  intervalRow: { flexDirection: 'row' as const, gap: t.space.sm, alignItems: 'center' as const },
+  section: { gap: 8 },
+  emptyHint: { paddingHorizontal: 4 },
+  groupPad: { paddingHorizontal: t.space.lg, paddingVertical: t.space.md, gap: t.space.sm },
   intervalPills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm, flex: 1 },
   alertRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.xs },
   alertBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingVertical: 4, paddingHorizontal: t.space.sm, borderRadius: t.radius.pill, backgroundColor: t.color.surfaceAlt },
@@ -33,6 +33,8 @@ const makeStyles = (t: ThemeT) => ({
   dropZone: { borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.lg, alignItems: 'center' as const, gap: t.space.xs },
   docEntry: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm, paddingVertical: 4 },
   flex1: { flex: 1 },
+  scheduleRow: { borderBottomWidth: 1, borderColor: t.color.border, paddingHorizontal: t.space.lg, paddingVertical: 10, gap: t.space.sm },
+  scheduleRowLast: { borderBottomWidth: 0 },
   scheduleItem: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: t.space.sm, paddingVertical: t.space.sm },
   scheduleInfo: { flex: 1, gap: 2 },
   scheduleAlerts: { gap: t.space.xs, marginTop: 2 },
@@ -44,7 +46,6 @@ const makeStyles = (t: ThemeT) => ({
   docRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.xs },
   docChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingVertical: 4, paddingHorizontal: t.space.sm, borderRadius: t.radius.pill, backgroundColor: t.color.surfaceAlt },
   docName: { maxWidth: 180 },
-  editFormBtn: { alignSelf: 'flex-start' as const },
 });
 
 export default function AssetMaintenance() {
@@ -162,7 +163,6 @@ export default function AssetMaintenance() {
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
         <Text variant="label" color={t.color.primary}>{asset?.name ?? 'Asset'}</Text>
       </Pressable>
-      <Text variant="title">Maintenance</Text>
       {!loading && openFaults.length > 0 && (
         <Pressable onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/faults', params: { assetId } })} accessibilityRole="link" style={s.faultLink}>
           <Ionicons name="warning-outline" size={14} color={t.color.danger} />
@@ -174,131 +174,155 @@ export default function AssetMaintenance() {
 
       <OfflineBanner offline={offline} />
 
-      <Card>
-        <View style={s.sectionHeader}>
-          <Text variant="heading">Scheduled tasks</Text>
-          {schedules.length > 0 && <Text variant="small" muted>{schedules.length}</Text>}
-        </View>
-        {loading ? <Text muted>Loading…</Text> : schedules.length === 0 ? <Text muted>No scheduled maintenance yet.</Text> : schedules.map((sc) => {
-          const due = dueById[sc.id];
-          const level = due?.level === 'over' ? 'over' : due?.level === 'due' ? 'due' : 'ok';
-          const sub = [`Every ${sc.interval_value ?? ''} ${sc.interval_type ?? ''}`.trim(), due?.due_date ? `Due ${formatDMY(due.due_date)}` : null].filter(Boolean).join(' · ');
-          return (
-            <View key={sc.id} style={s.scheduleItem}>
-              <View style={s.scheduleInfo}>
-                <Text>{sc.task_name}</Text>
-                <Text variant="small" muted>{sub}</Text>
-                {sc.alerts?.length > 0 && (
-                  <View style={s.scheduleAlerts}>
-                    <Text variant="small" muted>Reminders:</Text>
-                    <View style={s.scheduleAlertPills}>
-                      {sc.alerts.map((a, i) => <Badge key={i} label={`${a.value} ${a.unit} before`} tone="neutral" />)}
+      <View style={s.section}>
+        <SectionLabel right={schedules.length > 0 ? <Text variant="small" muted>{schedules.length}</Text> : undefined}>Scheduled tasks</SectionLabel>
+        {loading
+          ? <Text muted style={s.emptyHint}>Loading…</Text>
+          : schedules.length === 0
+            ? <Text muted style={s.emptyHint}>No scheduled maintenance yet.</Text>
+            : (
+              <GroupedCard>
+                {schedules.map((sc, i) => {
+                  const due = dueById[sc.id];
+                  const level = due?.level === 'over' ? 'over' : due?.level === 'due' ? 'due' : 'ok';
+                  const sub = [`Every ${sc.interval_value ?? ''} ${sc.interval_type ?? ''}`.trim(), due?.due_date ? `Due ${formatDMY(due.due_date)}` : null].filter(Boolean).join(' · ');
+                  return (
+                    <View key={sc.id} style={[s.scheduleRow, i === schedules.length - 1 && s.scheduleRowLast]}>
+                      <View style={s.scheduleItem}>
+                        <View style={s.scheduleInfo}>
+                          <Text>{sc.task_name}</Text>
+                          <Text variant="small" muted>{sub}</Text>
+                          {sc.alerts?.length > 0 && (
+                            <View style={s.scheduleAlerts}>
+                              <Text variant="small" muted>Reminders:</Text>
+                              <View style={s.scheduleAlertPills}>
+                                {sc.alerts.map((a, j) => <Badge key={j} label={`${a.value} ${a.unit} before`} tone="neutral" />)}
+                              </View>
+                            </View>
+                          )}
+                          {!!sc.task_notes && <Text variant="small" muted>{sc.task_notes}</Text>}
+                          {sc.document_urls?.length > 0 && (
+                            <View style={s.docRow}>
+                              {sc.document_urls.map((url, j) => (
+                                <Pressable key={j} onPress={() => { if (Platform.OS === 'web') window.open(url, '_blank'); }} accessibilityRole="link" style={s.docChip}>
+                                  <Ionicons name="document-outline" size={12} color={t.color.primary} />
+                                  <Text variant="small" color={t.color.primary} numberOfLines={1} style={s.docName}>{url.split('/').pop()}</Text>
+                                </Pressable>
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                        <View style={s.scheduleActions}>
+                          {due && <StatusBadge level={level} label={due.level === 'over' ? 'Overdue' : due.level === 'due' ? 'Due soon' : 'OK'} />}
+                          <View style={s.scheduleButtons}>
+                            {isAdmin && (
+                              <Button
+                                label={sc.form_schema ? 'Edit form' : 'Build form'}
+                                variant="secondary"
+                                onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/maintenance/[scheduleId]/form-builder', params: { assetId, scheduleId: sc.id } })}
+                              />
+                            )}
+                            <Button
+                              label="Mark as done"
+                              variant="secondary"
+                              loading={markingId === sc.id}
+                              onPress={() =>
+                                sc.form_schema?.fields?.length
+                                  ? router.push({ pathname: '/dashboard/asset/[assetId]/maintenance/[scheduleId]/complete', params: { assetId, scheduleId: sc.id } })
+                                  : markDone(sc)
+                              }
+                            />
+                          </View>
+                        </View>
+                      </View>
                     </View>
+                  );
+                })}
+              </GroupedCard>
+            )}
+      </View>
+
+      {isAdmin && (
+        <>
+          <View style={s.section}>
+            <SectionLabel>Schedule a task</SectionLabel>
+            <GroupedCard>
+              <FieldRow label="Task name" displayValue={task}>
+                <TextInput value={task} onChangeText={setTask} placeholder="Weekly inspection"
+                  autoCapitalize="sentences" placeholderTextColor={t.color.textMuted} style={s.input} />
+              </FieldRow>
+              <FieldRow label="Starts" displayValue={dueDate} last>
+                <DateField value={dueDate} onChange={setDueDate} placeholder="Select date" />
+              </FieldRow>
+            </GroupedCard>
+          </View>
+
+          <View style={s.section}>
+            <SectionLabel>Repeat</SectionLabel>
+            <GroupedCard>
+              <View style={s.groupPad}>
+                <View style={s.intervalPills}>
+                  {INTERVALS.map((iv) => <Pill key={iv} label={iv} active={intervalType === iv} onPress={() => setIntervalType(iv)} />)}
+                </View>
+                {intervalType === 'Day' && (
+                  <View style={s.addAlertRow}>
+                    <Text variant="label" muted style={s.flex1}>Custom interval (days)</Text>
+                    <Stepper value={Number(intervalValue) || 1} onChange={(v) => setIntervalValue(String(v))} min={1} />
                   </View>
                 )}
-                {!!sc.task_notes && <Text variant="small" muted>{sc.task_notes}</Text>}
-                {sc.document_urls?.length > 0 && (
-                  <View style={s.docRow}>
-                    {sc.document_urls.map((url, i) => (
-                      <Pressable key={i} onPress={() => { if (Platform.OS === 'web') window.open(url, '_blank'); }} accessibilityRole="link" style={s.docChip}>
-                        <Ionicons name="document-outline" size={12} color={t.color.primary} />
-                        <Text variant="small" color={t.color.primary} numberOfLines={1} style={s.docName}>{url.split('/').pop()}</Text>
+              </View>
+            </GroupedCard>
+          </View>
+
+          <View style={s.section}>
+            <SectionLabel>Alerts</SectionLabel>
+            <GroupedCard>
+              <View style={s.groupPad}>
+                {alerts.length > 0 && (
+                  <View style={s.alertRow}>
+                    {alerts.map((a, i) => (
+                      <Pressable key={i} onPress={() => removeAlert(i)} accessibilityRole="button"
+                        accessibilityLabel={`Remove ${a.value} ${a.unit} alert`} style={s.alertBadge}>
+                        <Text variant="small">{a.value} {a.unit} before</Text>
+                        <Text variant="small" muted>✕</Text>
                       </Pressable>
                     ))}
                   </View>
                 )}
-              </View>
-              <View style={s.scheduleActions}>
-                {due && <StatusBadge level={level} label={due.level === 'over' ? 'Overdue' : due.level === 'due' ? 'Due soon' : 'OK'} />}
-                <View style={s.scheduleButtons}>
-                  {isAdmin && (
-                    <Button
-                      label={sc.form_schema ? 'Edit form' : 'Build form'}
-                      variant="secondary"
-                      onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/maintenance/[scheduleId]/form-builder', params: { assetId, scheduleId: sc.id } })}
-                    />
-                  )}
-                  <Button
-                    label="Mark as done"
-                    variant="secondary"
-                    loading={markingId === sc.id}
-                    onPress={() =>
-                      sc.form_schema?.fields?.length
-                        ? router.push({ pathname: '/dashboard/asset/[assetId]/maintenance/[scheduleId]/complete', params: { assetId, scheduleId: sc.id } })
-                        : markDone(sc)
-                    }
-                  />
-                </View>
-              </View>
-            </View>
-          );
-        })}
-      </Card>
-
-      {isAdmin && (
-        <>
-          <Card>
-            <Text variant="heading">Schedule a task</Text>
-            <TextField label="Asset name" value={task} onChangeText={setTask} placeholder="Weekly inspection" autoCapitalize="sentences" />
-
-            <View style={s.section}>
-              <Text variant="label" muted>Repeat every *</Text>
-              <View style={s.intervalPills}>
-                {INTERVALS.map((iv) => <Pill key={iv} label={iv} active={intervalType === iv} onPress={() => setIntervalType(iv)} />)}
-              </View>
-              {intervalType === 'Day' && (
                 <View style={s.addAlertRow}>
-                  <Text variant="label" muted style={s.flex1}>Custom interval (days)</Text>
-                  <Stepper value={Number(intervalValue) || 1} onChange={(v) => setIntervalValue(String(v))} min={1} />
+                  <Text variant="label" muted style={s.flex1}>Days before due</Text>
+                  <Stepper value={Number(aVal) || 1} onChange={(v) => setAVal(String(v))} min={1} />
                 </View>
-              )}
-            </View>
-
-            <DateField label="Starts *" value={dueDate} onChange={setDueDate} placeholder="Select date" />
-
-            <View style={s.section}>
-              <Text variant="label" muted>Alerts</Text>
-              {alerts.length > 0 && (
-                <View style={s.alertRow}>
-                  {alerts.map((a, i) => (
-                    <Pressable key={i} onPress={() => removeAlert(i)} accessibilityRole="button"
-                      accessibilityLabel={`Remove ${a.value} ${a.unit} alert`} style={s.alertBadge}>
-                      <Text variant="small">{a.value} {a.unit} before</Text>
-                      <Text variant="small" muted>✕</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
-              <View style={s.addAlertRow}>
-                <Text variant="label" muted style={s.flex1}>Days before due</Text>
-                <Stepper value={Number(aVal) || 1} onChange={(v) => setAVal(String(v))} min={1} />
+                <Button label="+ Add alert" variant="ghost" onPress={addAlert} />
+                <Toggle value={notifyManager} onChange={setNotifyManager} label="Also notify manager" />
               </View>
-              <Button label="+ Add alert condition" variant="ghost" onPress={addAlert} />
-              <Toggle value={notifyManager} onChange={setNotifyManager} label="Also notify manager" />
-            </View>
-          </Card>
+            </GroupedCard>
+          </View>
 
-          <Card>
-            <Text variant="heading">Documents</Text>
-            {docUrls.map((url, i) => (
-              <View key={i} style={s.docEntry}>
-                <Ionicons name="document-outline" size={18} color={t.color.primary} />
-                <Text variant="small" numberOfLines={1} style={s.flex1}>{url.split('/').pop()}</Text>
-                <Pressable onPress={() => setDocUrls((prev) => prev.filter((_, x) => x !== i))}
-                  accessibilityRole="button" accessibilityLabel="Remove document">
-                  <Ionicons name="close" size={18} color={t.color.textMuted} />
+          <View style={s.section}>
+            <SectionLabel>Documents</SectionLabel>
+            <GroupedCard>
+              <View style={s.groupPad}>
+                {docUrls.map((url, i) => (
+                  <View key={i} style={s.docEntry}>
+                    <Ionicons name="document-outline" size={18} color={t.color.primary} />
+                    <Text variant="small" numberOfLines={1} style={s.flex1}>{url.split('/').pop()}</Text>
+                    <Pressable onPress={() => setDocUrls((prev) => prev.filter((_, x) => x !== i))}
+                      accessibilityRole="button" accessibilityLabel="Remove document">
+                      <Ionicons name="close" size={18} color={t.color.textMuted} />
+                    </Pressable>
+                  </View>
+                ))}
+                <Pressable onPress={pickDocument} style={s.dropZone} accessibilityRole="button" disabled={uploading}>
+                  <Ionicons name="cloud-upload-outline" size={28} color={t.color.textMuted} />
+                  <View style={s.alertRow}>
+                    <Text variant="small" muted>Drop photos or</Text>
+                    <Text variant="small" color={t.color.primary}>{uploading ? 'Uploading…' : 'browse'}</Text>
+                  </View>
                 </Pressable>
               </View>
-            ))}
-            <Pressable onPress={pickDocument} style={s.dropZone} accessibilityRole="button"
-              disabled={uploading}>
-              <Ionicons name="cloud-upload-outline" size={28} color={t.color.textMuted} />
-              <View style={s.alertRow}>
-                <Text variant="small" muted>Drop photos or</Text>
-                <Text variant="small" color={t.color.primary}>{uploading ? 'Uploading…' : 'browse'}</Text>
-              </View>
-            </Pressable>
-          </Card>
+            </GroupedCard>
+          </View>
 
           <View style={s.taskDetailsRow}>
             <Button label="Build form" variant="secondary" onPress={addScheduleAndBuildForm} loading={busy} style={s.flex1} />

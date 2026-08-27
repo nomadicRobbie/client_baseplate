@@ -8,7 +8,7 @@ import { getAccessToken } from '@/lib/session';
 import { listPeople, createPerson, listAssetAssignments, listAssetTypes, upsertAssetAssignment, deleteAssetAssignment } from '@/lib/api';
 import { loadAsset } from '@/lib/asset-sync';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Button, Row, TextField } from '@/ui/components';
+import { Screen, Text, Card, GroupedCard, GRow, SectionLabel, Button, TextField } from '@/ui/components';
 
 type Msg = { text: string; tone: 'success' | 'error' | 'info' };
 type ThemeT = ReturnType<typeof useTheme>;
@@ -108,35 +108,36 @@ export default function AssetCrew() {
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
         <Text variant="label" color={t.color.primary}>{asset?.name ?? 'Asset'}</Text>
       </Pressable>
-      <Text variant="title">Assigned people</Text>
-
-      <Card>
-        <Text variant="heading">Currently assigned</Text>
+      <View style={{ gap: 8 }}>
+        <SectionLabel right={assignedPeople.length > 0 ? <Text variant="small" muted>{assignedPeople.length}</Text> : undefined}>Assigned</SectionLabel>
         {assignedPeople.length === 0
-          ? <Text muted>No one assigned yet.</Text>
-          : assignedPeople.map(({ assignment: a, person: p }) => (
-            <View key={a.id} style={s.personItem}>
-              <View style={s.personRow}>
-                <Ionicons name="person-outline" size={18} color={t.color.textMuted} />
-                <View style={s.personInfo}>
-                  <Text>{p?.name ?? 'Unknown'}</Text>
-                  {!!a.role && <Text variant="small" muted>{a.role}</Text>}
-                </View>
-                {isAdmin && (
-                  <Pressable onPress={() => remove(a.id)} accessibilityRole="button" accessibilityLabel="Remove">
-                    <Ionicons name="close-circle-outline" size={20} color={t.color.textMuted} />
-                  </Pressable>
-                )}
-              </View>
-            </View>
-          ))}
-      </Card>
+          ? <Text muted style={{ paddingHorizontal: 4 }}>No one assigned yet.</Text>
+          : (
+            <GroupedCard>
+              {assignedPeople.map(({ assignment: a, person: p }, i) => (
+                <GRow key={a.id} last={i === assignedPeople.length - 1}>
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="person-outline" size={18} color={t.color.textMuted} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text variant="label">{p?.name ?? 'Unknown'}</Text>
+                    {!!a.role && <Text variant="small" muted>{a.role}</Text>}
+                  </View>
+                  {isAdmin && (
+                    <Pressable onPress={() => remove(a.id)} accessibilityRole="button" accessibilityLabel="Remove" hitSlop={8}>
+                      <Ionicons name="close-circle-outline" size={20} color={t.color.textMuted} />
+                    </Pressable>
+                  )}
+                </GRow>
+              ))}
+            </GroupedCard>
+          )}
+      </View>
 
-      {/* Add from roster — admins only */}
       {isAdmin && (
-        <Card>
-          <Text variant="heading">Add from roster</Text>
-          <>
+        <View style={{ gap: 8 }}>
+          <SectionLabel>Add from roster</SectionLabel>
+          <Card>
             <Text variant="label" muted>Role</Text>
             <View style={s.roleRow}>
               {(assetType?.roles.length ? assetType.roles : FALLBACK_ROLES).map((r) => (
@@ -156,23 +157,23 @@ export default function AssetCrew() {
               unassigned.length === 0
                 ? <Text variant="small" muted>Everyone on the roster is already assigned.</Text>
                 : unassigned.map((p) => (
-                  <Row key={p.id} onPress={() => setPickedId(pickedId === p.id ? null : p.id)}>
+                  <GRow key={p.id} onPress={() => setPickedId(pickedId === p.id ? null : p.id)}>
                     <Ionicons
                       name={pickedId === p.id ? 'checkmark-circle' : 'ellipse-outline'}
                       size={20}
                       color={pickedId === p.id ? t.color.primary : t.color.textMuted}
                     />
-                    <View style={s.personInfo}>
-                      <Text>{p.name}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text variant="label">{p.name}</Text>
                       {!!p.email && <Text variant="small" muted>{p.email}</Text>}
                     </View>
-                  </Row>
+                  </GRow>
                 ))
             )}
 
             <Button label="Assign" onPress={addCrew} loading={busy} style={s.assignBtn} />
-          </>
-        </Card>
+          </Card>
+        </View>
       )}
 
     </Screen>

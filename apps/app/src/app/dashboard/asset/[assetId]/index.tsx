@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -14,21 +14,11 @@ import { syncAssetOutbox, loadAsset } from '@/lib/asset-sync';
 import { formatDMY } from '@/lib/format';
 import { useOnReconnect } from '@/lib/use-reconnect';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Button, Row, TextField } from '@/ui/components';
-import { ParticularsForm } from '@/ui/asset';
+import { Screen, Text, Card, GroupedCard, GRow, SectionLabel, Button, TextField } from '@/ui/components';
+import { ParticularsForm, assetTypeIcon } from '@/ui/asset';
 import { StatusBadge, OfflineBanner, PendingSyncBanner, type StatusLevel } from '@/ui/status';
 
 type ThemeT = ReturnType<typeof useTheme>;
-type AssetTab = 'overview' | 'sections';
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
-function assetTypeIcon(typeName: string | null | undefined): IoniconName {
-  const n = (typeName ?? '').toLowerCase();
-  if (n.includes('vessel') || n.includes('boat') || n.includes('ship') || n.includes('marine')) return 'boat-outline';
-  if (n.includes('vehicle') || n.includes('car') || n.includes('truck') || n.includes('van')) return 'car-outline';
-  if (n.includes('facilit') || n.includes('building') || n.includes('site')) return 'business-outline';
-  if (n.includes('hardware') || n.includes('computer') || n.includes('server') || n.includes('network')) return 'desktop-outline';
-  return 'cube-outline';
-}
 const makeStyles = (t: ThemeT) => ({
   stat: { flex: 1, alignItems: 'center' as const, gap: 2 },
   buttonGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
@@ -42,11 +32,10 @@ const makeStyles = (t: ThemeT) => ({
   upcomingItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.md, paddingVertical: t.space.sm },
   upcomingInfo: { flex: 1 },
   sectionRow: { flex: 1 },
+  headerRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.md },
+  headerText: { flex: 1, gap: 2 },
   dangerCard: { borderWidth: 1, borderColor: t.color.danger, borderRadius: t.radius.md, padding: t.space.md, gap: t.space.md },
   dangerHeading: { color: t.color.danger, fontWeight: '700' as const, fontSize: 16 },
-  seg: { flexDirection: 'row' as const, backgroundColor: t.color.surfaceAlt, borderRadius: t.radius.md, padding: 3, marginBottom: t.space.sm },
-  segBtn: { flex: 1, paddingVertical: t.space.sm, borderRadius: t.radius.sm, alignItems: 'center' as const },
-  segBtnOn: { backgroundColor: t.color.surface },
 });
 
 const tok = () => getAccessToken()!;
@@ -59,7 +48,6 @@ export default function AssetHome() {
   const { features, user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'super';
 
-  const [assetTab, setAssetTab] = useState<AssetTab>('overview');
   const [asset, setAsset] = useState<Asset | null>(null);
   const [faults, setFaults] = useState<AssetFault[]>([]);
   const [upcoming, setUpcoming] = useState<AssetUpcomingItem[]>([]);
@@ -164,265 +152,224 @@ export default function AssetHome() {
     }
   };
 
-  const Stat = ({ n, label, danger }: { n: number; label: string; danger?: boolean }) => (
-    <View style={s.stat}>
-      <Text style={[s.statNum, { color: danger && n > 0 ? t.color.danger : t.color.primary }]}>{n}</Text>
-      <Text variant="small" muted>{label}</Text>
-    </View>
-  );
-
   return (
     <Screen>
       <Pressable onPress={() => router.push('/dashboard/asset')} accessibilityRole="button" style={s.backBtn}>
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
         <Text variant="label" color={t.color.primary}>Assets</Text>
       </Pressable>
-      <Pressable onPress={() => void pickIcon()} disabled={!isAdmin || uploadingIcon} accessibilityRole="button" accessibilityLabel="Change asset icon" style={{ alignSelf: 'flex-start' }}>
-        {asset?.image_url
-          ? <Image source={{ uri: asset.image_url }} style={{ width: 64, height: 64, borderRadius: 12 }} contentFit="cover" />
-          : <View style={{ width: 64, height: 64, borderRadius: 12, backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name={assetTypeIcon(assetType?.name)} size={32} color={t.color.textMuted} />
+
+      <View style={s.headerRow}>
+        <Pressable onPress={() => void pickIcon()} disabled={!isAdmin || uploadingIcon} accessibilityRole="button" accessibilityLabel="Change asset icon">
+          {asset?.image_url
+            ? <Image source={{ uri: asset.image_url }} style={{ width: 56, height: 56, borderRadius: 12 }} contentFit="cover" />
+            : <View style={{ width: 56, height: 56, borderRadius: 12, backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name={assetTypeIcon(assetType?.name)} size={28} color={t.color.textMuted} />
+              </View>
+          }
+          {isAdmin && (
+            <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: t.color.primary, borderRadius: 10, padding: 3 }}>
+              <Ionicons name={uploadingIcon ? 'hourglass-outline' : 'camera-outline'} size={12} color={t.color.primaryText} />
             </View>
-        }
-        {isAdmin && (
-          <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: t.color.primary, borderRadius: 10, padding: 3 }}>
-            <Ionicons name={uploadingIcon ? 'hourglass-outline' : 'camera-outline'} size={12} color={t.color.primaryText} />
-          </View>
-        )}
-      </Pressable>
-      <Text variant="title">{asset?.name ?? 'Asset'}</Text>
-      <Text variant="small" muted>
-        {[asset?.location, asset?.condition].filter(Boolean).join(' · ') || 'No details yet'}
-      </Text>
+          )}
+        </Pressable>
+        <View style={s.headerText}>
+          <Text variant="title">{asset?.name ?? 'Asset'}</Text>
+          <Text variant="small" muted>
+            {[asset?.location, asset?.condition].filter(Boolean).join(' · ') || 'No details yet'}
+          </Text>
+        </View>
+      </View>
 
       <OfflineBanner offline={offline} />
       <PendingSyncBanner count={pending} onSync={() => void doSync()} busy={false} />
 
-      <View style={s.seg}>
-        <Pressable style={[s.segBtn, assetTab === 'overview' && s.segBtnOn]} onPress={() => setAssetTab('overview')} accessibilityRole="button" accessibilityState={{ selected: assetTab === 'overview' }}>
-          <Text variant="label" color={assetTab === 'overview' ? t.color.primary : t.color.textMuted}>Overview</Text>
-        </Pressable>
-        <Pressable style={[s.segBtn, assetTab === 'sections' && s.segBtnOn]} onPress={() => setAssetTab('sections')} accessibilityRole="button" accessibilityState={{ selected: assetTab === 'sections' }}>
-          <Text variant="label" color={assetTab === 'sections' ? t.color.primary : t.color.textMuted}>Sections</Text>
-        </Pressable>
+      <View style={{ gap: 8 }}>
+        <SectionLabel>Actions</SectionLabel>
+        <GroupedCard>
+          <GRow onPress={goFaults}>
+            <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: openFaults > 0 ? t.color.dangerMuted : t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="alert-circle-outline" size={18} color={openFaults > 0 ? t.color.danger : t.color.text} />
+            </View>
+            <Text variant="label" style={{ flex: 1 }}>Faults</Text>
+            {openFaults > 0 && <Text variant="label" color={t.color.danger}>{openFaults}</Text>}
+            <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
+          </GRow>
+          <GRow onPress={goMaint}>
+            <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: overdue > 0 ? t.color.dangerMuted : t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="construct-outline" size={18} color={overdue > 0 ? t.color.danger : t.color.text} />
+            </View>
+            <Text variant="label" style={{ flex: 1 }}>Maintenance</Text>
+            {(overdue > 0 || dueSoon > 0) && (
+              <Text variant="label" color={overdue > 0 ? t.color.danger : t.color.primary}>{overdue > 0 ? `${overdue} overdue` : `${dueSoon} due`}</Text>
+            )}
+            <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
+          </GRow>
+          <GRow onPress={goCrew}>
+            <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="people-outline" size={18} color={t.color.text} />
+            </View>
+            <Text variant="label" style={{ flex: 1 }}>Assignees</Text>
+            <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
+          </GRow>
+          <GRow onPress={goComponents} last>
+            <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="hardware-chip-outline" size={18} color={t.color.text} />
+            </View>
+            <Text variant="label" style={{ flex: 1 }}>Components</Text>
+            <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
+          </GRow>
+        </GroupedCard>
       </View>
 
-      {assetTab === 'overview' && (
-        <>
-          <Card>
-            <View style={s.statsRow}>
-              <Stat n={openFaults} label="Open faults" danger />
-              <Stat n={dueSoon} label="Due soon" />
-              <Stat n={overdue} label="Overdue" danger />
-            </View>
-          </Card>
-
-          <View style={s.buttonGrid}>
-            <View style={s.buttonCell}>
-              <Button label="Faults" icon="alert-circle-outline" onPress={goFaults} />
-            </View>
-            <View style={s.buttonCell}>
-              <Button label="Maintenance" icon="construct-outline" onPress={goMaint} />
-            </View>
-            <View style={s.buttonCell}>
-              <Button label="Assignees" icon="people-outline" onPress={goCrew} />
-            </View>
-            <View style={s.buttonCell}>
-              <Button label="Components" icon="hardware-chip-outline" onPress={goComponents} />
-            </View>
-          </View>
-
-          {/* Food Control Plan — only when both asset and compliance modules are active */}
-          {features?.compliance && (
-            <>
-              <Text variant="heading">Food Control Plan</Text>
-              <Card>
-                {asset?.food_control_plan_id ? (() => {
-                  const plan = plans.find((p) => p.id === asset.food_control_plan_id);
-                  return assigningPlan ? null : (
-                    <Row onPress={() => router.push('/dashboard/compliance')}>
-                      <Ionicons name="clipboard-outline" size={22} color={t.color.text} />
-                      <View style={s.sectionRow}>
-                        <Text>{plan?.name ?? 'Control plan'}</Text>
-                        <Text variant="small" muted>{plan ? `Tier: ${plan.tier}` : 'Loading…'} · Open compliance</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
-                    </Row>
-                  );
-                })() : (
-                  !assigningPlan && <Text muted>No control plan assigned to this asset.</Text>
-                )}
-
-                {assigningPlan ? (
-                  <>
-                    <Text variant="label" muted>Select a plan</Text>
-                    {plans.length === 0
-                      ? <Text variant="small" muted>No plans yet — create one in Food Compliance.</Text>
-                      : plans.map((p) => (
-                        <Pressable key={p.id} onPress={() => void assignPlan(p.id)} disabled={savingPlan}
-                          style={{ paddingVertical: t.space.sm, flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
-                          <Ionicons name={asset?.food_control_plan_id === p.id ? 'radio-button-on' : 'radio-button-off'} size={20} color={t.color.primary} />
-                          <View>
-                            <Text>{p.name}</Text>
-                            <Text variant="small" muted>Tier: {p.tier}</Text>
-                          </View>
-                        </Pressable>
-                      ))
-                    }
-                    {asset?.food_control_plan_id && (
-                      <Button label="Unassign plan" variant="ghost" onPress={() => void assignPlan(null)} loading={savingPlan} />
-                    )}
-                    <Button label="Cancel" variant="ghost" onPress={() => setAssigningPlan(false)} />
-                  </>
-                ) : isAdmin && (
-                  <Button
-                    label={asset?.food_control_plan_id ? 'Change plan' : 'Assign a control plan'}
-                    variant="ghost"
-                    onPress={() => setAssigningPlan(true)}
-                    style={{ marginTop: t.space.sm }}
-                  />
-                )}
-              </Card>
-            </>
-          )}
-
-          <Text variant="heading">Coming up</Text>
-          {loading ? <Card><Text muted>Loading…</Text></Card>
-            : coming.length === 0 ? (
-              <Card><Text muted>Nothing due right now.</Text></Card>
-            ) : (
-              <Card>
-                {coming.map((u) => {
-                  const level: StatusLevel = u.level === 'over' ? 'over' : u.level === 'due' ? 'due' : 'ok';
-                  return (
-                    <Pressable key={u.id} onPress={goMaint} accessibilityRole="button" style={s.upcomingItem}>
-                      <Ionicons name="construct-outline" size={20} color={t.color.textMuted} />
-                      <View style={s.upcomingInfo}>
-                        <Text>{u.title}</Text>
-                        {!!u.due_date && <Text variant="small" muted>Due {formatDMY(u.due_date)}</Text>}
-                      </View>
-                      <StatusBadge level={level} label={u.level === 'over' ? 'Overdue' : 'Due soon'} />
-                    </Pressable>
-                  );
-                })}
-              </Card>
-            )}
-
-          {isAdmin && (
-            <>
-              <Text variant="heading">Details</Text>
-              <Card>
-                {!editingDetails ? (
-                  <>
-                    <View style={s.detailRow}>
-                      <Text variant="small" muted>Name</Text>
-                      <Text variant="small">{asset?.name ?? '—'}</Text>
-                    </View>
-                    {assetType?.fields.map((f) => {
-                      const v = asset?.particulars?.[f.key];
-                      const label = f.unit ? `${f.label} (${f.unit})` : f.label;
-                      return (
-                        <View key={f.key} style={s.detailRow}>
-                          <Text variant="small" muted>{label}</Text>
-                          <Text variant="small">{v || '—'}</Text>
-                        </View>
-                      );
-                    })}
-                    <Button
-                      label="Edit"
-                      variant="ghost"
-                      onPress={() => {
-                        setDraftName(asset?.name ?? '');
-                        setDraftParticulars({ ...(asset?.particulars as Record<string, string> ?? {}) });
-                        setEditingDetails(true);
-                      }}
-                      style={s.editDetailBtn}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <TextField label="Name" value={draftName} onChangeText={setDraftName} autoCapitalize="sentences" />
-                    {assetType && <ParticularsForm fields={assetType.fields} value={draftParticulars} onChange={setDraftParticulars} />}
-                    <Button label="Save" onPress={saveDetails} loading={savingDetails} />
-                    <Button label="Cancel" variant="ghost" onPress={() => setEditingDetails(false)} />
-                  </>
-                )}
-              </Card>
-            </>
-          )}
-        </>
+      {!loading && coming.length > 0 && (
+        <View style={{ gap: 8 }}>
+          <SectionLabel>Coming up</SectionLabel>
+          <GroupedCard>
+            {coming.map((u, i) => {
+              const level: StatusLevel = u.level === 'over' ? 'over' : u.level === 'due' ? 'due' : 'ok';
+              return (
+                <GRow key={u.id} onPress={goMaint} last={i === coming.length - 1}>
+                  <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="construct-outline" size={18} color={t.color.textMuted} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text variant="label">{u.title}</Text>
+                    {!!u.due_date && <Text variant="small" muted>Due {formatDMY(u.due_date)}</Text>}
+                  </View>
+                  <StatusBadge level={level} label={u.level === 'over' ? 'Overdue' : 'Due soon'} />
+                </GRow>
+              );
+            })}
+          </GroupedCard>
+        </View>
       )}
 
-      {assetTab === 'sections' && (
-        <>
-          <Card>
-            <Row onPress={goFaults}>
-              <Ionicons name="alert-circle-outline" size={22} color={t.color.text} />
-              <View style={s.sectionRow}>
-                <Text>Faults</Text>
-                <Text variant="small" muted>{openFaults ? `${openFaults} open` : 'Log and resolve defects'}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
-            </Row>
-            <Row onPress={goMaint}>
-              <Ionicons name="construct-outline" size={22} color={t.color.text} />
-              <View style={s.sectionRow}>
-                <Text>Maintenance</Text>
-                <Text variant="small" muted>{overdue + dueSoon ? `${overdue + dueSoon} due` : 'Scheduled work and history'}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
-            </Row>
-            <Row onPress={goCrew}>
-              <Ionicons name="people-outline" size={22} color={t.color.text} />
-              <View style={s.sectionRow}>
-                <Text>Crew</Text>
-                <Text variant="small" muted>Assigned crew and roles</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
-            </Row>
-            <Row onPress={goComponents}>
-              <Ionicons name="hardware-chip-outline" size={22} color={t.color.text} />
-              <View style={s.sectionRow}>
-                <Text>Components</Text>
-                <Text variant="small" muted>Sub-systems and parts</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
-            </Row>
-          </Card>
-
-          {isAdmin && (
-            <View style={s.dangerCard}>
-              <Text style={s.dangerHeading}>Danger zone</Text>
-              {!showDelete ? (
-                <Button label="Delete this asset" variant="danger" onPress={() => setShowDelete(true)} />
-              ) : (
-                <>
-                  <Text variant="small" muted>
-                    This is permanent and cannot be undone. All associated faults, maintenance records, and schedules will be archived with it.
-                  </Text>
-                  <Text variant="small" muted>
-                    Type <Text variant="small" style={s.boldText}>{asset?.name ?? '…'}</Text> to confirm.
-                  </Text>
-                  <TextField
-                    label="Confirm asset name"
-                    value={deleteConfirm}
-                    onChangeText={setDeleteConfirm}
-                    placeholder={asset?.name ?? ''}
-                    autoCapitalize="none"
-                  />
-                  <Button
-                    label={deleting ? 'Deleting…' : 'Confirm delete'}
-                    variant="danger"
-                    onPress={handleDelete}
-                    loading={deleting}
-                    disabled={deleteConfirm !== asset?.name}
-                  />
-                  <Button label="Cancel" variant="ghost" onPress={() => { setShowDelete(false); setDeleteConfirm(''); }} />
-                </>
-              )}
-            </View>
+      {isAdmin && (
+        <View style={{ gap: 8 }}>
+          <SectionLabel right={
+            !editingDetails
+              ? <Pressable onPress={() => { setDraftName(asset?.name ?? ''); setDraftParticulars({ ...(asset?.particulars as Record<string, string> ?? {}) }); setEditingDetails(true); }} accessibilityRole="button">
+                  <Text variant="small" color={t.color.primary}>Edit</Text>
+                </Pressable>
+              : undefined
+          }>Details</SectionLabel>
+          {!editingDetails ? (
+            <GroupedCard>
+              <GRow>
+                <Text variant="label" style={{ flex: 1 }}>Name</Text>
+                <Text variant="body" muted numberOfLines={1}>{asset?.name ?? '—'}</Text>
+              </GRow>
+              {assetType?.fields.map((f, i) => {
+                const v = asset?.particulars?.[f.key];
+                const label = f.unit ? `${f.label} (${f.unit})` : f.label;
+                return (
+                  <GRow key={f.key} last={i === (assetType.fields.length - 1)}>
+                    <Text variant="label" style={{ flex: 1 }}>{label}</Text>
+                    <Text variant="body" muted numberOfLines={1}>{v || '—'}</Text>
+                  </GRow>
+                );
+              })}
+              {(!assetType?.fields.length) && <GRow last><Text variant="label" style={{ flex: 1 }}>Name</Text><Text variant="body" muted>{asset?.name ?? '—'}</Text></GRow>}
+            </GroupedCard>
+          ) : (
+            <Card>
+              <TextField label="Name" value={draftName} onChangeText={setDraftName} autoCapitalize="sentences" />
+              {assetType && <ParticularsForm fields={assetType.fields} value={draftParticulars} onChange={setDraftParticulars} />}
+              <Button label="Save" onPress={saveDetails} loading={savingDetails} />
+              <Button label="Cancel" variant="ghost" onPress={() => setEditingDetails(false)} />
+            </Card>
           )}
-        </>
+        </View>
+      )}
+
+      {features?.compliance && (
+        <View style={{ gap: 8 }}>
+          <SectionLabel>Food Control Plan</SectionLabel>
+          <GroupedCard>
+            {asset?.food_control_plan_id ? (() => {
+              const plan = plans.find((p) => p.id === asset.food_control_plan_id);
+              return assigningPlan ? null : (
+                <GRow onPress={() => router.push('/dashboard/compliance')} last={!isAdmin}>
+                  <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="clipboard-outline" size={18} color={t.color.text} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text variant="label">{plan?.name ?? 'Control plan'}</Text>
+                    <Text variant="small" muted>{plan ? `Tier: ${plan.tier}` : 'Loading…'}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
+                </GRow>
+              );
+            })() : (
+              !assigningPlan && <GRow last={!isAdmin}><Text variant="body" muted>No control plan assigned.</Text></GRow>
+            )}
+
+            {assigningPlan ? (
+              <>
+                <Text variant="label" muted>Select a plan</Text>
+                {plans.length === 0
+                  ? <Text variant="small" muted>No plans yet — create one in Food Compliance.</Text>
+                  : plans.map((p) => (
+                    <Pressable key={p.id} onPress={() => void assignPlan(p.id)} disabled={savingPlan}
+                      style={{ paddingVertical: t.space.sm, flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>
+                      <Ionicons name={asset?.food_control_plan_id === p.id ? 'radio-button-on' : 'radio-button-off'} size={20} color={t.color.primary} />
+                      <View>
+                        <Text>{p.name}</Text>
+                        <Text variant="small" muted>Tier: {p.tier}</Text>
+                      </View>
+                    </Pressable>
+                  ))
+                }
+                {asset?.food_control_plan_id && (
+                  <Button label="Unassign plan" variant="ghost" onPress={() => void assignPlan(null)} loading={savingPlan} />
+                )}
+                <Button label="Cancel" variant="ghost" onPress={() => setAssigningPlan(false)} />
+              </>
+            ) : isAdmin && (
+              <GRow onPress={() => setAssigningPlan(true)} last>
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="add" size={18} color={t.color.text} />
+                </View>
+                <Text variant="label" style={{ flex: 1 }}>{asset?.food_control_plan_id ? 'Change plan' : 'Assign a control plan'}</Text>
+                <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
+              </GRow>
+            )}
+          </GroupedCard>
+        </View>
+      )}
+
+      {isAdmin && (
+        <View style={s.dangerCard}>
+          <Text style={s.dangerHeading}>Danger zone</Text>
+          {!showDelete ? (
+            <Button label="Delete this asset" variant="danger" onPress={() => setShowDelete(true)} />
+          ) : (
+            <>
+              <Text variant="small" muted>
+                This is permanent and cannot be undone. All associated faults, maintenance records, and schedules will be archived with it.
+              </Text>
+              <Text variant="small" muted>
+                Type <Text variant="small" style={s.boldText}>{asset?.name ?? '…'}</Text> to confirm.
+              </Text>
+              <TextField
+                label="Confirm asset name"
+                value={deleteConfirm}
+                onChangeText={setDeleteConfirm}
+                placeholder={asset?.name ?? ''}
+                autoCapitalize="none"
+              />
+              <Button
+                label={deleting ? 'Deleting…' : 'Confirm delete'}
+                variant="danger"
+                onPress={handleDelete}
+                loading={deleting}
+                disabled={deleteConfirm !== asset?.name}
+              />
+              <Button label="Cancel" variant="ghost" onPress={() => { setShowDelete(false); setDeleteConfirm(''); }} />
+            </>
+          )}
+        </View>
       )}
     </Screen>
   );

@@ -3,6 +3,7 @@ import ColorPicker, { Panel5 } from 'reanimated-color-picker';
 export type ColorWheelProps = {
   h: number; s: number; v: number;
   onChange: (h: number, s: number) => void;
+  size?: number;
 };
 
 function hsv2hex(h: number, s: number, v: number): string {
@@ -23,21 +24,20 @@ function hex2hs(hex: string): { h: number; s: number } {
   return { h: (h + 360) % 360, s: mx ? d / mx : 0 };
 }
 
-const SIZE = 216;
-
-export function ColorWheel({ h, s, v, onChange }: ColorWheelProps) {
+export function ColorWheel({ h, s, v, onChange, size = 216 }: ColorWheelProps) {
   return (
     <ColorPicker
       value={hsv2hex(h, s, v)}
       thumbAnimationDuration={0}
       thumbSize={24}
       adaptSpectrum
+      style={{ width: size, height: size }}
       onChangeJS={(colors) => {
         const { h: nh, s: ns } = hex2hs(colors.hex);
         onChange(nh, ns);
       }}
     >
-      <Panel5 style={{ width: SIZE, height: SIZE }} />
+      <Panel5 style={{ width: size, height: size }} />
     </ColorPicker>
   );
 }

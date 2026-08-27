@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
 import { listPlans, createPlan, updatePlan, duplicatePlan, uploadPlanImage } from '@/lib/api';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Button, Row, Notice, Badge, Pill } from '@/ui/components';
+import { Screen, Text, Card, GroupedCard, GRow, SectionLabel, Button, Notice, Badge, Pill } from '@/ui/components';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' | 'info' } | null;
@@ -102,64 +102,82 @@ export default function CompliancePlans() {
 
   return (
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
-      <Text variant="title">Food Compliance</Text>
-      <Text muted>Select a control plan to begin recording checks.</Text>
-
-      {loading ? (
-        <Card><Text muted>Loading…</Text></Card>
-      ) : plans.length === 0 ? (
-        <Card>
-          <Text muted>
-            {isAdmin ? 'No control plans yet. Create one below.' : 'No control plans set up yet — ask an admin.'}
+      <View style={{ gap: 8 }}>
+        <SectionLabel right={plans.length > 0 ? <Text variant="small" muted>{plans.length}</Text> : undefined}>Control plans</SectionLabel>
+        {loading ? (
+          <Text muted style={{ paddingHorizontal: 4 }}>Loading…</Text>
+        ) : plans.length === 0 ? (
+          <Text muted style={{ paddingHorizontal: 4 }}>
+            {isAdmin ? 'No control plans yet.' : 'No control plans set up yet — ask an admin.'}
           </Text>
-        </Card>
-      ) : (
-        <Card>
-          {plans.map((p) => (
-            <View key={p.id}>
-              <Row onPress={() => router.push({ pathname: '/dashboard/compliance/[planId]', params: { planId: p.id } })}>
-                <Pressable onPress={isAdmin ? () => void pickImage(p.id) : undefined}
-                  accessibilityLabel={isAdmin ? 'Change plan image' : undefined}
-                  style={{ width: 44, height: 44, borderRadius: 8, overflow: 'hidden', backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
-                  {p.asset_image_url ?? p.image_url
-                    ? <Image source={{ uri: (p.asset_image_url ?? p.image_url)! }} style={{ width: 44, height: 44 }} contentFit="cover" />
-                    : <Ionicons name={uploadingId === p.id ? 'hourglass-outline' : 'clipboard-outline'} size={22} color={t.color.textMuted} />}
-                </Pressable>
-                <View style={s.planInfo}>
-                  <Text>{p.name}</Text>
-                  <Text variant="small" muted>Tier: {p.tier}</Text>
+        ) : (
+          <GroupedCard>
+            {plans.map((p, i) => (
+              <View key={p.id} style={{ borderBottomWidth: i === plans.length - 1 && dupId !== p.id ? 0 : 1, borderColor: t.color.border }}>
+                {/* Split nav + admin actions into siblings — no nested pressables */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56 }}>
+                  {isAdmin ? (
+                    <Pressable onPress={() => void pickImage(p.id)} accessibilityLabel="Change plan image"
+                      style={{ width: 56, height: 56, alignItems: 'center', justifyContent: 'center' }}>
+                      <View style={{ width: 36, height: 36, borderRadius: 8, overflow: 'hidden', backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+                        {p.asset_image_url ?? p.image_url
+                          ? <Image source={{ uri: (p.asset_image_url ?? p.image_url)! }} style={{ width: 36, height: 36 }} contentFit="cover" />
+                          : <Ionicons name={uploadingId === p.id ? 'hourglass-outline' : 'clipboard-outline'} size={18} color={t.color.textMuted} />}
+                      </View>
+                    </Pressable>
+                  ) : (
+                    <View style={{ width: 56, height: 56, alignItems: 'center', justifyContent: 'center' }}>
+                      <View style={{ width: 36, height: 36, borderRadius: 8, overflow: 'hidden', backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+                        {p.asset_image_url ?? p.image_url
+                          ? <Image source={{ uri: (p.asset_image_url ?? p.image_url)! }} style={{ width: 36, height: 36 }} contentFit="cover" />
+                          : <Ionicons name="clipboard-outline" size={18} color={t.color.textMuted} />}
+                      </View>
+                    </View>
+                  )}
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/dashboard/compliance/[planId]', params: { planId: p.id } })}
+                    accessibilityRole="button"
+                    style={(state) => {
+                      const { pressed, hovered } = state as { pressed: boolean; hovered?: boolean };
+                      return { flex: 1, paddingVertical: 10, paddingRight: 8, backgroundColor: pressed || hovered ? t.color.surfaceAlt : 'transparent' };
+                    }}
+                  >
+                    <Text variant="label">{p.name}</Text>
+                    <Text variant="small" muted>Tier: {p.tier}</Text>
+                  </Pressable>
+                  {isAdmin && (
+                    <>
+                      <Pressable onPress={() => { setDupId(p.id); setDupName(`${p.name} (copy)`); }} accessibilityLabel="Duplicate plan" hitSlop={8} style={{ padding: 12 }}>
+                        <Ionicons name="copy-outline" size={18} color={t.color.textMuted} />
+                      </Pressable>
+                      <Pressable onPress={() => deactivate(p.id)} accessibilityLabel="Deactivate plan" hitSlop={8} style={{ padding: 12 }}>
+                        <Ionicons name="trash-outline" size={18} color={t.color.danger} />
+                      </Pressable>
+                    </>
+                  )}
+                  <View style={{ paddingRight: 16 }}>
+                    <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
+                  </View>
                 </View>
-                {isAdmin && (
-                  <View style={s.actions}>
-                    <Pressable onPress={() => { setDupId(p.id); setDupName(`${p.name} (copy)`); }} accessibilityLabel="Duplicate plan" hitSlop={8}>
-                      <Ionicons name="copy-outline" size={18} color={t.color.textMuted} />
-                    </Pressable>
-                    <Pressable onPress={() => deactivate(p.id)} accessibilityLabel="Deactivate plan" hitSlop={8}>
-                      <Ionicons name="trash-outline" size={18} color={t.color.danger} />
-                    </Pressable>
+                {dupId === p.id && (
+                  <View style={{ gap: t.space.sm, padding: 16, paddingTop: 0 }}>
+                    <TextInput value={dupName} onChangeText={setDupName} placeholder="Name for the copy" style={s.input} placeholderTextColor={t.color.textMuted} />
+                    <View style={s.rowWrap}>
+                      <Button label="Duplicate" onPress={doDuplicate} loading={busy} style={s.flexGrow1} />
+                      <Button label="Cancel" variant="ghost" onPress={() => { setDupId(null); setDupName(''); }} style={s.flexGrow1} />
+                    </View>
                   </View>
                 )}
-                <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
-              </Row>
-
-              {/* Inline duplicate form — only shown for this card */}
-              {dupId === p.id && (
-                <View style={{ gap: t.space.sm, paddingTop: t.space.sm }}>
-                  <TextInput value={dupName} onChangeText={setDupName} placeholder="Name for the copy" style={s.input} placeholderTextColor={t.color.textMuted} />
-                  <View style={s.rowWrap}>
-                    <Button label="Duplicate" onPress={doDuplicate} loading={busy} style={s.flexGrow1} />
-                    <Button label="Cancel" variant="ghost" onPress={() => { setDupId(null); setDupName(''); }} style={s.flexGrow1} />
-                  </View>
-                </View>
-              )}
-            </View>
-          ))}
-        </Card>
-      )}
+              </View>
+            ))}
+          </GroupedCard>
+        )}
+      </View>
 
       {isAdmin && (creating ? (
-        <Card>
-          <Text variant="heading">New control plan</Text>
+        <View style={{ gap: 8 }}>
+          <SectionLabel>New control plan</SectionLabel>
+          <Card>
           <View style={s.fieldGroup}>
             <Text variant="label" muted>Name *</Text>
             <TextInput value={newName} onChangeText={setNewName} placeholder="Plan name" style={s.input} placeholderTextColor={t.color.textMuted} />
@@ -176,7 +194,8 @@ export default function CompliancePlans() {
             <Button label="Create plan" onPress={create} loading={busy} style={s.flexGrow1} />
             <Button label="Cancel" variant="ghost" onPress={() => { setCreating(false); setNewName(''); }} style={s.flexGrow1} />
           </View>
-        </Card>
+          </Card>
+        </View>
       ) : (
         <Button label="+ New control plan" onPress={() => setCreating(true)} />
       ))}

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import {
   View, Text as RNText, Pressable, TextInput, ScrollView, ActivityIndicator, Animated, Easing,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, StyleSheet,
   type StyleProp, type ViewStyle, type TextStyle, type TextInput as RNTextInput,
   type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native';
@@ -501,6 +501,96 @@ export function Toggle({ value, onChange, label }: {
         <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', marginLeft: value ? 21 : 3, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 }} />
       </View>
     </Pressable>
+  );
+}
+
+// ── GroupedCard ───────────────────────────────────────────────────────────────
+// White card, no padding, overflow hidden — rows supply their own padding
+// and hairline dividers clip at the card edge.
+export function GroupedCard({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  const t = useTheme();
+  return (
+    <View style={[{
+      backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border,
+      borderRadius: t.radius.lg, overflow: 'hidden',
+    }, style]}>
+      {children}
+    </View>
+  );
+}
+
+// ── GRow — grouped list row ────────────────────────────────────────────────────
+// 56px min height, 16px horizontal padding, hairline bottom border.
+// Pass last={true} on the final row to skip the bottom divider.
+export function GRow({
+  children, onPress, last, style,
+}: { children: ReactNode; onPress?: () => void; last?: boolean; style?: StyleProp<ViewStyle> }) {
+  const t = useTheme();
+  const base: ViewStyle = {
+    flexDirection: 'row', alignItems: 'center', gap: t.space.md,
+    minHeight: 56, paddingHorizontal: t.space.lg, paddingVertical: 10,
+    borderBottomWidth: last ? 0 : 1, borderColor: t.color.border,
+  };
+  if (!onPress) return <View style={[base, style]}>{children}</View>;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={(state) => {
+        const { pressed, hovered } = state as PressState;
+        return [base, { backgroundColor: pressed || hovered ? t.color.surfaceAlt : 'transparent' }, style];
+      }}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+// ── SectionLabel ──────────────────────────────────────────────────────────────
+// Mono uppercase label above a grouped card section.
+export function SectionLabel({ children, right, style }: {
+  children: ReactNode; right?: ReactNode; style?: StyleProp<TextStyle>;
+}) {
+  const t = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 }}>
+      <RNText style={[{
+        flex: 1, fontSize: t.size.xs, fontWeight: '600', letterSpacing: 1.2,
+        textTransform: 'uppercase', fontFamily: t.font.mono, color: t.color.textMuted,
+      }, style]}>
+        {children}
+      </RNText>
+      {right}
+    </View>
+  );
+}
+
+// ── FieldRow — 56px grouped row, taps to expand inline editor ─────────────────
+export function FieldRow({ label, displayValue, last, children }: {
+  label: string;
+  displayValue: string;
+  last?: boolean;
+  children: ReactNode;
+}) {
+  const t = useTheme();
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={{ borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth, borderColor: t.color.border }}>
+      <Pressable
+        onPress={() => setOpen(o => !o)}
+        accessibilityRole="button"
+        style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingHorizontal: t.space.lg, gap: t.space.md }}
+      >
+        <Text variant="label" style={{ flex: 1 }}>{label}</Text>
+        {!!displayValue && <Text variant="body" muted numberOfLines={1}>{displayValue}</Text>}
+        <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={14} color={t.color.textMuted} />
+      </Pressable>
+      {open && (
+        <View style={{ paddingHorizontal: t.space.lg, paddingBottom: t.space.md }}>
+          {children}
+        </View>
+      )}
+    </View>
   );
 }
 

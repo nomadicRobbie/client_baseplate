@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, TextInput } from 'react-native';
 import { Redirect, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { Asset, AssetFault } from '@blnk/shared';
@@ -12,28 +12,29 @@ import { syncAssetOutbox, loadAsset } from '@/lib/asset-sync';
 import { useOnReconnect } from '@/lib/use-reconnect';
 import { formatDMY } from '@/lib/format';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Button, TextField, Badge } from '@/ui/components';
+import { Screen, Text, GroupedCard, GRow, SectionLabel, Button, FieldRow, Badge } from '@/ui/components';
 import { StatusBadge, urgencyLevel, OfflineBanner, PendingSyncBanner } from '@/ui/status';
 
 type ThemeT = ReturnType<typeof useTheme>;
 const makeStyles = (t: ThemeT) => ({
+  input: { backgroundColor: t.color.surfaceAlt, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.md, color: t.color.text, fontSize: 14 },
   backBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
-  sectionHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
+  section: { gap: 8 },
+  emptyHint: { paddingHorizontal: 4 },
   flex1: { flex: 1 },
   resolveIndent: { paddingLeft: t.space.sm },
   urgencyGroup: { gap: 6 },
   urgencyRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
   urgencyBtn: (sel: boolean) => ({ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }),
-  pendingItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm, paddingVertical: t.space.sm },
   pendingInfo: { flex: 1, gap: 2 },
-  faultItem: { paddingVertical: t.space.sm, gap: t.space.sm },
+  faultRow: { borderBottomWidth: 1, borderColor: t.color.border, paddingHorizontal: t.space.lg, paddingVertical: 10, gap: t.space.sm },
+  faultRowLast: { borderBottomWidth: 0 },
   faultHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
   faultInfo: { flex: 1, gap: 2 },
   faultFooter: { alignItems: 'flex-end' as const },
   stepsList: { gap: 2, paddingLeft: t.space.sm },
   actions: { gap: t.space.sm },
   actionRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
-  closedItem: { paddingVertical: t.space.sm, gap: 2 },
 });
 
 type Msg = { text: string; tone: 'success' | 'error' | 'info' };
@@ -131,16 +132,21 @@ export default function AssetFaults() {
         <Ionicons name="chevron-back" size={18} color={t.color.primary} />
         <Text variant="label" color={t.color.primary}>{asset?.name ?? 'Asset'}</Text>
       </Pressable>
-      <Text variant="title">Faults</Text>
-
       <OfflineBanner offline={offline} />
       <PendingSyncBanner count={pending} onSync={() => void doSync()} busy={busy} />
 
-      {/* Log a fault */}
-      <Card>
-        <Text variant="heading">Log a fault</Text>
-        <TextField label="Fault" value={fName} onChangeText={setFName} placeholder="Fault name" autoCapitalize="sentences" />
-        <TextField label="Description" value={fDesc} onChangeText={setFDesc} placeholder="Optional" autoCapitalize="sentences" />
+      <View style={s.section}>
+        <SectionLabel>Log a fault</SectionLabel>
+        <GroupedCard>
+          <FieldRow label="Fault" displayValue={fName}>
+            <TextInput value={fName} onChangeText={setFName} placeholder="Fault name"
+              autoCapitalize="sentences" placeholderTextColor={t.color.textMuted} style={s.input} />
+          </FieldRow>
+          <FieldRow label="Description" displayValue={fDesc} last>
+            <TextInput value={fDesc} onChangeText={setFDesc} placeholder="Optional"
+              autoCapitalize="sentences" placeholderTextColor={t.color.textMuted} style={s.input} />
+          </FieldRow>
+        </GroupedCard>
         <View style={s.urgencyGroup}>
           <Text variant="label" muted>Urgency</Text>
           <View style={s.urgencyRow}>
@@ -156,85 +162,86 @@ export default function AssetFaults() {
           </View>
         </View>
         <Button label="Log fault" onPress={logFault} loading={busy} />
-      </Card>
+      </View>
 
-      {/* Open faults */}
-      <Card>
-        <View style={s.sectionHeader}>
-          <Text variant="heading">Open faults</Text>
-          {open.length > 0 && <Text variant="small" muted>{open.length}</Text>}
-        </View>
-        {pendingLogged.map((p) => (
-          <View key={p.key} style={s.pendingItem}>
-            <View style={s.pendingInfo}>
-              <Text>{p.name}</Text>
-              {!!p.description && <Text variant="small" muted>{p.description}</Text>}
-            </View>
-            {!!p.urgency && <StatusBadge level={urgencyLevel(p.urgency)} label={p.urgency} />}
-            <Badge label="pending sync" tone="accent" />
-          </View>
-        ))}
-        {open.length === 0 && pendingLogged.length === 0 ? <Text muted>No open faults.</Text> : open.map((f) => {
-          const expanded = activeId === f.id;
-          const closing = pendingCloseIds.has(f.id);
-          const pSteps = pendingStepsByFault[f.id] ?? [];
-          return (
-            <View key={f.id} style={s.faultItem}>
-              <View style={s.faultHeader}>
-                <View style={s.faultInfo}>
-                  <Text>{f.name}</Text>
-                  {!!f.description && <Text variant="small" muted>{f.description}</Text>}
-                </View>
-                {!!f.urgency && <StatusBadge level={urgencyLevel(f.urgency)} label={f.urgency} />}
-              </View>
-
-              {(f.steps?.length > 0 || pSteps.length > 0) && (
-                <View style={s.stepsList}>
-                  {f.steps.map((st) => (
-                    <Text key={st.id} variant="small" muted>• {st.note}{st.kind === 'close' ? ' (closed)' : ''} · {formatDMY(st.created_at)}</Text>
-                  ))}
-                  {pSteps.map((n, i) => <Text key={`p${i}`} variant="small" muted>• {n} · pending sync</Text>)}
-                </View>
-              )}
-
-              {expanded ? (
-                <View style={s.actions}>
-                  <TextField label="Note (what was done, or the next step)" value={note} onChangeText={setNote} placeholder="Ordered replacement" autoCapitalize="sentences" />
-                  <View style={s.actionRow}>
-                    <Button label="Add step" variant="secondary" onPress={() => addStep(f)} loading={busy} />
-                    <Button label="Close with note" onPress={() => closeWithNote(f)} loading={busy} />
-                    <Button label="Cancel" variant="ghost" onPress={() => { setActiveId(null); setNote(''); }} />
+      <View style={s.section}>
+        <SectionLabel right={open.length + pendingLogged.length > 0 ? <Text variant="small" muted>{open.length + pendingLogged.length}</Text> : undefined}>Open faults</SectionLabel>
+        {open.length === 0 && pendingLogged.length === 0
+          ? <Text muted style={s.emptyHint}>No open faults.</Text>
+          : (
+            <GroupedCard>
+              {pendingLogged.map((p, i) => (
+                <GRow key={p.key} last={i === pendingLogged.length - 1 && open.length === 0}>
+                  <View style={s.pendingInfo}>
+                    <Text>{p.name}</Text>
+                    {!!p.description && <Text variant="small" muted>{p.description}</Text>}
                   </View>
-                </View>
-              ) : (
-                <View style={s.faultFooter}>
-                  {closing
-                    ? <Badge label="closing — pending sync" tone="accent" />
-                    : <Button label="Update" variant="secondary" onPress={() => { setActiveId(f.id); setNote(''); }} />}
-                </View>
-              )}
-            </View>
-          );
-        })}
-      </Card>
+                  {!!p.urgency && <StatusBadge level={urgencyLevel(p.urgency)} label={p.urgency} />}
+                  <Badge label="pending sync" tone="accent" />
+                </GRow>
+              ))}
+              {open.map((f, i) => {
+                const expanded = activeId === f.id;
+                const closing = pendingCloseIds.has(f.id);
+                const pSteps = pendingStepsByFault[f.id] ?? [];
+                return (
+                  <View key={f.id} style={[s.faultRow, i === open.length - 1 && s.faultRowLast]}>
+                    <View style={s.faultHeader}>
+                      <View style={s.faultInfo}>
+                        <Text>{f.name}</Text>
+                        {!!f.description && <Text variant="small" muted>{f.description}</Text>}
+                      </View>
+                      {!!f.urgency && <StatusBadge level={urgencyLevel(f.urgency)} label={f.urgency} />}
+                    </View>
 
-      {/* Closed history */}
+                    {(f.steps?.length > 0 || pSteps.length > 0) && (
+                      <View style={s.stepsList}>
+                        {f.steps.map((st) => (
+                          <Text key={st.id} variant="small" muted>• {st.note}{st.kind === 'close' ? ' (closed)' : ''} · {formatDMY(st.created_at)}</Text>
+                        ))}
+                        {pSteps.map((n, j) => <Text key={`p${j}`} variant="small" muted>• {n} · pending sync</Text>)}
+                      </View>
+                    )}
+
+                    {expanded ? (
+                      <View style={s.actions}>
+                        <TextInput value={note} onChangeText={setNote} placeholder="Note — what was done, or the next step"
+                          autoCapitalize="sentences" placeholderTextColor={t.color.textMuted} style={s.input} />
+                        <View style={s.actionRow}>
+                          <Button label="Add step" variant="secondary" onPress={() => addStep(f)} loading={busy} />
+                          <Button label="Close with note" onPress={() => closeWithNote(f)} loading={busy} />
+                          <Button label="Cancel" variant="ghost" onPress={() => { setActiveId(null); setNote(''); }} />
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={s.faultFooter}>
+                        {closing
+                          ? <Badge label="closing — pending sync" tone="accent" />
+                          : <Button label="Update" variant="secondary" onPress={() => { setActiveId(f.id); setNote(''); }} />}
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </GroupedCard>
+          )}
+      </View>
+
       {closed.length > 0 && (
-        <Card>
-          <View style={s.sectionHeader}>
-            <Text variant="heading">Closed</Text>
-            <Text variant="small" muted>{closed.length}</Text>
-          </View>
-          {closed.map((f) => (
-            <View key={f.id} style={s.closedItem}>
-              <View style={s.faultHeader}>
-                <Text style={s.flex1} muted>{f.name}</Text>
-                <StatusBadge level="closed" label="closed" />
+        <View style={s.section}>
+          <SectionLabel right={<Text variant="small" muted>{closed.length}</Text>}>Closed</SectionLabel>
+          <GroupedCard>
+            {closed.map((f, i) => (
+              <View key={f.id} style={[s.faultRow, i === closed.length - 1 && s.faultRowLast]}>
+                <View style={s.faultHeader}>
+                  <Text style={s.flex1} muted>{f.name}</Text>
+                  <StatusBadge level="closed" label="closed" />
+                </View>
+                {!!f.resolution_notes && <Text variant="small" muted style={s.resolveIndent}>{f.resolution_notes}</Text>}
               </View>
-              {!!f.resolution_notes && <Text variant="small" muted style={s.resolveIndent}>{f.resolution_notes}</Text>}
-            </View>
-          ))}
-        </Card>
+            ))}
+          </GroupedCard>
+        </View>
       )}
 
     </Screen>

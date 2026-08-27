@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, TextInput } from 'react-native';
 import { Image } from 'expo-image';
 import { Redirect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,33 +13,24 @@ import { pendingCount } from '@/lib/outbox';
 import { syncAssetOutbox } from '@/lib/asset-sync';
 import { useOnReconnect } from '@/lib/use-reconnect';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, Row, Button, TextField, Notice } from '@/ui/components';
+import { Screen, Text, Card, GroupedCard, GRow, SectionLabel, Button, TextField, Notice } from '@/ui/components';
 import { OfflineBanner, PendingSyncBanner } from '@/ui/status';
-import { ParticularsForm } from '@/ui/asset';
+import { ParticularsForm, assetTypeIcon } from '@/ui/asset';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' | 'info' };
 type Tab = 'overview' | 'add' | 'schedule';
 const tok = () => getAccessToken()!;
 
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
-function assetTypeIcon(typeName: string | null | undefined): IoniconName {
-  const n = (typeName ?? '').toLowerCase();
-  if (n.includes('vessel') || n.includes('boat') || n.includes('ship') || n.includes('marine')) return 'boat-outline';
-  if (n.includes('vehicle') || n.includes('car') || n.includes('truck') || n.includes('van')) return 'car-outline';
-  if (n.includes('facilit') || n.includes('building') || n.includes('site')) return 'business-outline';
-  if (n.includes('hardware') || n.includes('computer') || n.includes('server') || n.includes('network')) return 'desktop-outline';
-  return 'cube-outline';
-}
 
 const makeStyles = (t: ThemeT) => ({
   assetInfo: { flex: 1 },
   summaryRow: { flexDirection: 'row' as const, gap: t.space.sm },
   summaryCard: { flex: 1, gap: t.space.xs },
   summaryNum: { fontSize: 32, fontWeight: '800' as const, lineHeight: 36 },
-  seg: { flexDirection: 'row' as const, backgroundColor: t.color.surfaceAlt, borderRadius: t.radius.md, padding: 3, marginBottom: t.space.sm },
-  segBtn: { flex: 1, paddingVertical: t.space.sm, borderRadius: t.radius.sm, alignItems: 'center' as const },
-  segBtnOn: { backgroundColor: t.color.surface },
+  seg: { flexDirection: 'row' as const, backgroundColor: t.color.surfaceAlt, borderRadius: t.radius.pill, padding: 4, marginBottom: t.space.sm },
+  segBtn: { flex: 1, minHeight: 36, alignItems: 'center' as const, justifyContent: 'center' as const, borderRadius: t.radius.pill },
+  segBtnOn: { backgroundColor: t.color.primary },
   cardToggle: { gap: t.space.xs },
   cardToggleHeader: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, justifyContent: 'space-between' as const },
   chevronTop: { marginTop: 6 },
@@ -58,8 +49,36 @@ const makeStyles = (t: ThemeT) => ({
   typeRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
   typeChip: (sel: boolean) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingVertical: t.space.sm, paddingLeft: t.space.md, paddingRight: t.space.sm, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }),
   typeListRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingVertical: 6 },
+  typePickerList: { borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.lg, overflow: 'hidden' as const, backgroundColor: t.color.surface },
+  typePickerSearch: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm, minHeight: 48, paddingHorizontal: t.space.md, paddingVertical: t.space.sm, borderBottomWidth: 1, borderBottomColor: t.color.border },
+  typePickerItem: (sel: boolean) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.md, minHeight: 56, paddingHorizontal: t.space.md, paddingVertical: t.space.sm, borderBottomWidth: 1, borderBottomColor: t.color.border, backgroundColor: sel ? t.color.primary + '18' : 'transparent' }),
+  typePickerItemLast: { borderBottomWidth: 0 },
+  typePickerIcon: (sel: boolean) => ({ width: 36, height: 36, borderRadius: 10, backgroundColor: sel ? t.color.primary : t.color.surfaceAlt, alignItems: 'center' as const, justifyContent: 'center' as const }),
+  typePickerSectionHeader: { flexDirection: 'row' as const, alignItems: 'baseline' as const, justifyContent: 'space-between' as const, paddingHorizontal: t.space.xs },
   totalRow: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, paddingHorizontal: t.space.md, paddingVertical: t.space.sm },
 });
+
+function NameRow({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const t = useTheme();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button"
+        style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingHorizontal: t.space.lg, gap: t.space.sm, borderBottomWidth: open ? 1 : 0, borderBottomColor: t.color.border }}>
+        <Text variant="label" style={{ flex: 1 }}>Name</Text>
+        <Text variant="small" muted numberOfLines={1}>{value || 'Required'}</Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={t.color.textMuted} />
+      </Pressable>
+      {open && (
+        <View style={{ paddingHorizontal: t.space.lg, paddingBottom: t.space.md }}>
+          <TextInput value={value} onChangeText={onChange} autoFocus autoCapitalize="sentences"
+            placeholder="Asset name" placeholderTextColor={t.color.textMuted}
+            style={{ borderBottomWidth: 2, borderBottomColor: t.color.primary, paddingVertical: t.space.sm, fontSize: t.size.md, color: t.color.text }} />
+        </View>
+      )}
+    </>
+  );
+}
 
 export default function AssetManager() {
   const t = useTheme();
@@ -81,6 +100,7 @@ export default function AssetManager() {
   // Add tab sub-view
   const [addView, setAddView] = useState<'asset' | 'types'>('asset');
   // Add-asset form
+  const [typeSearch, setTypeSearch] = useState('');
   const [addMsg, setAddMsg] = useState<Msg | null>(null);
   const [addBusy, setAddBusy] = useState(false);
   const [assetName, setAssetName] = useState('');
@@ -266,9 +286,9 @@ export default function AssetManager() {
       )}
 
       {loading
-        ? <Card><Text muted>Loading…</Text></Card>
+        ? <Text muted style={{ paddingHorizontal: 4 }}>Loading…</Text>
         : assets.length === 0
-          ? <Card><Text muted>No assets yet.</Text></Card>
+          ? <Text muted style={{ paddingHorizontal: 4 }}>No assets yet.</Text>
           : (() => {
             const byType = types.map((ty) => ({ ty, items: assets.filter((a) => a.asset_type_id === ty.id) })).filter((g) => g.items.length > 0);
             const untyped = assets.filter((a) => !a.asset_type_id);
@@ -276,29 +296,32 @@ export default function AssetManager() {
             return (
               <React.Fragment key="asset-list">
                 {groups.map(({ ty, items }) => (
-                  <Card key={ty?.id ?? '__untyped__'}>
-                    <View style={s.groupHeader}>
-                      <Text variant="heading">{ty?.name ?? 'Uncategorised'}</Text>
-                      <Text variant="small" muted>{items.length}</Text>
-                    </View>
-                    {items.map((a) => (
-                      <Row key={a.id} onPress={() => openAsset(a.id)}>
-                        {a.image_url
-                          ? <Image source={{ uri: a.image_url }} style={{ width: 28, height: 28, borderRadius: 6 }} contentFit="cover" />
-                          : <Ionicons name={assetTypeIcon(ty?.name)} size={20} color={t.color.text} />
-                        }
-                        <View style={s.assetInfo}>
-                          <Text>{a.name}</Text>
-                          {!!a.location && <Text variant="small" muted>{a.location}</Text>}
-                        </View>
-                        <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
-                      </Row>
-                    ))}
-                  </Card>
+                  <View key={ty?.id ?? '__untyped__'} style={{ gap: 8 }}>
+                    <SectionLabel right={<Text variant="small" muted>{items.length}</Text>}>
+                      {ty?.name ?? 'Uncategorised'}
+                    </SectionLabel>
+                    <GroupedCard>
+                      {items.map((a, i) => (
+                        <GRow key={a.id} onPress={() => openAsset(a.id)} last={i === items.length - 1}>
+                          {a.image_url
+                            ? <Image source={{ uri: a.image_url }} style={{ width: 36, height: 36, borderRadius: 8 }} contentFit="cover" />
+                            : <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+                                <Ionicons name={assetTypeIcon(ty?.name)} size={18} color={t.color.text} />
+                              </View>
+                          }
+                          <View style={{ flex: 1 }}>
+                            <Text variant="label">{a.name}</Text>
+                            {!!a.location && <Text variant="small" muted>{a.location}</Text>}
+                          </View>
+                          <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
+                        </GRow>
+                      ))}
+                    </GroupedCard>
+                  </View>
                 ))}
-                <View style={s.totalRow}>
-                  <Text variant="label" muted>Total</Text>
-                  <Text variant="label">{assets.length}</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 }}>
+                  <Text variant="small" muted>Total</Text>
+                  <Text variant="small" muted>{assets.length}</Text>
                 </View>
               </React.Fragment>
             );
@@ -315,79 +338,79 @@ export default function AssetManager() {
   const renderSchedule = () => {
     const actionable = upcoming.filter((u) => u.level !== 'ok');
     const scheduled = upcoming.filter((u) => u.level === 'ok');
-    if (loading) return <Card><Text muted>Loading…</Text></Card>;
-    if (!upcoming.length && !faults.length) return <Card><Text muted>No maintenance schedules or open faults.</Text></Card>;
+    if (loading) return <Text muted style={{ paddingHorizontal: 4 }}>Loading…</Text>;
+    if (!upcoming.length && !faults.length) return <Text muted style={{ paddingHorizontal: 4 }}>No maintenance schedules or open faults.</Text>;
     return (
       <>
         {actionable.length > 0 && (
-          <Card>
-            {actionable.map((u) => {
-              const assetName = assets.find((a) => a.id === u.asset_id)?.name;
-              return (
-                <Pressable key={u.id} onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/maintenance', params: { assetId: u.asset_id } })} accessibilityRole="button"
-                  style={s.scheduleRow}>
-                  <View style={s.levelDot(u.level)} />
-                  <View style={s.scheduleInfo}>
-                    <Text numberOfLines={1}>{u.title}</Text>
-                    <Text variant="small" muted numberOfLines={1}>
-                      {[assetName, u.due_date ? formatDMY(u.due_date) : 'No date'].filter(Boolean).join(' · ')}
+          <View style={{ gap: 8 }}>
+            <SectionLabel>Action needed</SectionLabel>
+            <GroupedCard>
+              {actionable.map((u, i) => {
+                const assetName = assets.find((a) => a.id === u.asset_id)?.name;
+                return (
+                  <GRow key={u.id} onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/maintenance', params: { assetId: u.asset_id } })} last={i === actionable.length - 1}>
+                    <View style={[s.levelDot(u.level), { marginTop: 0 }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text variant="label" numberOfLines={1}>{u.title}</Text>
+                      <Text variant="small" muted numberOfLines={1}>
+                        {[assetName, u.due_date ? formatDMY(u.due_date) : 'No date'].filter(Boolean).join(' · ')}
+                      </Text>
+                    </View>
+                    <Text variant="small" color={u.level === 'over' ? t.color.danger : t.color.primary}>
+                      {u.level === 'over' ? 'Overdue' : 'Due soon'}
                     </Text>
-                  </View>
-                  <Text variant="small" color={u.level === 'over' ? t.color.danger : t.color.primary}>
-                    {u.level === 'over' ? 'Overdue' : 'Due soon'}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </Card>
+                  </GRow>
+                );
+              })}
+            </GroupedCard>
+          </View>
         )}
 
         {sortedFaults.length > 0 && (
-          <>
-            <Text variant="heading">Open faults</Text>
-            <Card>
-              {sortedFaults.map((f) => {
+          <View style={{ gap: 8 }}>
+            <SectionLabel>Open faults</SectionLabel>
+            <GroupedCard>
+              {sortedFaults.map((f, i) => {
                 const assetName = assets.find((a) => a.id === f.asset_id)?.name;
                 const dotColor = faultDotColor(f.urgency);
                 return (
-                  <Pressable key={f.id} onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/faults', params: { assetId: f.asset_id } })} accessibilityRole="button"
-                    style={s.scheduleRow}>
-                    <View style={{ width: 8, height: 8, borderRadius: 4, marginTop: 5, backgroundColor: dotColor }} />
-                    <View style={s.scheduleInfo}>
-                      <Text numberOfLines={1}>{f.name}</Text>
+                  <GRow key={f.id} onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/faults', params: { assetId: f.asset_id } })} last={i === sortedFaults.length - 1}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dotColor }} />
+                    <View style={{ flex: 1 }}>
+                      <Text variant="label" numberOfLines={1}>{f.name}</Text>
                       <Text variant="small" muted numberOfLines={1}>
                         {[assetName, f.urgency].filter(Boolean).join(' · ')}
                       </Text>
                     </View>
                     <Text variant="small" color={dotColor}>{f.urgency ?? 'Fault'}</Text>
-                  </Pressable>
+                  </GRow>
                 );
               })}
-            </Card>
-          </>
+            </GroupedCard>
+          </View>
         )}
 
         {scheduled.length > 0 && (
-          <>
-            <Text variant="heading">Scheduled</Text>
-            <Card>
-              {scheduled.map((u) => {
+          <View style={{ gap: 8 }}>
+            <SectionLabel>Scheduled</SectionLabel>
+            <GroupedCard>
+              {scheduled.map((u, i) => {
                 const assetName = assets.find((a) => a.id === u.asset_id)?.name;
                 return (
-                  <Pressable key={u.id} onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/maintenance', params: { assetId: u.asset_id } })} accessibilityRole="button"
-                    style={s.scheduleRow}>
-                    <View style={s.levelDot(u.level)} />
-                    <View style={s.scheduleInfo}>
-                      <Text numberOfLines={1}>{u.title}</Text>
+                  <GRow key={u.id} onPress={() => router.push({ pathname: '/dashboard/asset/[assetId]/maintenance', params: { assetId: u.asset_id } })} last={i === scheduled.length - 1}>
+                    <View style={[s.levelDot(u.level), { marginTop: 0 }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text variant="label" numberOfLines={1}>{u.title}</Text>
                       <Text variant="small" muted numberOfLines={1}>
                         {[assetName, u.due_date ? formatDMY(u.due_date) : 'No date set'].filter(Boolean).join(' · ')}
                       </Text>
                     </View>
-                  </Pressable>
+                  </GRow>
                 );
               })}
-            </Card>
-          </>
+            </GroupedCard>
+          </View>
         )}
       </>
     );
@@ -397,38 +420,81 @@ export default function AssetManager() {
     <>
       <View style={s.seg}>
         <Pressable style={[s.segBtn, addView === 'asset' && s.segBtnOn]} onPress={() => { setAddView('asset'); setAddMsg(null); }} accessibilityRole="button" accessibilityState={{ selected: addView === 'asset' }}>
-          <Text variant="label" color={addView === 'asset' ? t.color.primary : t.color.textMuted}>Asset</Text>
+          <Text variant="label" color={addView === 'asset' ? t.color.primaryText : t.color.textMuted}>Asset</Text>
         </Pressable>
         <Pressable style={[s.segBtn, addView === 'types' && s.segBtnOn]} onPress={() => { setAddView('types'); setAddMsg(null); }} accessibilityRole="button" accessibilityState={{ selected: addView === 'types' }}>
-          <Text variant="label" color={addView === 'types' ? t.color.primary : t.color.textMuted}>Types</Text>
+          <Text variant="label" color={addView === 'types' ? t.color.primaryText : t.color.textMuted}>Types</Text>
         </Pressable>
       </View>
 
       {addView === 'asset' && (
-        <Card>
+        <>
           {addMsg && <Notice message={addMsg.text} tone={addMsg.tone} />}
-          <TextField label="Name" value={assetName} onChangeText={setAssetName} placeholder="Asset name" autoCapitalize="sentences" />
-          <Text variant="label" muted>Type</Text>
-          {types.length === 0
-            ? <Text variant="small" muted>Add a type in the Types tab first.</Text>
-            : (
-              <View style={s.typeRow}>
-                {types.map((ty) => {
+
+          <View style={{ gap: 8 }}>
+            <View style={s.typePickerSectionHeader}>
+              <SectionLabel>Type</SectionLabel>
+              <Text variant="mono" muted style={{ fontSize: t.size.xs }}>{types.length}</Text>
+            </View>
+            <View style={s.typePickerList}>
+              <View style={s.typePickerSearch}>
+                <Ionicons name="search-outline" size={18} color={t.color.textMuted} />
+                <TextInput
+                  value={typeSearch}
+                  onChangeText={setTypeSearch}
+                  placeholder="Search types"
+                  placeholderTextColor={t.color.textMuted}
+                  style={{ flex: 1, fontSize: t.size.md, color: t.color.text }}
+                />
+              </View>
+              {types
+                .filter((ty) => ty.name.toLowerCase().includes(typeSearch.toLowerCase()))
+                .map((ty) => {
                   const sel = typeId === ty.id;
                   return (
-                    <Pressable key={ty.id} onPress={() => selectType(ty.id)} accessibilityRole="button" style={s.typeChip(sel)}>
-                      <Text variant="label" color={sel ? t.color.primaryText : t.color.text}>{ty.name}</Text>
+                    <Pressable key={ty.id} onPress={() => selectType(ty.id)} accessibilityRole="button"
+                      style={s.typePickerItem(sel)}>
+                      <View style={s.typePickerIcon(sel)}>
+                        <Ionicons name={assetTypeIcon(ty.name)} size={18} color={sel ? t.color.primaryText : t.color.text} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text variant="label">{ty.name}</Text>
+                        {ty.fields.length > 0 && <Text variant="small" muted>{ty.fields.length} {ty.fields.length === 1 ? 'particular' : 'particulars'}</Text>}
+                      </View>
+                      {sel && <Ionicons name="checkmark" size={22} color={t.color.primary} />}
                     </Pressable>
                   );
                 })}
-              </View>
-            )
-          }
+              <Pressable onPress={() => { setAddView('types'); setAddMsg(null); }} accessibilityRole="button"
+                style={[s.typePickerItem(false), s.typePickerItemLast]}>
+                <View style={s.typePickerIcon(false)}>
+                  <Ionicons name="add" size={20} color={t.color.text} />
+                </View>
+                <Text variant="label" style={{ flex: 1 }}>New type</Text>
+                <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={{ gap: 8 }}>
+            <SectionLabel>Details</SectionLabel>
+            <GroupedCard>
+              <NameRow value={assetName} onChange={setAssetName} />
+            </GroupedCard>
+          </View>
+
           {selectedType && selectedType.fields.length > 0 && (
-            <ParticularsForm fields={selectedType.fields} value={particulars} onChange={setParticulars} />
+            <View style={{ gap: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: 4 }}>
+                <SectionLabel>{selectedType.name} particulars</SectionLabel>
+                <Text variant="small" muted>Optional</Text>
+              </View>
+              <ParticularsForm fields={selectedType.fields} value={particulars} onChange={setParticulars} />
+            </View>
           )}
-          <Button label="Save asset" onPress={addAsset} loading={addBusy} />
-        </Card>
+
+          <Button label="Add asset" onPress={addAsset} loading={addBusy} />
+        </>
       )}
 
       {addView === 'types' && (
@@ -488,15 +554,15 @@ export default function AssetManager() {
 
       <View style={s.seg}>
         <Pressable style={[s.segBtn, tab === 'overview' && s.segBtnOn]} onPress={() => setTab('overview')} accessibilityRole="button" accessibilityState={{ selected: tab === 'overview' }}>
-          <Text variant="label" color={tab === 'overview' ? t.color.primary : t.color.textMuted}>Overview</Text>
+          <Text variant="label" color={tab === 'overview' ? t.color.primaryText : t.color.textMuted}>Overview</Text>
         </Pressable>
         {isAdmin && (
           <Pressable style={[s.segBtn, tab === 'add' && s.segBtnOn]} onPress={() => { setTab('add'); setAddMsg(null); }} accessibilityRole="button" accessibilityState={{ selected: tab === 'add' }}>
-            <Text variant="label" color={tab === 'add' ? t.color.primary : t.color.textMuted}>+ Add</Text>
+            <Text variant="label" color={tab === 'add' ? t.color.primaryText : t.color.textMuted}>+ Add</Text>
           </Pressable>
         )}
         <Pressable style={[s.segBtn, tab === 'schedule' && s.segBtnOn]} onPress={() => setTab('schedule')} accessibilityRole="button" accessibilityState={{ selected: tab === 'schedule' }}>
-          <Text variant="label" color={tab === 'schedule' ? t.color.primary : t.color.textMuted}>Schedule</Text>
+          <Text variant="label" color={tab === 'schedule' ? t.color.primaryText : t.color.textMuted}>Schedule</Text>
         </Pressable>
       </View>
 

@@ -6,7 +6,7 @@ import { setTokens } from '@/lib/session';
 import { doAuthenticate, passkeySupported } from '@/lib/passkey';
 import { useTheme } from '@/theme';
 import { getItem, setItem } from '@/lib/storage';
-import { Screen, Text, Card, Button, TextField } from '@/ui/components';
+import { Screen, Text, GroupedCard, Button, TextField } from '@/ui/components';
 
 type Msg = { text: string; tone: 'info' | 'success' | 'error' };
 type ThemeT = ReturnType<typeof useTheme>;
@@ -39,7 +39,7 @@ export default function Login() {
     await otpSend(email);
     setItem(LAST_EMAIL, email.trim()); // remember only once blnk_auth accepted it
     setSent(true);
-    setMsg({ text: 'Code sent — check the blnk_auth dev log', tone: 'success' });
+    setMsg({ text: 'Code sent — check your inbox.', tone: 'success' });
   });
 
   const verify = (c = code) => run(async () => {
@@ -70,7 +70,7 @@ export default function Login() {
             <Text muted>sign in · {TENANT}</Text>
           </View>
 
-          <Card>
+          <GroupedCard>
             <TextField
               label="Email"
               value={email}
@@ -80,17 +80,14 @@ export default function Login() {
               autoCapitalize="none"
               autoComplete="email"
             />
-
-            {!sent ? (
-              <Button label="Send code" onPress={sendCode} loading={busy} />
-            ) : (
-              <>
-                <TextField label="Verification code" value={code} onChangeText={onCodeChange} placeholder="6-digit code" keyboardType="number-pad" autoFocus />
-                <Button label="Verify & sign in" onPress={() => verify()} loading={busy} />
-                <Button label="Use a different email" variant="ghost" onPress={() => { setSent(false); setCode(''); setMsg(null); }} />
-              </>
+            {sent && (
+              <TextField label="Verification code" value={code} onChangeText={onCodeChange} placeholder="6-digit code" keyboardType="number-pad" autoFocus />
             )}
-          </Card>
+            <Button label={sent ? 'Verify & sign in' : 'Send code'} onPress={sent ? () => verify() : sendCode} loading={busy} />
+            {sent && (
+              <Button label="Use a different email" variant="ghost" onPress={() => { setSent(false); setCode(''); setMsg(null); }} />
+            )}
+          </GroupedCard>
 
           {passkeySupported && (
             <Button label="Sign in with passkey" variant="secondary" onPress={loginPasskey} loading={busy} />

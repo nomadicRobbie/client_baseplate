@@ -13,12 +13,13 @@ import { useAuth } from '@/lib/auth-context';
 import { useProfile } from '@/lib/profile-context';
 import { visibleNav } from '@/lib/nav';
 import { useTheme, useColorSchemePref, type SchemePref } from '@/theme';
-import { Screen, Text } from '@/ui/components';
+import { Screen, Text, GroupedCard, GRow, SectionLabel } from '@/ui/components';
 import { passkeyRegisterBegin, passkeyRegisterComplete, updateMyProfile, uploadUserAvatar, updateOrg } from '@/lib/api';
 import { getAccessToken } from '@/lib/session';
 import { doRegister, passkeySupported } from '@/lib/passkey';
 
 type Msg = { text: string; tone: 'success' | 'error' };
+
 
 const CONTACT_OPTS: { key: PreferredContact; label: string }[] = [
   { key: 'email', label: 'Email' }, { key: 'phone', label: 'Phone' },
@@ -52,20 +53,20 @@ function ExpandableRow({ label, value, onChange, onSave, placeholder, last }: {
   return (
     <View style={{ borderBottomWidth: last ? 0 : 1, borderColor: t.color.border }}>
       <Pressable onPress={toggle} accessibilityRole="button" accessibilityLabel={`Edit ${label}`}
-        style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingHorizontal: 16, gap: 8 }}>
+        style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingHorizontal: t.space.lg, gap: t.space.sm }}>
         <Text variant="label" style={{ flex: 1 }}>{label}</Text>
         <Text variant="body" muted numberOfLines={1} style={{ maxWidth: 200, color: value ? t.color.textMuted : t.color.primary }}>{value || 'Add'}</Text>
         <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={18} color={t.color.textMuted} />
       </Pressable>
       {open && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 14, gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: t.space.lg, paddingBottom: t.space.md, gap: t.space.sm }}>
           <TextInput
             ref={inputRef}
             value={value}
             onChangeText={onChange}
             placeholder={placeholder}
             placeholderTextColor={t.color.textMuted}
-            style={{ flex: 1, fontSize: 17, color: t.color.text, borderBottomWidth: 1, borderBottomColor: t.color.primary, paddingBottom: 4 }}
+            style={{ flex: 1, fontSize: t.size.md, color: t.color.text, borderBottomWidth: 1, borderBottomColor: t.color.primary, paddingBottom: t.space.xs }}
             returnKeyType="done"
             onSubmitEditing={save}
           />
@@ -158,13 +159,6 @@ export default function Account() {
       ? 'Off in local development'
       : passkeySupported ? 'Tap to add a passkey for this device' : 'Not supported on this browser';
 
-  const groupedCard = {
-    backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border, borderRadius: 16, overflow: 'hidden' as const,
-  };
-  const sectionLabelStyle = {
-    fontSize: 12, fontWeight: '600' as const, letterSpacing: 1.2, textTransform: 'uppercase' as const,
-    fontFamily: t.font.mono, color: t.color.textMuted, paddingLeft: 4,
-  };
 
   return (
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
@@ -187,16 +181,12 @@ export default function Account() {
           <Text variant="heading" style={{ fontSize: 26, letterSpacing: -0.5 }}>{me?.name || 'Your name'}</Text>
           <Text muted style={{ fontSize: 14 }}>{me?.email}</Text>
         </View>
-        <Pressable onPress={pickAvatar} accessibilityRole="button" disabled={busy}
-          style={{ paddingVertical: 9, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: t.color.border, backgroundColor: t.color.surface, opacity: busy ? 0.5 : 1 }}>
-          <Text variant="label">{avatarUri ? 'Change photo' : 'Add a photo'}</Text>
-        </Pressable>
       </View>
 
       {/* ── About you ────────────────────────────────── */}
       <View style={{ gap: 8 }}>
-        <Text style={sectionLabelStyle}>About you</Text>
-        <View style={groupedCard}>
+        <SectionLabel>About you</SectionLabel>
+        <GroupedCard>
           <ExpandableRow label="Name" value={name} onChange={setName} onSave={saveProfile} placeholder="Full name" />
           <ExpandableRow label="Email" value={contactEmail} onChange={setContactEmail} onSave={saveProfile} placeholder="you@example.com" />
           <ExpandableRow label="Phone" value={phone} onChange={setPhone} onSave={saveProfile} placeholder="+64 21 000 000" last />
@@ -207,49 +197,40 @@ export default function Account() {
                 const sel = preferred === o.key;
                 return (
                   <Pressable key={o.key} onPress={() => { setPreferred(o.key); saveProfile(); }} accessibilityRole="button"
-                    style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }}>
+                    style={{ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }}>
                     <Text variant="label" color={sel ? t.color.primaryText : t.color.text}>{o.label}</Text>
                   </Pressable>
                 );
               })}
             </View>
           </View>
-        </View>
+        </GroupedCard>
       </View>
 
       {/* ── Organisation (admin only) ─────────────────── */}
       {isAdmin && (
         <View style={{ gap: 8 }}>
-          <Text style={sectionLabelStyle}>{data?.org?.org_name || 'Organisation'}</Text>
-          <View style={groupedCard}>
+          <SectionLabel>{data?.org?.org_name || 'Organisation'}</SectionLabel>
+          <GroupedCard>
             <ExpandableRow label="Organisation name" value={orgName} onChange={setOrgName} onSave={saveOrg} placeholder="Organisation name" />
             <ExpandableRow label="Support email" value={supportEmail} onChange={setSupportEmail} onSave={saveOrg} placeholder="support@example.com" last={manageLinks.length === 0} />
             {manageLinks.map((l, i) => (
-              <Pressable key={l.href} onPress={() => router.push(l.href)} accessibilityRole="button"
-                style={(state) => {
-                  const { pressed, hovered } = state as { pressed: boolean; hovered?: boolean };
-                  return {
-                    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12,
-                    paddingVertical: 12, paddingHorizontal: 14, minHeight: 56,
-                    borderTopWidth: 1, borderColor: t.color.border,
-                    backgroundColor: pressed || hovered ? t.color.surfaceAlt : 'transparent',
-                  };
-                }}>
+              <GRow key={l.href} onPress={() => router.push(l.href)} last={i === manageLinks.length - 1}>
                 <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
                   <Ionicons name={l.icon} size={18} color={t.color.text} />
                 </View>
                 <Text variant="label" style={{ flex: 1 }}>{l.label}</Text>
                 <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
-              </Pressable>
+              </GRow>
             ))}
-          </View>
+          </GroupedCard>
         </View>
       )}
 
       {/* ── This device ──────────────────────────────── */}
       <View style={{ gap: 8 }}>
-        <Text style={sectionLabelStyle}>This device</Text>
-        <View style={groupedCard}>
+        <SectionLabel>This device</SectionLabel>
+        <GroupedCard>
           <View style={{ padding: 14, gap: 10, borderBottomWidth: 1, borderColor: t.color.border }}>
             <Text variant="label">Appearance</Text>
             <View style={{ flexDirection: 'row', backgroundColor: t.color.surfaceAlt, borderRadius: 999, padding: 4 }}>
@@ -273,14 +254,14 @@ export default function Account() {
             </View>
             {canEnrolPasskey && <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />}
           </Pressable>
-        </View>
+        </GroupedCard>
       </View>
 
       {/* ── Log out ──────────────────────────────────── */}
       <Pressable onPress={signOut} accessibilityRole="button"
         style={(state) => {
           const { pressed } = state as { pressed: boolean };
-          return { minHeight: 44, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: t.color.border, borderRadius: 10, paddingVertical: 12, opacity: pressed ? 0.7 : 1 };
+          return { minHeight: 44, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, paddingVertical: t.space.md, opacity: pressed ? 0.7 : 1 };
         }}>
         <Text variant="label" color={t.color.danger}>Log out</Text>
       </Pressable>

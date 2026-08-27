@@ -6,7 +6,7 @@ import type { Product } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
 import { listAdminProducts, createProduct, updateProduct, uploadProductImage } from '@/lib/api';
-import { Screen, Text, Card, Button, Notice, Toggle, Pill, Stepper } from '@/ui/components';
+import { Screen, Text, Card, Button, Notice, Toggle, Pill, Stepper, GroupedCard, FieldRow } from '@/ui/components';
 import { useTheme } from '@/theme';
 import { useProfile } from '@/lib/profile-context';
 
@@ -103,22 +103,21 @@ function EditSheet({ product, currency, onSaved, onClose }: {
           </Pressable>
         </View>
 
-        <View style={s.fieldGroup}>
-          <Text variant="label" muted>Product name *</Text>
-          <TextInput value={draft.title} onChangeText={v => setDraft(d => ({ ...d, title: v }))} style={s.textInput} />
-        </View>
-
-        <View style={s.fieldGroup}>
-          <Text variant="label" muted>Price *</Text>
-          <View style={s.priceRow}>
-            <Text variant="label" muted>{currency}</Text>
-            <TextInput
-              value={fmt(draft.price_cents)}
-              onChangeText={v => { const n = parseFloat(v); if (!isNaN(n)) setDraft(d => ({ ...d, price_cents: Math.round(n * 100) })); }}
-              keyboardType="decimal-pad"
-              style={[s.textInput, s.flex1]} />
-          </View>
-        </View>
+        <GroupedCard>
+          <FieldRow label="Product name" displayValue={draft.title}>
+            <TextInput value={draft.title} onChangeText={v => setDraft(d => ({ ...d, title: v }))} style={s.textInput} />
+          </FieldRow>
+          <FieldRow label="Price" displayValue={`${currency} ${fmt(draft.price_cents)}`} last>
+            <View style={s.priceRow}>
+              <Text variant="label" muted>{currency}</Text>
+              <TextInput
+                value={fmt(draft.price_cents)}
+                onChangeText={v => { const n = parseFloat(v); if (!isNaN(n)) setDraft(d => ({ ...d, price_cents: Math.round(n * 100) })); }}
+                keyboardType="decimal-pad"
+                style={[s.textInput, s.flex1]} />
+            </View>
+          </FieldRow>
+        </GroupedCard>
 
         {draft.sizes.length > 0 && (
           <View style={s.fieldGroup}>
@@ -336,20 +335,19 @@ function AddProductForm({ currency, onAdded, onCancel }: { currency: string; onA
       <Card>
         <Text variant="heading">New product</Text>
 
-        <View style={s.fieldGroup}>
-          <Text variant="label" muted>Product name *</Text>
-          <TextInput value={title} onChangeText={setTitle} placeholder="Product name"
-            placeholderTextColor={t.color.textMuted} style={s.textInput} />
-        </View>
-
-        <View style={s.fieldGroup}>
-          <Text variant="label" muted>Price *</Text>
-          <View style={s.priceRow}>
-            <Text variant="label" muted>{currency}</Text>
-            <TextInput value={price} onChangeText={setPrice} placeholder="0.00" keyboardType="decimal-pad"
-              placeholderTextColor={t.color.textMuted} style={[s.textInput, s.flex1]} />
-          </View>
-        </View>
+        <GroupedCard>
+          <FieldRow label="Product name" displayValue={title}>
+            <TextInput value={title} onChangeText={setTitle} placeholder="Product name"
+              placeholderTextColor={t.color.textMuted} style={s.textInput} />
+          </FieldRow>
+          <FieldRow label="Price" displayValue={price ? `${currency} ${price}` : ''} last>
+            <View style={s.priceRow}>
+              <Text variant="label" muted>{currency}</Text>
+              <TextInput value={price} onChangeText={setPrice} placeholder="0.00" keyboardType="decimal-pad"
+                placeholderTextColor={t.color.textMuted} style={[s.textInput, s.flex1]} />
+            </View>
+          </FieldRow>
+        </GroupedCard>
 
         <View style={s.fieldGroup}>
           <Text variant="label" muted>Sizes *</Text>
@@ -408,7 +406,7 @@ export default function Commerce() {
   const s = makeStyles(t);
   const { features } = useAuth();
   const { data: profile } = useProfile();
-  const currency = profile?.org?.currency ?? 'USD';
+  const currency = profile?.org?.currency ?? process.env.EXPO_PUBLIC_CURRENCY ?? 'NZD';
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading]   = useState(true);
   const [err, setErr]           = useState<string | null>(null);

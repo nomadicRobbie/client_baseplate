@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, ScrollView, Pressable, TextInput, Animated, Platform, useWindowDimensions } from 'react-native';
+import { View, ScrollView, Pressable, TextInput, Modal, Animated, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Redirect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useProfile } from '@/lib/profile-context';
 import { getAccessToken } from '@/lib/session';
 import { updateOrg } from '@/lib/api';
-import { useTheme } from '@/theme';
+import { useTheme, useColorSchemePref } from '@/theme';
 import { lightColor, darkColor } from '@/theme/tokens';
-import { Text } from '@/ui/components';
+import { Text, GroupedCard, GRow, SectionLabel } from '@/ui/components';
 import { ColorWheel } from '@/ui/color-wheel';
 
 // ── HSV helpers ───────────────────────────────────────────────────────────────
@@ -48,47 +48,53 @@ function textOn(hex: string): string {
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Scheme = 'light' | 'dark';
 type Tab = 'primary' | 'accent' | 'bgColor' | 'surfaceColor';
 type Colors = { primary: string | null; accent: string | null; bgColor: string | null; surfaceColor: string | null };
 
-const TABS: { key: Tab; label: string; hint: string }[] = [
-  { key: 'primary', label: 'Brand', hint: 'Buttons, links and active states.' },
-  { key: 'accent', label: 'Accent', hint: 'Badges, highlights and alerts.' },
-  { key: 'bgColor', label: 'Background', hint: 'The page behind every card.' },
-  { key: 'surfaceColor', label: 'Surface', hint: 'Cards, inputs and sheets.' },
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'primary', label: 'Primary' },
+  { key: 'accent', label: 'Accent' },
+  { key: 'bgColor', label: 'Background' },
+  { key: 'surfaceColor', label: 'Ink' },
 ];
 
-// ── Preview ───────────────────────────────────────────────────────────────────
+// ── Mini preview ──────────────────────────────────────────────────────────────
 type PT = { bg: string; surface: string; text: string; textMuted: string; border: string; primary: string; accent: string };
 
+// makePTStyles: all values derived from the PT token — dynamic per preview colour state
+const makePTStyles = (pt: PT) => ({
+  card: { backgroundColor: pt.surface, borderRadius: 14, padding: 14, gap: 12, borderWidth: 1, borderColor: pt.border, overflow: 'hidden' as const },
+  headerRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
+  iconBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: pt.bg, alignItems: 'center' as const, justifyContent: 'center' as const },
+  textStack: { flex: 1 },
+  accentBadge: { backgroundColor: pt.accent + '22', borderWidth: 1, borderColor: pt.accent, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 9 },
+  btnRow: { flexDirection: 'row' as const, gap: 8 },
+  primaryBtn: { flex: 1, backgroundColor: pt.primary, borderRadius: 10, paddingVertical: 10, alignItems: 'center' as const },
+  cancelBtn: { flex: 1, borderWidth: 1, borderColor: pt.border, borderRadius: 10, paddingVertical: 10, alignItems: 'center' as const },
+});
+
 function MiniPreview({ pt }: { pt: PT }) {
+  const p = makePTStyles(pt);
   return (
-    <View style={{ backgroundColor: pt.bg, borderRadius: 14, padding: 12, gap: 10, borderWidth: 1, borderColor: '#303030', overflow: 'hidden' }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text variant="label" color={pt.text}>Preview</Text>
-        <View style={{ backgroundColor: pt.accent, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 9 }}>
-          <Text variant="small" color={textOn(pt.accent)}>Due</Text>
+    <View style={p.card}>
+      <View style={p.headerRow}>
+        <View style={p.iconBox}>
+          <Ionicons name="document-outline" size={18} color={pt.textMuted} />
+        </View>
+        <View style={p.textStack}>
+          <Text variant="label" color={pt.text}>Quarterly report</Text>
+          <Text variant="small" color={pt.textMuted}>Updated 2 minutes ago</Text>
+        </View>
+        <View style={p.accentBadge}>
+          <Text variant="small" color={pt.accent}>Due</Text>
         </View>
       </View>
-      <View style={{ backgroundColor: pt.surface, borderRadius: 12, borderWidth: 1, borderColor: pt.border, padding: 12, gap: 10 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <View style={{ width: 30, height: 30, borderRadius: 999, backgroundColor: pt.primary, flexShrink: 0 }} />
-          <View style={{ flex: 1 }}>
-            <Text variant="label" color={pt.text}>Quarterly report</Text>
-            <Text variant="small" color={pt.textMuted}>Updated 2 minutes ago</Text>
-          </View>
+      <View style={p.btnRow}>
+        <View style={p.primaryBtn}>
+          <Text variant="label" color={textOn(pt.primary)}>Save</Text>
         </View>
-        <View style={{ backgroundColor: pt.surface, borderRadius: 8, borderWidth: 1, borderColor: pt.border, padding: 9 }}>
-          <Text variant="small" color={pt.textMuted}>Search records</Text>
-        </View>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <View style={{ backgroundColor: pt.primary, borderRadius: 8, paddingVertical: 9, paddingHorizontal: 18 }}>
-            <Text variant="small" color={textOn(pt.primary)} style={{ fontWeight: '600' }}>Save</Text>
-          </View>
-          <View style={{ borderWidth: 1, borderColor: pt.border, borderRadius: 8, paddingVertical: 9, paddingHorizontal: 18 }}>
-            <Text variant="small" color={pt.text} style={{ fontWeight: '600' }}>Cancel</Text>
-          </View>
+        <View style={p.cancelBtn}>
+          <Text variant="label" color={pt.text}>Cancel</Text>
         </View>
       </View>
     </View>
@@ -96,63 +102,137 @@ function MiniPreview({ pt }: { pt: PT }) {
 }
 
 // ── Brightness slider ─────────────────────────────────────────────────────────
+// Static slider styles — backgroundColor on segments and left on thumb are dynamic (per-frame)
+const bs = {
+  wrapper: { width: '100%' as const, gap: 6 },
+  labelRow: { flexDirection: 'row' as const, justifyContent: 'space-between' as const },
+  labelText: { fontWeight: '600' as const },
+  track: { height: 24, justifyContent: 'center' as const, position: 'relative' as const },
+  trackBar: { flexDirection: 'row' as const, borderRadius: 999, overflow: 'hidden' as const, height: 10 },
+  segFlex: { flex: 1 },
+  thumbBase: { position: 'absolute' as const, top: 0, width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.3)' },
+  thumbWeb: { boxShadow: '0 1px 4px rgba(0,0,0,0.4)' } as any,
+  thumbNative: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.4, shadowRadius: 4, elevation: 4 },
+};
+
 function BrightnessSlider({ value, maxColor, onChange }: { value: number; maxColor: string; onChange: (v: number) => void }) {
   const [trackWidth, setTrackWidth] = useState(0);
   const SEGMENTS = 12;
-
   const handleResponder = (locationX: number) => {
     if (trackWidth === 0) return;
-    const v = Math.max(0.04, Math.min(1, locationX / trackWidth));
-    onChange(v);
+    onChange(Math.max(0.04, Math.min(1, locationX / trackWidth)));
   };
-
+  // ponytail: left is genuinely dynamic per touch event — cannot pre-compute in makeStyles
   const thumbLeft = Math.max(0, Math.min(trackWidth - 24, value * trackWidth - 12));
-
+  const thumbShadow = Platform.OS === 'web' ? bs.thumbWeb : bs.thumbNative;
   return (
-    <View style={{ width: '100%', gap: 6 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text variant="small" color="#9a9590" style={{ fontWeight: '600' }}>Brightness</Text>
-        <Text variant="small" color="#9a9590" style={{ fontWeight: '600' }}>{Math.round(value * 100)}%</Text>
+    <View style={bs.wrapper}>
+      <View style={bs.labelRow}>
+        <Text variant="small" color="#9a9590" style={bs.labelText}>Brightness</Text>
+        <Text variant="small" color="#9a9590" style={bs.labelText}>{Math.round(value * 100)}%</Text>
       </View>
       <View
         onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
-        style={{ height: 24, justifyContent: 'center', position: 'relative' }}
+        style={bs.track}
         onStartShouldSetResponder={() => true}
         onMoveShouldSetResponder={() => true}
         onResponderGrant={(e) => handleResponder(e.nativeEvent.locationX)}
         onResponderMove={(e) => handleResponder(e.nativeEvent.locationX)}
       >
-        <View style={{ flexDirection: 'row', borderRadius: 999, overflow: 'hidden', height: 10 }}>
+        <View style={bs.trackBar}>
           {Array.from({ length: SEGMENTS }, (_, i) => (
-            <View key={i} style={{ flex: 1, backgroundColor: blendHex('#000000', maxColor, (i + 0.5) / SEGMENTS) }} />
+            // ponytail: backgroundColor is per-segment computed gradient — cannot pre-compute
+            <View key={i} style={[bs.segFlex, { backgroundColor: blendHex('#000000', maxColor, (i + 0.5) / SEGMENTS) }]} />
           ))}
         </View>
         {trackWidth > 0 && (
-          <View style={{
-            position: 'absolute', left: thumbLeft, top: 0,
-            width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff',
-            borderWidth: 1, borderColor: 'rgba(0,0,0,0.3)',
-            ...(Platform.OS === 'web' ? { boxShadow: '0 1px 4px rgba(0,0,0,0.4)' } : { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.4, shadowRadius: 4, elevation: 4 }),
-          }} />
+          // ponytail: left is dynamic per touch — cannot pre-compute
+          <View style={[bs.thumbBase, thumbShadow, { left: thumbLeft }]} />
         )}
       </View>
     </View>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
+type ThemeT = ReturnType<typeof useTheme>;
+
+// Page-level styles
+const makeStyles = (t: ThemeT) => ({
+  root: { flex: 1, backgroundColor: t.color.bg },
+  inner: { flex: 1 },
+  scrollContent: { flexGrow: 1, width: '100%' as const, padding: 20, gap: 20, paddingBottom: 20 },
+  backBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
+  section: { gap: 8 },
+  flex1: { flex: 1 },
+  swatchRow: { fontFamily: 'monospace', fontSize: 13 },
+  swatch: (hex: string) => ({ width: 32, height: 32, borderRadius: 8, backgroundColor: hex, borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)' }),
+  iconBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: t.color.surfaceAlt, alignItems: 'center' as const, justifyContent: 'center' as const },
+  saveBar: (bottomInset: number) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12 + bottomInset, backgroundColor: t.color.surface, borderTopWidth: 1, borderTopColor: t.color.border }),
+  discardBtn: { minHeight: 40, paddingHorizontal: 14, justifyContent: 'center' as const },
+  saveBtn: (busy: boolean) => ({ minHeight: 40, paddingHorizontal: 18, justifyContent: 'center' as const, backgroundColor: t.color.success, borderRadius: 10, opacity: busy ? 0.5 : 1 }),
+  toastView: { position: 'absolute' as const, right: 16, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, backgroundColor: t.color.successMuted, borderWidth: 1, borderColor: t.color.success, borderRadius: 10, padding: 12, pointerEvents: 'none' as any },
+});
+
+// Mobile bottom-sheet styles — slide up from bottom, scrollable content
+const makeMobileSheet = (t: ThemeT, bottomInset: number) => ({
+  backdrop: { flex: 1, justifyContent: 'flex-end' as const, backgroundColor: 'rgba(0,0,0,0.5)' },
+  backdropClose: { flex: 1 },
+  // No fixed height — content determines size; maxHeight caps it at 75% of screen
+  sheet: { backgroundColor: t.color.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' as const, maxHeight: '75%' as any },
+  handle: { alignItems: 'center' as const, paddingTop: 12, paddingBottom: 4 },
+  handleBar: { width: 36, height: 4, borderRadius: 2, backgroundColor: t.color.border },
+  scrollContent: { padding: 20, paddingTop: 8, gap: 16, paddingBottom: bottomInset + 24 },
+});
+
+// Web dialog styles — fade in centred, standard modal
+const makeWebDialog = (t: ThemeT) => ({
+  backdrop: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: 'rgba(0,0,0,0.5)' },
+  // Absolute fill so pressing outside the dialog closes it without stealing layout space
+  backdropClose: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 },
+  dialog: { backgroundColor: t.color.surface, borderRadius: 16, overflow: 'hidden' as const, width: '90%' as any, maxWidth: 440 },
+  scrollContent: { padding: 24, gap: 16 },
+});
+
+// Shared picker content styles (used inside both mobile sheet and web dialog)
+const makePickerStyles = (t: ThemeT) => ({
+  header: { flexDirection: 'row' as const, alignItems: 'center' as const },
+  flex1: { flex: 1 },
+  wheelWrapper: { alignItems: 'center' as const },
+  hexRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, minHeight: 52, paddingHorizontal: 12, backgroundColor: t.color.surfaceAlt, borderWidth: 1, borderColor: t.color.border, borderRadius: 12 },
+  hexSwatch: (hex: string) => ({ width: 30, height: 30, borderRadius: 8, backgroundColor: hex, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)', flexShrink: 0 as const }),
+  hexMono: { flex: 1, fontSize: 15 },
+  hexInputRow: { flexDirection: 'row' as const, gap: 8, alignItems: 'center' as const },
+  hexInput: (err: boolean, t2: ThemeT) => ({ flex: 1, backgroundColor: t2.color.surface, borderWidth: 1, borderColor: err ? t2.color.danger : t2.color.border, borderRadius: 10, padding: 12, minHeight: 44, fontSize: 16, color: t2.color.text, fontFamily: t2.font.mono }),
+  hexApplyBtn: { paddingHorizontal: 16, minHeight: 44, justifyContent: 'center' as const, alignItems: 'center' as const, backgroundColor: t.color.surfaceAlt, borderRadius: 10 },
+});
+
 // ── Main page ─────────────────────────────────────────────────────────────────
-// Theme / appearance. Admin-only; brand colours apply to everyone.
 export default function Theme() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const wide = width >= 900;
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const { pref } = useColorSchemePref();
   const { data, refresh } = useProfile();
   const isAdmin = data?.me.role === 'admin' || data?.me.role === 'super';
   const orgName = data?.org?.org_name ?? 'your organisation';
 
-  // Saved colors from org (restore on discard)
+  // Use the user's chosen scheme for the preview; fall back to system via Appearance
+  const { Appearance } = require('react-native');
+  const systemScheme = Appearance.getColorScheme?.() ?? 'light';
+  const previewScheme = pref === 'os' ? systemScheme : pref;
+  const base = previewScheme === 'dark' ? darkColor : lightColor;
+
+  const isWeb = Platform.OS === 'web';
+  // Fixed wheel sizes — no computation; ScrollView inside the modal handles any overflow
+  const wheelSize = isWeb ? 220 : 180;
+
+  const defaultForTab: Record<Tab, string> = {
+    primary: base.primary, accent: base.accent, bgColor: base.bg, surfaceColor: base.surface,
+  };
+
   const savedColorsRef = useRef<Colors>({
     primary: data?.org?.brand_color ?? null,
     accent: data?.org?.accent_color ?? null,
@@ -161,8 +241,7 @@ export default function Theme() {
   });
 
   const [colors, setColors] = useState<Colors>(savedColorsRef.current);
-  const [tab, setTab] = useState<Tab>('primary');
-  const [previewScheme, setPreviewScheme] = useState<Scheme>('dark');
+  const [editingTab, setEditingTab] = useState<Tab | null>(null);
   const [hexOpen, setHexOpen] = useState(false);
   const [hexInput, setHexInput] = useState('');
   const [hexErr, setHexErr] = useState(false);
@@ -170,22 +249,17 @@ export default function Theme() {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Derive current color for active tab
-  const base = previewScheme === 'dark' ? darkColor : lightColor;
-  const defaultForTab: Record<Tab, string> = {
-    primary: base.primary, accent: base.accent, bgColor: base.bg, surfaceColor: base.surface,
-  };
-  const currentHex = colors[tab] ?? defaultForTab[tab];
+  const currentHex = editingTab ? (colors[editingTab] ?? defaultForTab[editingTab]) : base.primary;
   const [hsv, setHsv] = useState(() => hex2hsv(currentHex));
 
-  // When tab changes, update hsv to match the new tab's color
+  // Sync HSV when a different colour row is opened
   useEffect(() => {
-    setHsv(hex2hsv(colors[tab] ?? defaultForTab[tab]));
-    setHexOpen(false);
+    if (!editingTab) { setHexOpen(false); setHexInput(''); setHexErr(false); return; }
+    setHsv(hex2hsv(colors[editingTab] ?? defaultForTab[editingTab]));
+    setHexOpen(false); setHexInput(''); setHexErr(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  }, [editingTab]);
 
-  // Preview theme (merges overrides onto the selected base scheme)
   const pt: PT = {
     bg: colors.bgColor ?? base.bg,
     surface: colors.surfaceColor ?? base.surface,
@@ -196,7 +270,7 @@ export default function Theme() {
     accent: colors.accent ?? base.accent,
   };
 
-  // Toast (fades out after save)
+  // Toast
   const toastAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!saved) return;
@@ -207,10 +281,16 @@ export default function Theme() {
     ]).start(() => setSaved(false));
   }, [saved, toastAnim]);
 
+  const s = makeStyles(t);
+  const ms = makeMobileSheet(t, insets.bottom);
+  const wd = makeWebDialog(t);
+  const pc = makePickerStyles(t);
+
   if (!isAdmin) return <Redirect href="/dashboard" />;
 
   const setColor = (hex: string) => {
-    setColors((c) => ({ ...c, [tab]: hex }));
+    if (!editingTab) return;
+    setColors((c) => ({ ...c, [editingTab]: hex }));
     setHsv(hex2hsv(hex));
     setDirty(true);
   };
@@ -235,13 +315,12 @@ export default function Theme() {
 
   const reset = () => {
     setColors({ primary: null, accent: null, bgColor: null, surfaceColor: null });
-    setHsv(hex2hsv(defaultForTab[tab]));
     setDirty(true);
+    setEditingTab(null);
   };
 
   const discard = () => {
     setColors(savedColorsRef.current);
-    setHsv(hex2hsv(savedColorsRef.current[tab] ?? defaultForTab[tab]));
     setDirty(false);
   };
 
@@ -261,191 +340,167 @@ export default function Theme() {
       setDirty(false);
       setSaved(true);
     } catch (e) {
-      // ponytail: surface error via alert — dedicated error UI is overkill for save failures
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.alert(e instanceof Error ? e.message : String(e));
-      }
+      if (Platform.OS === 'web' && typeof window !== 'undefined') window.alert(e instanceof Error ? e.message : String(e));
     } finally { setBusy(false); }
   };
 
-  const maxColor = hsv2hex(hsv.h, hsv.s, 1);
+  const maxColor = editingTab ? hsv2hex(hsv.h, hsv.s, 1) : base.primary;
+  const activeLabel = TABS.find((tb) => tb.key === editingTab)?.label ?? '';
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: t.color.bg }}>
-      <View style={{ flex: 1, overflow: 'hidden' }}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={s.root}>
+      <View style={s.inner}>
 
-        {/* ── Fixed header ── */}
-        <View style={{ backgroundColor: t.color.bg, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, gap: 12 }}>
-
-          {/* Back link (mobile only) */}
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.scrollContent}>
+          {/* Back */}
           {!wide && (
-            <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back"
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginBottom: -4 }}>
-              <Ionicons name="chevron-back" size={20} color={t.color.textMuted} />
-              <Text variant="label" muted>Account</Text>
+            <Pressable onPress={() => router.back()} accessibilityRole="button" style={s.backBtn}>
+              <Ionicons name="chevron-back" size={18} color={t.color.primary} />
+              <Text variant="label" color={t.color.primary}>Account</Text>
             </Pressable>
           )}
 
-          {/* Title + scheme toggle */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Text variant="title" style={{ flex: 1 }}>Theme</Text>
-            <View style={{ flexDirection: 'row', backgroundColor: t.color.surfaceAlt, borderRadius: 999, padding: 3 }}>
-              {(['light', 'dark'] as Scheme[]).map((sc) => {
-                const active = previewScheme === sc;
-                return (
-                  <Pressable
-                    key={sc}
-                    onPress={() => setPreviewScheme(sc)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    style={{
-                      paddingVertical: 5, paddingHorizontal: 12, borderRadius: 999,
-                      backgroundColor: active ? t.color.ink : 'transparent',
-                    }}
-                  >
-                    <Text variant="small" style={{ fontWeight: '600' }} color={active ? t.color.parchment : t.color.textMuted}>
-                      {sc === 'light' ? 'Light' : 'Dark'}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Preview label flush against the preview box */}
-          <View style={{ gap: 0 }}>
-            <Text variant="small" color={t.color.textMuted} style={{ fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase' as const, textAlign: 'right' }}>Preview</Text>
+          {/* Preview */}
+          <View style={s.section}>
+            <SectionLabel>Preview</SectionLabel>
             <MiniPreview pt={pt} />
           </View>
-        </View>
 
-        {/* ── Scrollable picker ── */}
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-          automaticallyAdjustKeyboardInsets
-          contentContainerStyle={{ padding: 20, gap: 18, paddingBottom: 20 }}
-        >
-
-          {/* Tabs */}
-          <View style={{ flexDirection: 'row', backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border, borderRadius: 999, padding: 4, width: '100%' }}>
-            {TABS.map(({ key, label }) => {
-              const active = tab === key;
-              return (
-                <Pressable
-                  key={key}
-                  onPress={() => setTab(key)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  style={{ flex: 1, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 999, backgroundColor: active ? t.color.ink : 'transparent' }}
-                >
-                  <Text variant="small" style={{ fontWeight: '600' }} color={active ? t.color.parchment : t.color.textMuted}>{label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text variant="small" color={t.color.textMuted} style={{ textAlign: 'center', marginTop: -8 }}>
-            {TABS.find((tb) => tb.key === tab)?.hint}
-          </Text>
-
-          {/* Color wheel (platform-resolved) */}
-          <View style={{ alignItems: 'center' }}>
-            <ColorWheel h={hsv.h} s={hsv.s} v={hsv.v} onChange={onWheelChange} />
+          {/* Brand colours */}
+          <View style={s.section}>
+            <SectionLabel>Brand colours</SectionLabel>
+            <GroupedCard>
+              {TABS.map(({ key, label }, i) => {
+                const hex = colors[key] ?? defaultForTab[key];
+                return (
+                  <GRow key={key} last={i === TABS.length - 1} onPress={() => setEditingTab(key)}>
+                    <Text variant="label" style={s.flex1}>{label}</Text>
+                    <Text variant="body" muted style={s.swatchRow}>{hex.toUpperCase()}</Text>
+                    <View style={s.swatch(hex)} />
+                    <Ionicons name="chevron-forward" size={16} color={t.color.textMuted} />
+                  </GRow>
+                );
+              })}
+            </GroupedCard>
           </View>
 
-          {/* Brightness slider */}
-          <BrightnessSlider value={hsv.v} maxColor={maxColor} onChange={onBrightness} />
-
-          {/* Hex row */}
-          <Pressable
-            onPress={() => setHexOpen((o) => !o)}
-            accessibilityRole="button"
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%', minHeight: 52, paddingHorizontal: 12, backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border, borderRadius: 12 }}
-          >
-            <View style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: currentHex, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', flexShrink: 0 }} />
-            <Text variant="mono" style={{ flex: 1, fontSize: 15 }}>{currentHex.toUpperCase()}</Text>
-            {!!colors[tab] && <Text variant="small" color={t.color.textMuted} style={{ fontWeight: '600', paddingRight: 4 }}>Custom</Text>}
-            <Ionicons name="create-outline" size={18} color={t.color.textMuted} />
-          </Pressable>
-
-          {/* Hex input (expandable) */}
-          {hexOpen && (
-            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', width: '100%', marginTop: -10 }}>
-              <TextInput
-                value={hexInput}
-                onChangeText={(v) => { setHexInput(v); setHexErr(false); }}
-                onSubmitEditing={applyHex}
-                placeholder="#rrggbb"
-                placeholderTextColor={t.color.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="done"
-                style={{
-                  flex: 1, backgroundColor: t.color.surface, borderWidth: 1,
-                  borderColor: hexErr ? t.color.danger : t.color.border,
-                  borderRadius: 10, padding: 12, minHeight: 44,
-                  fontSize: 16, color: t.color.text, fontFamily: t.font.mono,
-                }}
-              />
-              <Pressable
-                onPress={applyHex}
-                accessibilityRole="button"
-                style={{ paddingHorizontal: 16, minHeight: 44, justifyContent: 'center', alignItems: 'center', backgroundColor: t.color.surfaceAlt, borderRadius: 10 }}
-              >
-                <Text variant="label">Apply</Text>
-              </Pressable>
-            </View>
-          )}
-          {hexErr && <Text variant="small" color={t.color.danger}>Enter a valid hex colour, e.g. #2a7f62</Text>}
-
+          {/* Manage */}
+          <View style={s.section}>
+            <SectionLabel>Manage</SectionLabel>
+            <GroupedCard>
+              <GRow last onPress={reset}>
+                <View style={s.iconBox}>
+                  <Ionicons name="refresh-outline" size={18} color={t.color.text} />
+                </View>
+                <Text variant="label" style={s.flex1}>Reset to blnk default</Text>
+                <Ionicons name="chevron-forward" size={16} color={t.color.textMuted} />
+              </GRow>
+            </GroupedCard>
+          </View>
         </ScrollView>
 
-        {/* ── Save bar — in-flow below scroll, above tab bar ── */}
-        <View style={{
-          flexDirection: 'row', alignItems: 'center', gap: 6,
-          paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12 + insets.bottom,
-          backgroundColor: t.color.surface, borderTopWidth: 1, borderTopColor: t.color.border,
-        }}>
-          <Pressable
-            onPress={reset}
-            accessibilityRole="button"
-            style={{ minHeight: 40, paddingHorizontal: 4, justifyContent: 'center' }}
-          >
-            <Ionicons name="refresh" size={18} color={t.color.textMuted} />
-          </Pressable>
-          <Text variant="small" color={t.color.textMuted} style={{ flex: 1 }}>Applies to everyone in {orgName}</Text>
-          <Pressable
-            onPress={discard}
-            accessibilityRole="button"
-            style={{ minHeight: 40, paddingHorizontal: 14, justifyContent: 'center' }}
-          >
-            <Text variant="label" color={t.color.textMuted}>Discard</Text>
-          </Pressable>
-          <Pressable
-            onPress={save}
-            disabled={!dirty || busy}
-            accessibilityRole="button"
-            style={{ minHeight: 40, paddingHorizontal: 18, justifyContent: 'center', backgroundColor: t.color.success, borderRadius: 10, opacity: (!dirty || busy) ? 0.4 : 1 }}
-          >
-            <Text variant="label" color={textOn(t.color.success)}>{busy ? 'Saving…' : 'Save'}</Text>
-          </Pressable>
-        </View>
+        {/* Save bar */}
+        {dirty && (
+          <View style={s.saveBar(insets.bottom)}>
+            <Text variant="small" color={t.color.textMuted} style={s.flex1}>Applies to everyone in {orgName}</Text>
+            <Pressable onPress={discard} accessibilityRole="button" style={s.discardBtn}>
+              <Text variant="label" color={t.color.textMuted}>Discard</Text>
+            </Pressable>
+            <Pressable onPress={save} disabled={busy} accessibilityRole="button" style={s.saveBtn(busy)}>
+              <Text variant="label" color={textOn(t.color.success)}>{busy ? 'Saving…' : 'Save'}</Text>
+            </Pressable>
+          </View>
+        )}
 
-        {/* ── Toast ── */}
-        <Animated.View style={{
-          position: 'absolute', right: 16, bottom: insets.bottom + 80,
-          flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: 320,
-          backgroundColor: t.color.successMuted, borderWidth: 1, borderColor: t.color.success,
-          borderRadius: 10, padding: 12,
-          opacity: toastAnim,
-          transform: [{ translateX: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [120, 0] }) }],
-          pointerEvents: 'none' as any,
-        }}>
+        {/* Toast */}
+        <Animated.View style={[s.toastView, { bottom: insets.bottom + 20, opacity: toastAnim, transform: [{ translateX: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [120, 0] }) }] }]}>
           <Ionicons name="checkmark-circle" size={16} color={t.color.success} />
           <Text variant="small" color={t.color.success}>Saved — colours apply to all users.</Text>
         </Animated.View>
-
       </View>
+
+      {/* ── Colour picker modal ── */}
+      <Modal
+        visible={editingTab !== null}
+        transparent
+        animationType={isWeb ? 'fade' : 'slide'}
+        onRequestClose={() => setEditingTab(null)}
+      >
+        {isWeb ? (
+          // Web: standard centred dialog
+          <View style={wd.backdrop}>
+            <Pressable style={wd.backdropClose} onPress={() => setEditingTab(null)} />
+            <View style={wd.dialog}>
+              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={wd.scrollContent}>
+                <View style={pc.header}>
+                  <Text variant="heading" style={pc.flex1}>{activeLabel}</Text>
+                  <Pressable onPress={() => setEditingTab(null)} hitSlop={8} accessibilityRole="button">
+                    <Ionicons name="close" size={22} color={t.color.textMuted} />
+                  </Pressable>
+                </View>
+                <View style={pc.wheelWrapper}>
+                  <ColorWheel h={hsv.h} s={hsv.s} v={hsv.v} onChange={onWheelChange} size={wheelSize} />
+                </View>
+                <BrightnessSlider value={hsv.v} maxColor={maxColor} onChange={onBrightness} />
+                <Pressable onPress={() => setHexOpen((o) => !o)} accessibilityRole="button" style={pc.hexRow}>
+                  <View style={pc.hexSwatch(currentHex)} />
+                  <Text variant="mono" style={pc.hexMono}>{currentHex.toUpperCase()}</Text>
+                  <Ionicons name="create-outline" size={18} color={t.color.textMuted} />
+                </Pressable>
+                {hexOpen && (
+                  <View style={pc.hexInputRow}>
+                    <TextInput value={hexInput} onChangeText={(v) => { setHexInput(v); setHexErr(false); }}
+                      onSubmitEditing={applyHex} placeholder="#rrggbb" placeholderTextColor={t.color.textMuted}
+                      autoCapitalize="none" autoCorrect={false} returnKeyType="done" style={pc.hexInput(hexErr, t)} />
+                    <Pressable onPress={applyHex} accessibilityRole="button" style={pc.hexApplyBtn}>
+                      <Text variant="label">Apply</Text>
+                    </Pressable>
+                  </View>
+                )}
+                {hexErr && <Text variant="small" color={t.color.danger}>Enter a valid hex, e.g. #2a7f62</Text>}
+              </ScrollView>
+            </View>
+          </View>
+        ) : (
+          // Mobile: bottom sheet — content in ScrollView so maxHeight clips cleanly
+          <View style={ms.backdrop}>
+            <Pressable style={ms.backdropClose} onPress={() => setEditingTab(null)} />
+            <View style={ms.sheet}>
+              <View style={ms.handle}>
+                <View style={ms.handleBar} />
+              </View>
+              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={ms.scrollContent}>
+                <View style={pc.header}>
+                  <Text variant="heading" style={pc.flex1}>{activeLabel}</Text>
+                  <Pressable onPress={() => setEditingTab(null)} hitSlop={8} accessibilityRole="button">
+                    <Ionicons name="close" size={22} color={t.color.textMuted} />
+                  </Pressable>
+                </View>
+                <View style={pc.wheelWrapper}>
+                  <ColorWheel h={hsv.h} s={hsv.s} v={hsv.v} onChange={onWheelChange} size={wheelSize} />
+                </View>
+                <BrightnessSlider value={hsv.v} maxColor={maxColor} onChange={onBrightness} />
+                <Pressable onPress={() => setHexOpen((o) => !o)} accessibilityRole="button" style={pc.hexRow}>
+                  <View style={pc.hexSwatch(currentHex)} />
+                  <Text variant="mono" style={pc.hexMono}>{currentHex.toUpperCase()}</Text>
+                  <Ionicons name="create-outline" size={18} color={t.color.textMuted} />
+                </Pressable>
+                {hexOpen && (
+                  <View style={pc.hexInputRow}>
+                    <TextInput value={hexInput} onChangeText={(v) => { setHexInput(v); setHexErr(false); }}
+                      onSubmitEditing={applyHex} placeholder="#rrggbb" placeholderTextColor={t.color.textMuted}
+                      autoCapitalize="none" autoCorrect={false} returnKeyType="done" style={pc.hexInput(hexErr, t)} />
+                    <Pressable onPress={applyHex} accessibilityRole="button" style={pc.hexApplyBtn}>
+                      <Text variant="label">Apply</Text>
+                    </Pressable>
+                  </View>
+                )}
+                {hexErr && <Text variant="small" color={t.color.danger}>Enter a valid hex, e.g. #2a7f62</Text>}
+              </ScrollView>
+            </View>
+          </View>
+        )}
+      </Modal>
     </SafeAreaView>
   );
 }

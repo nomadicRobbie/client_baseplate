@@ -40,7 +40,7 @@ const makeStyles = (t: ThemeT) => ({
   sidebar: { width: 248, borderRightWidth: 1, borderRightColor: t.color.border, padding: t.space.lg, justifyContent: 'space-between' as const },
   sidebarTop: { gap: t.space.lg },
   content: { flex: 1 },
-  badgeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: t.color.danger ?? '#e53e3e', marginLeft: 4 },
+  badgeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: t.color.danger, marginLeft: 4 },
 });
 
 function greeting(): string {
