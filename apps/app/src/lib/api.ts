@@ -4,6 +4,20 @@ import { getAccessToken, getRefreshToken, setTokens, clearSession } from './sess
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
 // and verifies tokens — the app never sees blnk_auth directly.
+
+// ponytail: Hermes's built-in fetch doesn't understand RN's {uri,name,type} FormData
+// trick. XHR still goes through the old RN networking stack that handles it natively.
+function nativeMultipartUpload(url: string, token: string, form: FormData): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.onload = () => resolve(new Response(xhr.responseText, { status: xhr.status }));
+    xhr.onerror = () => reject(new TypeError('Network request failed'));
+    xhr.send(form);
+  });
+}
+
 export const API = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000';
 export const TENANT = process.env.EXPO_PUBLIC_TENANT_SLUG ?? 'ting-test';
 
@@ -134,17 +148,19 @@ export const uploadUserAvatar = async (
     const form = new FormData();
     if (asset?.file) {
       form.append('file', asset.file, asset.file.name || filename);
+    } else if (typeof document === 'undefined') {
+      form.append('file', { uri, name: filename, type: asset?.mimeType ?? 'image/jpeg' } as unknown as Blob);
     } else {
       const blob = await fetch(uri).then((r) => r.blob());
       form.append('file', blob, filename);
     }
     return form;
   };
-  const doUpload = async (tok: string) => fetch(`${API}/profile/me/avatar`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${tok}` },
-    body: await buildForm(),
-  });
+  const doUpload = async (tok: string) => {
+    const form = await buildForm();
+    if (typeof document === 'undefined') return nativeMultipartUpload(`${API}/profile/me/avatar`, tok, form);
+    return fetch(`${API}/profile/me/avatar`, { method: 'POST', headers: { authorization: `Bearer ${tok}` }, body: form });
+  };
   let res = await doUpload(token);
   if (res.status === 401) {
     if (await trySilentRefresh()) {
@@ -211,15 +227,19 @@ export const uploadAssetImage = async (token: string, uri: string): Promise<stri
   const filename = uri.split('/').pop() ?? 'image.jpg';
   const buildForm = async () => {
     const form = new FormData();
-    const blob = await fetch(uri).then((r) => r.blob());
-    form.append('file', blob, filename);
+    if (typeof document === 'undefined') {
+      form.append('file', { uri, name: filename, type: 'image/jpeg' } as unknown as Blob);
+    } else {
+      const blob = await fetch(uri).then((r) => r.blob());
+      form.append('file', blob, filename);
+    }
     return form;
   };
-  const doUpload = async (tok: string) => fetch(`${API}/asset/documents/upload`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${tok}` },
-    body: await buildForm(),
-  });
+  const doUpload = async (tok: string) => {
+    const form = await buildForm();
+    if (typeof document === 'undefined') return nativeMultipartUpload(`${API}/asset/documents/upload`, tok, form);
+    return fetch(`${API}/asset/documents/upload`, { method: 'POST', headers: { authorization: `Bearer ${tok}` }, body: form });
+  };
   let res = await doUpload(token);
   if (res.status === 401) {
     if (await trySilentRefresh()) {
@@ -414,15 +434,19 @@ export const uploadPlanImage = async (token: string, planId: string, uri: string
   const filename = uri.split('/').pop() ?? 'image.jpg';
   const buildForm = async () => {
     const form = new FormData();
-    const blob = await fetch(uri).then((r) => r.blob());
-    form.append('file', blob, filename);
+    if (typeof document === 'undefined') {
+      form.append('file', { uri, name: filename, type: 'image/jpeg' } as unknown as Blob);
+    } else {
+      const blob = await fetch(uri).then((r) => r.blob());
+      form.append('file', blob, filename);
+    }
     return form;
   };
-  const doUpload = async (tok: string) => fetch(`${API}/compliance/plans/${planId}/image`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${tok}` },
-    body: await buildForm(),
-  });
+  const doUpload = async (tok: string) => {
+    const form = await buildForm();
+    if (typeof document === 'undefined') return nativeMultipartUpload(`${API}/compliance/plans/${planId}/image`, tok, form);
+    return fetch(`${API}/compliance/plans/${planId}/image`, { method: 'POST', headers: { authorization: `Bearer ${tok}` }, body: form });
+  };
   let res = await doUpload(token);
   if (res.status === 401) {
     if (await trySilentRefresh()) {

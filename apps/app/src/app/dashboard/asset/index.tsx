@@ -485,10 +485,7 @@ export default function AssetManager() {
 
           {selectedType && selectedType.fields.length > 0 && (
             <View style={{ gap: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: 4 }}>
-                <SectionLabel>{selectedType.name} particulars</SectionLabel>
-                <Text variant="small" muted>Optional</Text>
-              </View>
+              <SectionLabel>{selectedType.name} particulars</SectionLabel>
               <ParticularsForm fields={selectedType.fields} value={particulars} onChange={setParticulars} />
             </View>
           )}
