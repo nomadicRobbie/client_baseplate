@@ -26,7 +26,6 @@
     "expo-font": "~56.0.5",
     "expo-glass-effect": "~56.0.4",
     "expo-image": "~56.0.10",
-    "expo-image-manipulator": "~56.0.25",
     "expo-image-picker": "~56.0.24",
     "expo-linking": "~56.0.13",
     "expo-notifications": "~56.0.24",

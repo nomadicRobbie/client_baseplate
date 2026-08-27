@@ -50,16 +50,6 @@ function StockEditor({ sizes, stockLevel, onChange }: {
   );
 }
 
-async function compressForUpload(uri: string): Promise<string> {
-  try {
-    // ponytail: lazy require so a missing native module doesn't crash at import time
-    const { manipulateAsync, SaveFormat } = require('expo-image-manipulator') as typeof import('expo-image-manipulator');
-    const result = await manipulateAsync(uri, [{ resize: { width: 1920 } }], { compress: 0.75, format: SaveFormat.JPEG });
-    return result.uri;
-  } catch {
-    return uri;
-  }
-}
 
 // ── Image row ────────────────────────────────────────────────────────────────
 function ImageRow({ images, onAdd, uploading }: { images: string[]; onAdd: () => void; uploading: boolean }) {
@@ -131,12 +121,11 @@ function EditSheet({ product, currency, onSaved, onClose, onToast }: {
     } else {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') { onToast('Photo library access is required.', 'error'); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.9});
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.75});
       if (result.canceled) return;
       setUploading(true);
       try {
-        const compressed = await compressForUpload(result.assets[0].uri);
-        const { url } = await uploadProductImage(getAccessToken()!, compressed);
+        const { url } = await uploadProductImage(getAccessToken()!, result.assets[0].uri);
         setDraft(d => { const imgs = [...d.images, url]; return { ...d, images: imgs, image_url: imgs[0] }; });
       }
       catch (e) { onToast(e instanceof Error ? e.message : 'Upload failed', 'error'); }
@@ -352,12 +341,11 @@ function AddProductForm({ currency, onAdded, onCancel, onToast }: { currency: st
     } else {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') { onToast('Photo library access is required.', 'error'); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.9});
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.75});
       if (result.canceled) return;
       setUploading(true);
       try {
-        const compressed = await compressForUpload(result.assets[0].uri);
-        const { url } = await uploadProductImage(getAccessToken()!, compressed);
+        const { url } = await uploadProductImage(getAccessToken()!, result.assets[0].uri);
         setImages(prev => [...prev, url]);
       }
       catch (e) { onToast(e instanceof Error ? e.message : 'Upload failed', 'error'); }
