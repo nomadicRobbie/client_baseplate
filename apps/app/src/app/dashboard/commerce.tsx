@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Pressable, Image, TextInput, Platform, StyleSheet, ScrollView } from 'react-native';
+import { View, Pressable, Image, TextInput, Platform, ScrollView } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,7 +7,7 @@ import type { Product } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
 import { listAdminProducts, createProduct, updateProduct, uploadProductImage } from '@/lib/api';
-import { Screen, Text, Card, Button, Notice, Toggle, Pill, Stepper, GroupedCard, FieldRow } from '@/ui/components';
+import { Screen, Text, Card, Button, Toggle, Pill, Stepper, GroupedCard, FieldRow } from '@/ui/components';
 import { useTheme } from '@/theme';
 import { useProfile } from '@/lib/profile-context';
 
@@ -69,11 +69,12 @@ function ImageRow({ images, onAdd, uploading }: { images: string[]; onAdd: () =>
 }
 
 // ── Edit sheet ────────────────────────────────────────────────────────────────
-function EditSheet({ product, currency, onSaved, onClose }: {
+function EditSheet({ product, currency, onSaved, onClose, onToast }: {
   product: Product;
   currency: string;
   onSaved: (p: Product) => void;
   onClose: () => void;
+  onToast: (text: string, tone: 'success' | 'error') => void;
 }) {
   const t = useTheme();
   const s = makeStyles(t);
@@ -83,12 +84,11 @@ function EditSheet({ product, currency, onSaved, onClose }: {
   });
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [msg, setMsg] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(product);
 
   const save = async () => {
-    setBusy(true); setMsg(null);
+    setBusy(true);
     try {
       const { product: updated } = await updateProduct(getAccessToken()!, product.id, {
         title: draft.title, price_cents: draft.price_cents, stock_level: draft.stock_level,
@@ -96,9 +96,9 @@ function EditSheet({ product, currency, onSaved, onClose }: {
         image_url: draft.images[0] ?? null, images: draft.images,
       });
       onSaved(updated);
-      setMsg({ text: 'Saved', tone: 'success' });
+      onToast('Saved', 'success');
     } catch (e) {
-      setMsg({ text: e instanceof Error ? e.message : 'Save failed', tone: 'error' });
+      onToast(e instanceof Error ? e.message : 'Save failed', 'error');
     } finally { setBusy(false); }
   };
 
@@ -113,21 +113,21 @@ function EditSheet({ product, currency, onSaved, onClose }: {
           const { url } = await uploadProductImage(getAccessToken()!, file);
           setDraft(d => { const imgs = [...d.images, url]; return { ...d, images: imgs, image_url: imgs[0] }; });
         }
-        catch (e) { setMsg({ text: e instanceof Error ? e.message : 'Upload failed', tone: 'error' }); }
+        catch (e) { onToast(e instanceof Error ? e.message : 'Upload failed', 'error'); }
         finally { setUploading(false); }
       };
       input.click();
     } else {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') { setMsg({ text: 'Photo library access is required.', tone: 'error' }); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.8 });
+      if (status !== 'granted') { onToast('Photo library access is required.', 'error'); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.6 });
       if (result.canceled) return;
       setUploading(true);
       try {
         const { url } = await uploadProductImage(getAccessToken()!, result.assets[0].uri);
         setDraft(d => { const imgs = [...d.images, url]; return { ...d, images: imgs, image_url: imgs[0] }; });
       }
-      catch (e) { setMsg({ text: e instanceof Error ? e.message : 'Upload failed', tone: 'error' }); }
+      catch (e) { onToast(e instanceof Error ? e.message : 'Upload failed', 'error'); }
       finally { setUploading(false); }
     }
   };
@@ -192,11 +192,9 @@ function EditSheet({ product, currency, onSaved, onClose }: {
         </View>
       </Card>
 
-      {msg && <Notice message={msg.text} tone={msg.tone} />}
-
       <View style={s.buttonRow}>
         <Button label="Save product" onPress={save} loading={busy} disabled={!dirty} style={s.flex1} />
-        <Button label="Discard" variant="ghost" onPress={() => { setDraft(product); setMsg(null); }} disabled={!dirty || busy} />
+        <Button label="Discard" variant="ghost" onPress={() => setDraft(product)} disabled={!dirty || busy} />
       </View>
     </>
   );
@@ -304,7 +302,7 @@ const makeStyles = (t: ReturnType<typeof useTheme>) => ({
 // ── Add product form ──────────────────────────────────────────────────────────
 const COMMON_SIZES = ['xs', 's', 'm', 'l', 'xl', 'xxl', 'one-size'];
 
-function AddProductForm({ currency, onAdded, onCancel }: { currency: string; onAdded: (p: Product) => void; onCancel: () => void }) {
+function AddProductForm({ currency, onAdded, onCancel, onToast }: { currency: string; onAdded: (p: Product) => void; onCancel: () => void; onToast: (text: string, tone: 'success' | 'error') => void }) {
   const t = useTheme();
   const s = makeStyles(t);
   const [title, setTitle]               = useState('');
@@ -316,7 +314,6 @@ function AddProductForm({ currency, onAdded, onCancel }: { currency: string; onA
   const [active, setActive]             = useState(true);
   const [busy, setBusy]                 = useState(false);
   const [uploading, setUploading]       = useState(false);
-  const [err, setErr]                   = useState<string | null>(null);
 
   const toggleSize = (sz: string) => {
     if (sizes.includes(sz)) {
@@ -336,27 +333,27 @@ function AddProductForm({ currency, onAdded, onCancel }: { currency: string; onA
         const file = input.files?.[0]; if (!file) return;
         setUploading(true);
         try { const { url } = await uploadProductImage(getAccessToken()!, file); setImages(prev => [...prev, url]); }
-        catch (e) { setErr(e instanceof Error ? e.message : 'Upload failed'); }
+        catch (e) { onToast(e instanceof Error ? e.message : 'Upload failed', 'error'); }
         finally { setUploading(false); }
       };
       input.click();
     } else {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') { setErr('Photo library access is required.'); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.8 });
+      if (status !== 'granted') { onToast('Photo library access is required.', 'error'); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.6 });
       if (result.canceled) return;
       setUploading(true);
       try { const { url } = await uploadProductImage(getAccessToken()!, result.assets[0].uri); setImages(prev => [...prev, url]); }
-      catch (e) { setErr(e instanceof Error ? e.message : 'Upload failed'); }
+      catch (e) { onToast(e instanceof Error ? e.message : 'Upload failed', 'error'); }
       finally { setUploading(false); }
     }
   };
 
   const submit = async () => {
-    if (!title.trim()) { setErr('Title is required'); return; }
+    if (!title.trim()) { onToast('Title is required', 'error'); return; }
     const priceCents = Math.round(parseFloat(price) * 100);
-    if (isNaN(priceCents) || priceCents < 0) { setErr('Enter a valid price'); return; }
-    setBusy(true); setErr(null);
+    if (isNaN(priceCents) || priceCents < 0) { onToast('Enter a valid price', 'error'); return; }
+    setBusy(true);
     try {
       const { product } = await createProduct(getAccessToken()!, {
         title: title.trim(), description: '', desc_points: [], price_cents: priceCents,
@@ -366,7 +363,7 @@ function AddProductForm({ currency, onAdded, onCancel }: { currency: string; onA
       });
       onAdded(product);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Failed to create product');
+      onToast(e instanceof Error ? e.message : 'Failed to create product', 'error');
     } finally { setBusy(false); }
   };
 
@@ -417,8 +414,6 @@ function AddProductForm({ currency, onAdded, onCancel }: { currency: string; onA
         </View>
       </Card>
 
-      {err && <Notice message={err} tone="error" />}
-
       <View style={s.buttonRow}>
         <Button label="Add product" onPress={submit} loading={busy} style={s.flex1} />
         <Button label="Cancel" variant="ghost" onPress={onCancel} disabled={busy} />
@@ -438,14 +433,16 @@ export default function Commerce() {
   const currency = profile?.org?.currency ?? process.env.EXPO_PUBLIC_CURRENCY ?? 'NZD';
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading]   = useState(true);
-  const [err, setErr]           = useState<string | null>(null);
+  const [toast, setToast]       = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
   const [adding, setAdding]     = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const showToast = useCallback((text: string, tone: 'success' | 'error') => setToast({ text, tone }), []);
+
   const load = useCallback(async () => {
-    setLoading(true); setErr(null);
+    setLoading(true);
     try { setProducts((await listAdminProducts(getAccessToken()!)).products); }
-    catch (e) { setErr(e instanceof Error ? e.message : 'Failed to load products'); }
+    catch (e) { setToast({ text: e instanceof Error ? e.message : 'Failed to load products', tone: 'error' }); }
     finally { setLoading(false); }
   }, []);
 
@@ -483,7 +480,7 @@ export default function Commerce() {
   }
 
   return (
-    <Screen toast={err ? { text: err, tone: 'error' } : null} onDismissToast={() => setErr(null)}>
+    <Screen toast={toast} onDismissToast={() => setToast(null)}>
       <View style={s.screenHeader}>
         <View style={s.titleSection}>
           <Text variant="title">Store</Text>
@@ -495,7 +492,7 @@ export default function Commerce() {
         </View>
       </View>
 
-      {adding && <AddProductForm currency={currency} onAdded={handleAdded} onCancel={() => setAdding(false)} />}
+      {adding && <AddProductForm currency={currency} onAdded={handleAdded} onCancel={() => setAdding(false)} onToast={showToast} />}
 
       {loading ? (
         <Text muted>Loading products…</Text>
@@ -512,6 +509,7 @@ export default function Commerce() {
                   currency={currency}
                   onSaved={handleSaved}
                   onClose={() => setSelectedId(null)}
+                  onToast={showToast}
                 />
               ) : null
             ) : (
