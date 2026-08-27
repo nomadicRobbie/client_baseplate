@@ -12,20 +12,6 @@ export type UploadFn = (fileOrUri: Blob | string) => Promise<{ url: string }>;
 let _uid = 0;
 const nextId = () => String(++_uid);
 
-function compressForUpload(file: File): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      canvas.getContext('2d')!.drawImage(img, 0, 0);
-      canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas toBlob failed')), 'image/jpeg', 0.7);
-    };
-    img.onerror = reject;
-    img.src = URL.createObjectURL(file);
-  });
-}
 
 export function useImageSlots(initialUrls: string[] = [], onUploadError?: (msg: string) => void) {
   const [slots, setSlots] = useState<ImageSlot[]>(() =>
@@ -56,12 +42,7 @@ export function useImageSlots(initialUrls: string[] = [], onUploadError?: (msg: 
           const localUri = URL.createObjectURL(file);
           const id = nextId();
           setSlots(prev => [...prev, { id, status: 'uploading', localUri }]);
-          compressForUpload(file)
-            .then(blob => _run(id, localUri, fn, blob))
-            .catch((e: unknown) => {
-              const error = e instanceof Error ? e.message : 'Compression failed';
-              setSlots(prev => prev.map(s => s.id === id ? { id, status: 'error', localUri, error } : s));
-            });
+          _run(id, localUri, fn, file);
           resolve();
         };
         input.click();
@@ -69,7 +50,7 @@ export function useImageSlots(initialUrls: string[] = [], onUploadError?: (msg: 
     } else {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') { onPermissionError('Photo library access is required.'); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.6 });
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6, allowsEditing: false });
       if (result.canceled) return;
       const localUri = result.assets[0].uri;
       const id = nextId();

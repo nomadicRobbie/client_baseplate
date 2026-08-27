@@ -18,6 +18,56 @@ function nativeMultipartUpload(url: string, token: string, form: FormData): Prom
   });
 }
 
+function compressWebImage(blob: Blob): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 1200;
+      const scale = img.width > maxW ? maxW / img.width : 1;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('Compression failed')), 'image/jpeg', 0.7);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')); };
+    img.src = url;
+  });
+}
+
+async function uploadImageMultipart(
+  endpoint: string,
+  token: string,
+  fileOrUri: Blob | string,
+  filename: string,
+): Promise<Response> {
+  const doUpload = async (tok: string) => {
+    const form = new FormData();
+    if (typeof document === 'undefined') {
+      form.append('file', { uri: fileOrUri as string, name: filename, type: 'image/jpeg' } as unknown as Blob);
+      return nativeMultipartUpload(endpoint, tok, form);
+    }
+    // fileOrUri may be a File/Blob (first pick) or a blob: URL string (retry path)
+    const blob = typeof fileOrUri === 'string'
+      ? await fetch(fileOrUri).then(r => r.blob())
+      : fileOrUri as Blob;
+    const compressed = await compressWebImage(blob);
+    form.append('file', compressed, filename);
+    return fetch(endpoint, { method: 'POST', headers: { authorization: `Bearer ${tok}` }, body: form });
+  };
+  let res = await doUpload(token);
+  if (res.status === 401) {
+    if (await trySilentRefresh()) {
+      res = await doUpload(getAccessToken() ?? token);
+    } else {
+      throw new Error('Your session expired — please sign in again.');
+    }
+  }
+  return res;
+}
+
 export const API = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000';
 export const TENANT = process.env.EXPO_PUBLIC_TENANT_SLUG ?? 'ting-test';
 
@@ -144,31 +194,10 @@ export const uploadUserAvatar = async (
   asset?: { mimeType?: string; file?: File; fileName?: string | null },
 ): Promise<string> => {
   const filename = asset?.fileName ?? uri.split('/').pop() ?? 'avatar.jpg';
-  const buildForm = async () => {
-    const form = new FormData();
-    if (asset?.file) {
-      form.append('file', asset.file, asset.file.name || filename);
-    } else if (typeof document === 'undefined') {
-      form.append('file', { uri, name: filename, type: asset?.mimeType ?? 'image/jpeg' } as unknown as Blob);
-    } else {
-      const blob = await fetch(uri).then((r) => r.blob());
-      form.append('file', blob, filename);
-    }
-    return form;
-  };
-  const doUpload = async (tok: string) => {
-    const form = await buildForm();
-    if (typeof document === 'undefined') return nativeMultipartUpload(`${API}/profile/me/avatar`, tok, form);
-    return fetch(`${API}/profile/me/avatar`, { method: 'POST', headers: { authorization: `Bearer ${tok}` }, body: form });
-  };
-  let res = await doUpload(token);
-  if (res.status === 401) {
-    if (await trySilentRefresh()) {
-      res = await doUpload(getAccessToken() ?? token);
-    } else {
-      throw new Error('Your session expired — please sign in again.');
-    }
-  }
+  const fileOrUri: Blob | string = typeof document === 'undefined'
+    ? uri
+    : (asset?.file ?? await fetch(uri).then(r => r.blob()));
+  const res = await uploadImageMultipart(`${API}/profile/me/avatar`, token, fileOrUri, filename);
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
   return (json as { avatar_url: string }).avatar_url;
@@ -480,22 +509,9 @@ export const createProduct = (token: string, data: Omit<Product, 'id' | 'created
 export const updateProduct = (token: string, id: string, data: Partial<Product>) =>
   req<{ product: Product }>(`/commerce/admin/products/${id}`, { method: 'PATCH', body: data, token });
 
-// multipart — bypasses req()'s JSON handling; hits /commerce/admin/upload directly.
 export const uploadProductImage = async (token: string, fileOrUri: Blob | string): Promise<{ url: string }> => {
-  const form = new FormData();
-  if (typeof fileOrUri === 'string') {
-    form.append('file', { uri: fileOrUri, name: fileOrUri.split('/').pop() ?? 'product.jpg', type: 'image/jpeg' } as unknown as Blob);
-    const res = await nativeMultipartUpload(`${API}/commerce/admin/upload`, token, form);
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
-    return json as { url: string };
-  }
-  form.append('file', fileOrUri);
-  const res = await fetch(`${API}/commerce/admin/upload`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${token}` },
-    body: form,
-  });
+  const filename = typeof fileOrUri === 'string' ? (fileOrUri.split('/').pop() ?? 'product.jpg') : 'product.jpg';
+  const res = await uploadImageMultipart(`${API}/commerce/admin/upload`, token, fileOrUri, filename);
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
   return json as { url: string };
