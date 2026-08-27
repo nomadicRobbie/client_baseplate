@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from 'react';
-import { View, Pressable, Image, TextInput, Platform, ScrollView } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { View, Pressable, Image, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import { useImageSlots, type ImageSlot, type UploadFn } from '@/lib/image-slots';
 import { Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { Product } from '@blnk/shared';
@@ -52,16 +52,36 @@ function StockEditor({ sizes, stockLevel, onChange }: {
 
 
 // ── Image row ────────────────────────────────────────────────────────────────
-function ImageRow({ images, onAdd, uploading }: { images: string[]; onAdd: () => void; uploading: boolean }) {
+function ImageRow({ slots, onAdd, onRetry }: {
+  slots: ImageSlot[];
+  onAdd: () => void;
+  onRetry: (id: string) => void;
+}) {
   const t = useTheme();
   const s = makeStyles(t);
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
       <View style={s.thumbRow}>
-        {images.map((uri, i) => (
-          <Image key={i} source={{ uri }} style={s.thumb} resizeMode="cover" />
+        {slots.map(slot => (
+          <Pressable
+            key={slot.id}
+            onPress={slot.status === 'error' ? () => onRetry(slot.id) : undefined}
+            style={s.thumbWrapper}
+          >
+            <Image source={{ uri: slot.localUri }} style={s.thumb} resizeMode="cover" />
+            {slot.status === 'uploading' && (
+              <View style={s.thumbOverlay}>
+                <ActivityIndicator size="small" color="#fff" />
+              </View>
+            )}
+            {slot.status === 'error' && (
+              <View style={[s.thumbOverlay, s.thumbError]}>
+                <Ionicons name="refresh" size={20} color="#fff" />
+              </View>
+            )}
+          </Pressable>
         ))}
-        <Pressable onPress={onAdd} disabled={uploading} accessibilityRole="button" accessibilityLabel="Add image" style={s.thumbAdd}>
+        <Pressable onPress={onAdd} accessibilityRole="button" accessibilityLabel="Add image" style={s.thumbAdd}>
           <Ionicons name="add" size={28} color={t.color.textMuted} />
         </Pressable>
       </View>
@@ -79,14 +99,24 @@ function EditSheet({ product, currency, onSaved, onClose, onToast }: {
 }) {
   const t = useTheme();
   const s = makeStyles(t);
-  const [draft, setDraft] = useState({
-    ...product,
-    images: product.images.length ? product.images : product.image_url ? [product.image_url] : [],
-  });
+  const [draft, setDraft] = useState(product);
   const [busy, setBusy] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
-  const dirty = JSON.stringify(draft) !== JSON.stringify(product);
+  const initialImages = useMemo(
+    () => product.images.length ? product.images : product.image_url ? [product.image_url] : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [product.id],
+  );
+  const uploadFn: UploadFn = (f) => uploadProductImage(getAccessToken()!, f);
+  const { slots, pick, retrySlot, doneUrls, isUploading } = useImageSlots(initialImages);
+
+  const fieldsDirty = draft.title !== product.title ||
+    draft.price_cents !== product.price_cents ||
+    draft.active !== product.active ||
+    draft.postable !== product.postable ||
+    JSON.stringify(draft.stock_level) !== JSON.stringify(product.stock_level);
+  const imagesDirty = JSON.stringify(doneUrls) !== JSON.stringify(initialImages);
+  const dirty = fieldsDirty || imagesDirty;
 
   const save = async () => {
     setBusy(true);
@@ -94,43 +124,13 @@ function EditSheet({ product, currency, onSaved, onClose, onToast }: {
       const { product: updated } = await updateProduct(getAccessToken()!, product.id, {
         title: draft.title, price_cents: draft.price_cents, stock_level: draft.stock_level,
         active: draft.active, is_new: draft.is_new, postable: draft.postable,
-        image_url: draft.images[0] ?? null, images: draft.images,
+        image_url: doneUrls[0] ?? null, images: doneUrls,
       });
       onSaved(updated);
       onToast('Saved', 'success');
     } catch (e) {
       onToast(e instanceof Error ? e.message : 'Save failed', 'error');
     } finally { setBusy(false); }
-  };
-
-  const pickImage = async () => {
-    if (Platform.OS === 'web') {
-      const input = document.createElement('input');
-      input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
-      input.onchange = async () => {
-        const file = input.files?.[0]; if (!file) return;
-        setUploading(true);
-        try {
-          const { url } = await uploadProductImage(getAccessToken()!, file);
-          setDraft(d => { const imgs = [...d.images, url]; return { ...d, images: imgs, image_url: imgs[0] }; });
-        }
-        catch (e) { onToast(e instanceof Error ? e.message : 'Upload failed', 'error'); }
-        finally { setUploading(false); }
-      };
-      input.click();
-    } else {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') { onToast('Photo library access is required.', 'error'); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.75});
-      if (result.canceled) return;
-      setUploading(true);
-      try {
-        const { url } = await uploadProductImage(getAccessToken()!, result.assets[0].uri);
-        setDraft(d => { const imgs = [...d.images, url]; return { ...d, images: imgs, image_url: imgs[0] }; });
-      }
-      catch (e) { onToast(e instanceof Error ? e.message : 'Upload failed', 'error'); }
-      finally { setUploading(false); }
-    }
   };
 
   return (
@@ -185,8 +185,11 @@ function EditSheet({ product, currency, onSaved, onClose, onToast }: {
 
       <Card>
         <Text variant="heading">Cover</Text>
-        <ImageRow images={draft.images} onAdd={pickImage} uploading={uploading} />
-
+        <ImageRow
+          slots={slots}
+          onAdd={() => void pick(uploadFn, (msg) => onToast(msg, 'error'))}
+          onRetry={(id) => retrySlot(id, uploadFn)}
+        />
         <View style={s.togglesContainer}>
           <Toggle value={!!draft.postable} onChange={() => setDraft(d => ({ ...d, postable: !d.postable }))} label="Postable" />
           <Toggle value={!!draft.active} onChange={() => setDraft(d => ({ ...d, active: !d.active }))} label="Visible in shop" />
@@ -194,7 +197,10 @@ function EditSheet({ product, currency, onSaved, onClose, onToast }: {
       </Card>
 
       <View style={s.buttonRow}>
-        <Button label="Save product" onPress={save} loading={busy} disabled={!dirty} style={s.flex1} />
+        <Button
+          label={isUploading ? 'Waiting for uploads…' : 'Save product'}
+          onPress={save} loading={busy} disabled={!dirty || isUploading} style={s.flex1}
+        />
         <Button label="Discard" variant="ghost" onPress={() => setDraft(product)} disabled={!dirty || busy} />
       </View>
     </>
@@ -284,7 +290,10 @@ const makeStyles = (t: ReturnType<typeof useTheme>) => ({
 
   // Image row
   thumbRow: { flexDirection: 'row' as const, gap: t.space.sm },
-  thumb: { width: 80, height: 80, borderRadius: t.radius.md } as const,
+  thumbWrapper: { width: 80, height: 80, borderRadius: t.radius.md, overflow: 'hidden' as const },
+  thumb: { width: 80, height: 80 } as const,
+  thumbOverlay: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center' as const, justifyContent: 'center' as const },
+  thumbError: { backgroundColor: 'rgba(220,38,38,0.6)' },
   thumbAdd: { width: 80, height: 80, borderRadius: t.radius.md, backgroundColor: t.color.surfaceAlt, alignItems: 'center' as const, justifyContent: 'center' as const },
 
   // Add product form
@@ -306,15 +315,16 @@ const COMMON_SIZES = ['xs', 's', 'm', 'l', 'xl', 'xxl', 'one-size'];
 function AddProductForm({ currency, onAdded, onCancel, onToast }: { currency: string; onAdded: (p: Product) => void; onCancel: () => void; onToast: (text: string, tone: 'success' | 'error') => void }) {
   const t = useTheme();
   const s = makeStyles(t);
-  const [title, setTitle]               = useState('');
-  const [price, setPrice]               = useState('');
-  const [images, setImages]             = useState<string[]>([]);
-  const [sizes, setSizes]               = useState<string[]>([]);
-  const [stockLevel, setStockLevel]     = useState<Record<string, number>>({});
-  const [postable, setPostable]         = useState(true);
-  const [active, setActive]             = useState(true);
-  const [busy, setBusy]                 = useState(false);
-  const [uploading, setUploading]       = useState(false);
+  const [title, setTitle]           = useState('');
+  const [price, setPrice]           = useState('');
+  const [sizes, setSizes]           = useState<string[]>([]);
+  const [stockLevel, setStockLevel] = useState<Record<string, number>>({});
+  const [postable, setPostable]     = useState(true);
+  const [active, setActive]         = useState(true);
+  const [busy, setBusy]             = useState(false);
+
+  const uploadFn: UploadFn = (f) => uploadProductImage(getAccessToken()!, f);
+  const { slots, pick, retrySlot, doneUrls, isUploading } = useImageSlots();
 
   const toggleSize = (sz: string) => {
     if (sizes.includes(sz)) {
@@ -326,33 +336,6 @@ function AddProductForm({ currency, onAdded, onCancel, onToast }: { currency: st
     }
   };
 
-  const pickImage = async () => {
-    if (Platform.OS === 'web') {
-      const input = document.createElement('input');
-      input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
-      input.onchange = async () => {
-        const file = input.files?.[0]; if (!file) return;
-        setUploading(true);
-        try { const { url } = await uploadProductImage(getAccessToken()!, file); setImages(prev => [...prev, url]); }
-        catch (e) { onToast(e instanceof Error ? e.message : 'Upload failed', 'error'); }
-        finally { setUploading(false); }
-      };
-      input.click();
-    } else {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') { onToast('Photo library access is required.', 'error'); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.75});
-      if (result.canceled) return;
-      setUploading(true);
-      try {
-        const { url } = await uploadProductImage(getAccessToken()!, result.assets[0].uri);
-        setImages(prev => [...prev, url]);
-      }
-      catch (e) { onToast(e instanceof Error ? e.message : 'Upload failed', 'error'); }
-      finally { setUploading(false); }
-    }
-  };
-
   const submit = async () => {
     if (!title.trim()) { onToast('Title is required', 'error'); return; }
     const priceCents = Math.round(parseFloat(price) * 100);
@@ -361,7 +344,7 @@ function AddProductForm({ currency, onAdded, onCancel, onToast }: { currency: st
     try {
       const { product } = await createProduct(getAccessToken()!, {
         title: title.trim(), description: '', desc_points: [], price_cents: priceCents,
-        image_url: images[0] ?? null, images,
+        image_url: doneUrls[0] ?? null, images: doneUrls,
         sizes, stock_level: stockLevel, postable, is_new: false,
         model_size: false, model_details: [], active,
       });
@@ -402,16 +385,18 @@ function AddProductForm({ currency, onAdded, onCancel, onToast }: { currency: st
         {sizes.length > 0 && (
           <View style={s.fieldGroup}>
             <Text variant="label" muted>Stock per size</Text>
-            <StockEditor sizes={sizes} stockLevel={stockLevel}
-              onChange={setStockLevel} />
+            <StockEditor sizes={sizes} stockLevel={stockLevel} onChange={setStockLevel} />
           </View>
         )}
       </Card>
 
       <Card>
         <Text variant="heading">Cover</Text>
-        <ImageRow images={images} onAdd={pickImage} uploading={uploading} />
-
+        <ImageRow
+          slots={slots}
+          onAdd={() => void pick(uploadFn, (msg) => onToast(msg, 'error'))}
+          onRetry={(id) => retrySlot(id, uploadFn)}
+        />
         <View style={s.togglesContainer}>
           <Toggle value={postable} onChange={setPostable} label="Postable" />
           <Toggle value={active} onChange={setActive} label="Visible in shop" />
@@ -419,7 +404,10 @@ function AddProductForm({ currency, onAdded, onCancel, onToast }: { currency: st
       </Card>
 
       <View style={s.buttonRow}>
-        <Button label="Add product" onPress={submit} loading={busy} style={s.flex1} />
+        <Button
+          label={isUploading ? 'Waiting for uploads…' : 'Add product'}
+          onPress={submit} loading={busy} disabled={isUploading} style={s.flex1}
+        />
         <Button label="Cancel" variant="ghost" onPress={onCancel} disabled={busy} />
       </View>
     </>

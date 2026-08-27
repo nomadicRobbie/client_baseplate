@@ -481,7 +481,7 @@ export const updateProduct = (token: string, id: string, data: Partial<Product>)
   req<{ product: Product }>(`/commerce/admin/products/${id}`, { method: 'PATCH', body: data, token });
 
 // multipart — bypasses req()'s JSON handling; hits /commerce/admin/upload directly.
-export const uploadProductImage = async (token: string, fileOrUri: File | string): Promise<{ url: string }> => {
+export const uploadProductImage = async (token: string, fileOrUri: Blob | string): Promise<{ url: string }> => {
   const form = new FormData();
   if (typeof fileOrUri === 'string') {
     form.append('file', { uri: fileOrUri, name: fileOrUri.split('/').pop() ?? 'product.jpg', type: 'image/jpeg' } as unknown as Blob);

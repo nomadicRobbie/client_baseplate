@@ -6,7 +6,7 @@ import { verifyBlnkAuth, requireRole } from '../../../blnk/auth'
 import { Errors } from '../../../utils/errors'
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
-const MAX_BYTES = 10 * 1024 * 1024 // 10 MB
+const MAX_BYTES = 25 * 1024 * 1024 // 25 MB
 
 const uploadPlugin: FastifyPluginAsync = async (fastify) => {
   cloudinary.config({
