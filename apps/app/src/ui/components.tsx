@@ -507,12 +507,15 @@ export function Toggle({ value, onChange, label }: {
 // ── GroupedCard ───────────────────────────────────────────────────────────────
 // White card, no padding, overflow hidden — rows supply their own padding
 // and hairline dividers clip at the card edge.
-export function GroupedCard({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+// Use padded={true} when children are bare form elements (TextField, Button)
+// rather than GRow children.
+export function GroupedCard({ children, style, padded }: { children: ReactNode; style?: StyleProp<ViewStyle>; padded?: boolean }) {
   const t = useTheme();
   return (
     <View style={[{
       backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border,
       borderRadius: t.radius.lg, overflow: 'hidden',
+      ...(padded ? { padding: t.space.lg, gap: t.space.md } : {}),
     }, style]}>
       {children}
     </View>

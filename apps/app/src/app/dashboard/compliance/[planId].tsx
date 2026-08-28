@@ -138,7 +138,7 @@ function makeStyles(t: ThemeT) {
     input: { backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.md, minHeight: 44, fontSize: t.size.md, color: t.color.text },
     limitBox: { backgroundColor: soft.limitBg, borderWidth: 1, borderColor: soft.limitBorder, borderRadius: t.radius.md, padding: t.space.md },
     verdict: { borderRadius: t.radius.md, padding: t.space.md, flexDirection: 'row', alignItems: 'center', gap: t.space.sm },
-    logItem: { flexDirection: 'row', alignItems: 'center', gap: t.space.md, paddingVertical: t.space.sm },
+    logItem: { flexDirection: 'row', alignItems: 'center', gap: t.space.md, paddingVertical: t.space.sm, paddingHorizontal: t.space.lg },
     failBadge: { backgroundColor: t.color.danger, paddingHorizontal: 8, paddingVertical: 2, borderRadius: t.radius.sm },
     caBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: t.space.sm, paddingVertical: 6, borderRadius: t.radius.sm, borderWidth: 1 },
     formHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

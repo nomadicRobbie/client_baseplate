@@ -70,7 +70,7 @@ export default function Login() {
             <Text muted>sign in · {TENANT}</Text>
           </View>
 
-          <GroupedCard>
+          <GroupedCard padded>
             <TextField
               label="Email"
               value={email}
