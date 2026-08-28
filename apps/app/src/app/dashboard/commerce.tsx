@@ -7,7 +7,7 @@ import type { Product } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
 import { listAdminProducts, createProduct, updateProduct, uploadProductImage } from '@/lib/api';
-import { Screen, Text, Card, Button, Toggle, Pill, Stepper, GroupedCard, FieldRow } from '@/ui/components';
+import { Screen, Text, Card, Button, Toggle, Pill, GroupedCard, FieldRow } from '@/ui/components';
 import { useTheme } from '@/theme';
 import { useProfile } from '@/lib/profile-context';
 
@@ -15,39 +15,16 @@ function fmt(cents: number) {
   return (cents / 100).toFixed(2);
 }
 
-// ── Stock editor ──────────────────────────────────────────────────────────────
-function StockEditor({ sizes, stockLevel, onChange }: {
-  sizes: string[];
-  stockLevel: Record<string, number>;
-  onChange: (sl: Record<string, number>) => void;
-}) {
-  const t = useTheme();
-  const s = makeStyles(t);
-  if (!sizes.length) return null;
+function productPrimaryImage(p: Product): string | null {
+  return p.media?.primary_image ?? null;
+}
 
-  // Normalise stock_level keys to lowercase so lookup is case-insensitive
-  const normalised = Object.fromEntries(
-    Object.entries(stockLevel).map(([k, v]) => [k.toLowerCase(), v])
-  );
+function productGallery(p: Product): string[] {
+  return p.media?.gallery ?? [];
+}
 
-  const get = (size: string) => normalised[size.toLowerCase()] ?? 0;
-
-  const set = (size: string, val: number) => {
-    // Rebuild preserving all existing keys (normalised), then update target
-    const updated = { ...normalised, [size.toLowerCase()]: val };
-    onChange(updated);
-  };
-
-  return (
-    <View style={s.stockContainer}>
-      {sizes.map(size => (
-        <View key={size} style={s.stockRow}>
-          <Text variant="label" style={s.stockSize}>{size.toUpperCase()}</Text>
-          <Stepper value={get(size)} onChange={(v) => set(size, v)} min={0} />
-        </View>
-      ))}
-    </View>
-  );
+function productSizes(p: Product): string[] {
+  return p.variant_options?.options?.['Size'] ?? [];
 }
 
 
@@ -103,7 +80,7 @@ function EditSheet({ product, currency, onSaved, onClose, onToast }: {
   const [busy, setBusy] = useState(false);
 
   const initialImages = useMemo(
-    () => product.images.length ? product.images : product.image_url ? [product.image_url] : [],
+    () => { const g = productGallery(product); return g.length ? g : productPrimaryImage(product) ? [productPrimaryImage(product)!] : []; },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [product.id],
   );
@@ -112,9 +89,9 @@ function EditSheet({ product, currency, onSaved, onClose, onToast }: {
 
   const fieldsDirty = draft.title !== product.title ||
     draft.price_cents !== product.price_cents ||
+    draft.stock_quantity !== product.stock_quantity ||
     draft.active !== product.active ||
-    draft.postable !== product.postable ||
-    JSON.stringify(draft.stock_level) !== JSON.stringify(product.stock_level);
+    draft.shipping_info?.requires_shipping !== product.shipping_info?.requires_shipping;
   const imagesDirty = JSON.stringify(doneUrls) !== JSON.stringify(initialImages);
   const dirty = fieldsDirty || imagesDirty;
 
@@ -122,9 +99,12 @@ function EditSheet({ product, currency, onSaved, onClose, onToast }: {
     setBusy(true);
     try {
       const { product: updated } = await updateProduct(getAccessToken()!, product.id, {
-        title: draft.title, price_cents: draft.price_cents, stock_level: draft.stock_level,
-        active: draft.active, is_new: draft.is_new, postable: draft.postable,
-        image_url: doneUrls[0] ?? null, images: doneUrls,
+        title: draft.title,
+        price_cents: draft.price_cents,
+        stock_quantity: draft.stock_quantity,
+        active: draft.active,
+        shipping_info: { ...draft.shipping_info, requires_shipping: draft.shipping_info?.requires_shipping ?? true },
+        media: { ...draft.media, primary_image: doneUrls[0] ?? null, gallery: doneUrls },
       });
       onSaved(updated);
       onToast('Saved', 'success');
@@ -159,27 +139,22 @@ function EditSheet({ product, currency, onSaved, onClose, onToast }: {
           </FieldRow>
         </GroupedCard>
 
-        {draft.sizes.length > 0 && (
+        {productSizes(draft).length > 0 && (
           <View style={s.fieldGroup}>
-            <Text variant="label" muted>Sizes *</Text>
+            <Text variant="label" muted>Sizes</Text>
             <View style={s.sizeGrid}>
-              {draft.sizes.map(sz => <Pill key={sz} label={sz.toUpperCase()} active onPress={() => {}} />)}
+              {productSizes(draft).map(sz => <Pill key={sz} label={sz.toUpperCase()} active onPress={() => {}} />)}
             </View>
           </View>
         )}
 
         <View style={s.fieldGroup}>
-          <Text variant="label" muted>Stock per size</Text>
-          {draft.sizes.length > 0 ? (
-            <StockEditor sizes={draft.sizes} stockLevel={draft.stock_level as Record<string, number>}
-              onChange={sl => setDraft(d => ({ ...d, stock_level: sl }))} />
-          ) : (
-            <TextInput
-              value={String(Object.values(draft.stock_level as Record<string, number>).reduce((a, b) => a + b, 0))}
-              onChangeText={v => { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0) setDraft(d => ({ ...d, stock_level: { total: n } })); }}
-              keyboardType="number-pad"
-              style={[s.textInput, { width: 100 }]} />
-          )}
+          <Text variant="label" muted>Total stock</Text>
+          <TextInput
+            value={String(draft.stock_quantity)}
+            onChangeText={v => { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0) setDraft(d => ({ ...d, stock_quantity: n })); }}
+            keyboardType="number-pad"
+            style={[s.textInput, { width: 100 }]} />
         </View>
       </Card>
 
@@ -191,7 +166,11 @@ function EditSheet({ product, currency, onSaved, onClose, onToast }: {
           onRetry={(id) => retrySlot(id, uploadFn)}
         />
         <View style={s.togglesContainer}>
-          <Toggle value={!!draft.postable} onChange={() => setDraft(d => ({ ...d, postable: !d.postable }))} label="Postable" />
+          <Toggle
+            value={draft.shipping_info?.requires_shipping ?? true}
+            onChange={() => setDraft(d => ({ ...d, shipping_info: { ...d.shipping_info, requires_shipping: !(d.shipping_info?.requires_shipping ?? true) } }))}
+            label="Can be delivered"
+          />
           <Toggle value={!!draft.active} onChange={() => setDraft(d => ({ ...d, active: !d.active }))} label="Visible in shop" />
         </View>
       </Card>
@@ -217,9 +196,7 @@ function ProductCard({ product, selected, onSelect, onToggleActive }: {
   const t = useTheme();
   const s = makeStyles(t);
 
-  const totalStock = typeof product.stock_level === 'object' && product.stock_level !== null
-    ? Object.values(product.stock_level as Record<string, number>).reduce((a, b) => a + b, 0)
-    : null;
+  const totalStock = product.stock_quantity;
 
   return (
     <View style={s.cardWrapper}>
@@ -234,8 +211,8 @@ function ProductCard({ product, selected, onSelect, onToggleActive }: {
           }
         ]}
       >
-        {product.image_url ? (
-          <Image source={{ uri: product.image_url }} style={s.cardImage} resizeMode="cover" />
+        {productPrimaryImage(product) ? (
+          <Image source={{ uri: productPrimaryImage(product)! }} style={s.cardImage} resizeMode="cover" />
         ) : (
           <View style={s.cardImagePlaceholder}>
             <Ionicons name="image-outline" size={36} color={t.color.textMuted} />
@@ -254,7 +231,7 @@ function ProductCard({ product, selected, onSelect, onToggleActive }: {
           <Text variant="label">{product.title}</Text>
           <View style={s.cardFooter}>
             <Text variant="small" muted>${fmt(product.price_cents)}</Text>
-            {totalStock !== null && <Text variant="small" muted>{totalStock} in stock</Text>}
+            <Text variant="small" muted>{totalStock} in stock</Text>
           </View>
         </View>
       </Pressable>
@@ -264,11 +241,6 @@ function ProductCard({ product, selected, onSelect, onToggleActive }: {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const makeStyles = (t: ReturnType<typeof useTheme>) => ({
-  // Stock editor
-  stockContainer: { gap: t.space.xs } as const,
-  stockRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const },
-  stockSize: { minWidth: 48 },
-
   // Edit sheet
   editHeader: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const },
   editClose: { padding: t.space.sm },
@@ -315,26 +287,18 @@ const COMMON_SIZES = ['xs', 's', 'm', 'l', 'xl', 'xxl', 'one-size'];
 function AddProductForm({ currency, onAdded, onCancel, onToast }: { currency: string; onAdded: (p: Product) => void; onCancel: () => void; onToast: (text: string, tone: 'success' | 'error') => void }) {
   const t = useTheme();
   const s = makeStyles(t);
-  const [title, setTitle]           = useState('');
-  const [price, setPrice]           = useState('');
-  const [sizes, setSizes]           = useState<string[]>([]);
-  const [stockLevel, setStockLevel] = useState<Record<string, number>>({});
-  const [postable, setPostable]     = useState(true);
-  const [active, setActive]         = useState(true);
-  const [busy, setBusy]             = useState(false);
+  const [title, setTitle]                   = useState('');
+  const [price, setPrice]                   = useState('');
+  const [sizes, setSizes]                   = useState<string[]>([]);
+  const [requiresShipping, setRequiresShipping] = useState(true);
+  const [active, setActive]                 = useState(true);
+  const [busy, setBusy]                     = useState(false);
 
   const uploadFn: UploadFn = (f) => uploadProductImage(getAccessToken()!, f);
   const { slots, pick, retrySlot, doneUrls, isUploading } = useImageSlots([], (msg) => onToast(msg, 'error'));
 
-  const toggleSize = (sz: string) => {
-    if (sizes.includes(sz)) {
-      setSizes(prev => prev.filter(x => x !== sz));
-      setStockLevel(prev => { const next = { ...prev }; delete next[sz]; return next; });
-    } else {
-      setSizes(prev => [...prev, sz]);
-      setStockLevel(prev => ({ ...prev, [sz]: 0 }));
-    }
-  };
+  const toggleSize = (sz: string) =>
+    setSizes(prev => prev.includes(sz) ? prev.filter(x => x !== sz) : [...prev, sz]);
 
   const submit = async () => {
     if (!title.trim()) { onToast('Title is required', 'error'); return; }
@@ -343,10 +307,31 @@ function AddProductForm({ currency, onAdded, onCancel, onToast }: { currency: st
     setBusy(true);
     try {
       const { product } = await createProduct(getAccessToken()!, {
-        title: title.trim(), description: '', desc_points: [], price_cents: priceCents,
-        image_url: doneUrls[0] ?? null, images: doneUrls,
-        sizes, stock_level: stockLevel, postable, is_new: false,
-        model_size: false, model_details: [], active,
+        title: title.trim(),
+        description: '',
+        price_cents: priceCents,
+        media: { primary_image: doneUrls[0] ?? null, gallery: doneUrls },
+        shipping_info: { requires_shipping: requiresShipping },
+        variant_options: sizes.length ? { option_names: ['Size'], options: { Size: sizes } } : {},
+        has_variants: sizes.length > 0,
+        stock_quantity: 0,
+        stock_status: 'in_stock' as const,
+        status: 'active' as const,
+        visibility: 'public' as const,
+        product_type: 'physical' as const,
+        active,
+        // required defaults
+        sku: null, slug: null, handle: null, parent_id: null, gtin: null, mpn: null,
+        featured: false, is_digital: false,
+        compare_at_price_cents: null, cost_price_cents: null, currency: currency,
+        tax_class: null, tax_inclusive: true,
+        track_inventory: true, allow_backorder: false, low_stock_threshold: null,
+        warehouse_location: null, lead_time_days: null, restock_date: null,
+        rating_average: null, rating_count: 0,
+        sales_channels: [], available_regions: [],
+        content: {}, specifications: {}, organisation: {}, seo: {},
+        social_proof: {}, pricing_meta: {}, digital_product: {}, compliance: {},
+        published_at: null,
       });
       onAdded(product);
     } catch (e) {
@@ -382,12 +367,6 @@ function AddProductForm({ currency, onAdded, onCancel, onToast }: { currency: st
           </View>
         </View>
 
-        {sizes.length > 0 && (
-          <View style={s.fieldGroup}>
-            <Text variant="label" muted>Stock per size</Text>
-            <StockEditor sizes={sizes} stockLevel={stockLevel} onChange={setStockLevel} />
-          </View>
-        )}
       </Card>
 
       <Card>
@@ -398,7 +377,7 @@ function AddProductForm({ currency, onAdded, onCancel, onToast }: { currency: st
           onRetry={(id) => retrySlot(id, uploadFn)}
         />
         <View style={s.togglesContainer}>
-          <Toggle value={postable} onChange={setPostable} label="Postable" />
+          <Toggle value={requiresShipping} onChange={setRequiresShipping} label="Can be delivered" />
           <Toggle value={active} onChange={setActive} label="Visible in shop" />
         </View>
       </Card>

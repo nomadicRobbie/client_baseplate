@@ -30,8 +30,8 @@ export async function submitOrder(body: {
 }): Promise<Order> {
   // Decrement stock for each item before persisting the order.
   for (const item of body.items) {
-    if (item.selected_size) {
-      await decrementStock(item.product_id, item.selected_size, item.quantity)
+    if (item.variant_id) {
+      await decrementStock(item.variant_id, item.quantity)
     }
   }
 

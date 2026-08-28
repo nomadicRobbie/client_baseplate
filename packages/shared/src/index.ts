@@ -159,24 +159,188 @@ export interface CoolingBatch {
 }
 
 // ── Commerce ─────────────────────────────────────────────────────────────────
-export interface ProductStockLevel {
-  [size: string]: number | undefined
+
+export type ProductStatus = 'active' | 'draft' | 'archived'
+export type ProductVisibility = 'public' | 'private' | 'password'
+export type ProductStockStatus = 'in_stock' | 'out_of_stock' | 'backorder' | 'discontinued'
+export type ProductType = 'physical' | 'digital' | 'service'
+
+export interface ProductContent {
+  subtitle?: string | null
+  short_description?: string | null
+  description_html?: string | null
+  features?: string[]
+  care_instructions?: string | null
+  warranty?: string | null
+  included_in_box?: string[]
+}
+
+export interface ProductMedia {
+  primary_image?: string | null
+  gallery?: string[]
+  alt_text?: string | null
+  video_url?: string | null
+  model_3d_url?: string | null
+  size_chart_url?: string | null
+}
+
+export interface ProductSpecifications {
+  brand?: string | null
+  manufacturer?: string | null
+  model?: string | null
+  material?: string | null
+  colour?: string | null
+  size?: string | null
+  weight_grams?: number | null
+  dimensions_cm?: { length: number; width: number; height: number } | null
+  country_of_origin?: string | null
+  custom_attributes?: Record<string, string>
+}
+
+export interface ProductShippingInfo {
+  requires_shipping?: boolean
+  shipping_weight_grams?: number | null
+  shipping_class?: string | null
+  package_dimensions_cm?: { length: number; width: number; height: number } | null
+  free_shipping?: boolean
+  hs_tariff_code?: string | null
+  hazardous?: boolean
+  ships_from?: string | null
+  delivery_estimate?: string | null
+}
+
+export interface ProductOrganisation {
+  category?: string | null
+  collections?: string[]
+  tags?: string[]
+  related_product_ids?: string[]
+  cross_sell_ids?: string[]
+  upsell_ids?: string[]
+}
+
+export interface ProductSeo {
+  meta_title?: string | null
+  meta_description?: string | null
+  canonical_url?: string | null
+  og_image?: string | null
+  keywords?: string[]
+  structured_data_type?: string | null
+}
+
+export interface ProductSocialProof {
+  review_ids?: string[]
+  questions_count?: number
+  badges?: string[]
+}
+
+export interface ProductPricingMeta {
+  sale_start?: string | null
+  sale_end?: string | null
+  min_quantity?: number | null
+  max_quantity?: number | null
+  unit_price_measure?: string | null
+}
+
+export interface ProductDigital {
+  download_url?: string | null
+  file_size_mb?: number | null
+  download_limit?: number | null
+  expiry_days?: number | null
+  licence_key_required?: boolean
+}
+
+export interface ProductCompliance {
+  age_restricted?: boolean
+  min_age?: number | null
+  certifications?: string[]
+  safety_warnings?: string | null
+  returnable?: boolean
+  return_window_days?: number | null
+}
+
+export interface ProductVariantOptions {
+  option_names?: string[]
+  options?: Record<string, string[]>
 }
 
 export interface Product {
   id: string
+  // identity
+  sku: string | null
+  slug: string | null
+  handle: string | null
+  parent_id: string | null
+  gtin: string | null
+  mpn: string | null
+  // core
   title: string
-  description: string
-  desc_points: string[]
+  description: string           // plain-text fallback / legacy compat
+  status: ProductStatus
+  visibility: ProductVisibility
+  product_type: ProductType
+  featured: boolean
+  is_digital: boolean
+  // pricing
   price_cents: number
-  image_url: string | null
-  images: string[]
-  sizes: string[]
-  stock_level: ProductStockLevel
-  postable: boolean
-  is_new: boolean
-  model_size: boolean
-  model_details: string[]
+  compare_at_price_cents: number | null
+  cost_price_cents: number | null
+  currency: string
+  tax_class: string | null
+  tax_inclusive: boolean
+  // inventory
+  stock_quantity: number
+  stock_status: ProductStockStatus
+  track_inventory: boolean
+  allow_backorder: boolean
+  low_stock_threshold: number | null
+  warehouse_location: string | null
+  lead_time_days: number | null
+  restock_date: string | null
+  // variants
+  has_variants: boolean
+  variant_options: ProductVariantOptions
+  // social proof scalars (indexed for sort)
+  rating_average: number | null
+  rating_count: number
+  // channels
+  sales_channels: string[]
+  available_regions: string[]
+  // JSONB blobs
+  content: ProductContent
+  media: ProductMedia
+  specifications: ProductSpecifications
+  shipping_info: ProductShippingInfo
+  organisation: ProductOrganisation
+  seo: ProductSeo
+  social_proof: ProductSocialProof
+  pricing_meta: ProductPricingMeta
+  digital_product: ProductDigital
+  compliance: ProductCompliance
+  // timestamps
+  active: boolean
+  published_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ProductVariant {
+  id: string
+  product_id: string
+  sku: string | null
+  title: string | null
+  option_values: Record<string, string>   // {"Size": "M", "Colour": "Black"}
+  price_cents: number | null              // null = inherit from parent
+  compare_at_price_cents: number | null
+  cost_price_cents: number | null
+  stock_quantity: number
+  stock_status: ProductStockStatus
+  track_inventory: boolean
+  allow_backorder: boolean
+  low_stock_threshold: number | null
+  warehouse_location: string | null
+  image_id: string | null
+  weight_grams: number | null
+  is_default: boolean
   active: boolean
   created_at: string
   updated_at: string
@@ -195,10 +359,11 @@ export interface ShippingAddress {
 
 export interface OrderItem {
   product_id: string
+  variant_id: string | null
   title: string
   price_cents: number
   quantity: number
-  selected_size: string | null
+  selected_size: string | null   // ponytail: kept for legacy order records
 }
 
 // CartItem is an OrderItem in progress — same shape, kept separate so the
@@ -206,6 +371,7 @@ export interface OrderItem {
 // polluting the order contract.
 export interface CartItem {
   product_id: string
+  variant_id: string | null
   title: string
   price_cents: number
   quantity: number
