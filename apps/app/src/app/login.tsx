@@ -11,9 +11,9 @@ import { Screen, Text, GroupedCard, Button, TextField } from '@/ui/components';
 type Msg = { text: string; tone: 'info' | 'success' | 'error' };
 type ThemeT = ReturnType<typeof useTheme>;
 const makeStyles = (t: ThemeT) => ({
-  center: { flex: 1, justifyContent: 'center' as const, alignItems: 'center' as const, padding: t.space.xl },
-  box: { width: '100%' as const, maxWidth: 380, gap: t.space.lg },
-  header: { gap: t.space.xs },
+  center: { flex: 1, justifyContent: 'center' as const, alignItems: 'center' as const, paddingHorizontal: t.space.xl, paddingVertical: t.space.xxl },
+  box: { width: '100%' as const, maxWidth: 380, gap: t.space.xl },
+  header: { gap: t.space.sm },
 });
 
 // Last address that signed in — prefilled so returning users don't retype it.
