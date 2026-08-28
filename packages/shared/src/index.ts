@@ -162,7 +162,7 @@ export interface CoolingBatch {
 
 export type ProductStatus = 'active' | 'draft' | 'archived'
 export type ProductVisibility = 'public' | 'private' | 'password'
-export type ProductStockStatus = 'in_stock' | 'out_of_stock' | 'backorder' | 'discontinued'
+export type ProductStockStatus = 'in_stock' | 'low_stock' | 'out_of_stock' | 'backorder' | 'discontinued'
 export type ProductType = 'physical' | 'digital' | 'service'
 
 export interface ProductContent {

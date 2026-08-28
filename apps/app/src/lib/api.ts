@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, FoodControlPlan, Product, Asset, AssetType, AssetFieldDef, AssetFault, AssetFaultStep, AssetMaintenanceLog, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert, AssetComponent, AssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, FoodControlPlan, Product, ProductVariant, Asset, AssetType, AssetFieldDef, AssetFault, AssetFaultStep, AssetMaintenanceLog, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert, AssetComponent, AssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData } from '@blnk/shared';
 import { getAccessToken, getRefreshToken, setTokens, clearSession } from './session';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
@@ -508,6 +508,21 @@ export const createProduct = (token: string, data: Omit<Product, 'id' | 'created
 
 export const updateProduct = (token: string, id: string, data: Partial<Product>) =>
   req<{ product: Product }>(`/commerce/admin/products/${id}`, { method: 'PATCH', body: data, token });
+
+export const getAdminProduct = (token: string, id: string) =>
+  req<{ product: Product }>(`/commerce/admin/products/${id}`, { method: 'GET', token });
+
+export const listProductVariants = (token: string, productId: string) =>
+  req<{ variants: ProductVariant[] }>(`/commerce/admin/products/${productId}/variants`, { method: 'GET', token });
+
+export const createVariant = (token: string, productId: string, data: Omit<ProductVariant, 'id' | 'product_id' | 'created_at' | 'updated_at'>) =>
+  req<{ variant: ProductVariant }>(`/commerce/admin/products/${productId}/variants`, { method: 'POST', body: data, token });
+
+export const updateVariant = (token: string, productId: string, variantId: string, data: Partial<ProductVariant>) =>
+  req<{ variant: ProductVariant }>(`/commerce/admin/products/${productId}/variants/${variantId}`, { method: 'PATCH', body: data, token });
+
+export const deleteVariant = (token: string, productId: string, variantId: string) =>
+  req<void>(`/commerce/admin/products/${productId}/variants/${variantId}`, { method: 'DELETE', token });
 
 export const uploadProductImage = async (token: string, fileOrUri: Blob | string): Promise<{ url: string }> => {
   const filename = typeof fileOrUri === 'string' ? (fileOrUri.split('/').pop() ?? 'product.jpg') : 'product.jpg';

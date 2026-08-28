@@ -97,6 +97,8 @@ export const config = {
     return _cloudinary;
   },
 
+  shopUrl: optional('SHOP_URL', ''),
+
   allowedOrigins: list('ALLOWED_ORIGINS'),
 
   associations: {
