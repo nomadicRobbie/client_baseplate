@@ -28,6 +28,14 @@ const productsPlugin: FastifyPluginAsync = async (fastify) => {
     return reply.send({ products: await fetchProducts(false) })
   })
 
+  // ── GET /commerce/admin/products/:id ─────────────────────────────────────
+  fastify.get('/commerce/admin/products/:id', {
+    preHandler: [verifyBlnkAuth, requireRole('admin', 'super')],
+  }, async (req, reply) => {
+    const { id } = req.params as { id: string }
+    return reply.send({ product: await fetchProduct(id) })
+  })
+
   // ── POST /commerce/admin/products ─────────────────────────────────────────
   fastify.post('/commerce/admin/products', {
     preHandler: [verifyBlnkAuth, requireRole('admin', 'super')],
