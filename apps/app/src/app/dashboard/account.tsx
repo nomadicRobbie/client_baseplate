@@ -152,12 +152,11 @@ export default function Account() {
     } catch (e) { setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' }); } finally { setBusy(false); }
   };
 
-  const canEnrolPasskey = Platform.OS === 'web' && passkeySupported && typeof window !== 'undefined' && window.location.hostname !== 'localhost';
-  const passkeyStatus = Platform.OS !== 'web'
-    ? 'Coming to the mobile app soon'
-    : typeof window !== 'undefined' && window.location.hostname === 'localhost'
-      ? 'Off in local development'
-      : passkeySupported ? 'Tap to add a passkey for this device' : 'Not supported on this browser';
+  const webOnLocalhost = Platform.OS === 'web' && typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  const canEnrolPasskey = passkeySupported && !webOnLocalhost;
+  const passkeyStatus = webOnLocalhost
+    ? 'Off in local development'
+    : passkeySupported ? 'Tap to add a passkey for this device' : 'Not supported on this device';
 
 
   return (
