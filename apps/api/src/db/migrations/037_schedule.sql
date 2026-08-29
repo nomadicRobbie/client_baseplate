@@ -112,5 +112,3 @@ $$;
 CREATE TRIGGER no_delete_scheduled_service_events
   BEFORE DELETE ON scheduled_service_events
   FOR EACH ROW EXECUTE FUNCTION scheduled_service_events_no_delete();
-
-REVOKE DELETE ON scheduled_service_events FROM "ting-test";
