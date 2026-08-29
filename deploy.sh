@@ -10,7 +10,9 @@ echo "→ installing dependencies"
 pnpm install --frozen-lockfile
 
 echo "→ building"
-pnpm build
+pnpm build --filter=@blnk/shared
+pnpm --filter=@blnk/app exec expo export -p web
+pnpm build --filter=@blnk/client-api
 
 echo "→ starting / reloading API via PM2"
 if pm2 describe client-api > /dev/null 2>&1; then
