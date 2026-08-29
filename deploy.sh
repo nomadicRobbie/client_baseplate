@@ -23,3 +23,7 @@ fi
 
 pm2 save
 echo "✓ done"
+echo ""
+echo "Note: if apps/app/.env has changed since the last deploy, bust Metro's"
+echo "cache to bake the new values into the frontend bundle:"
+echo "  cd apps/app && npx expo export -p web --clear"
