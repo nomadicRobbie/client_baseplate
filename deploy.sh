@@ -11,7 +11,7 @@ pnpm install --frozen-lockfile
 
 echo "→ building"
 pnpm build --filter=@blnk/shared
-pnpm --filter=@blnk/app exec expo export -p web
+(cd apps/app && npx expo export -p web)
 pnpm build --filter=@blnk/client-api
 
 echo "→ starting / reloading API via PM2"
