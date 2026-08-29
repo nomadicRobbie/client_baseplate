@@ -10,7 +10,7 @@ import type {
 } from '@blnk/shared';
 import { getAccessToken } from '@/lib/session';
 import {
-  getAdminProduct, updateProduct, uploadProductImage,
+  getAdminProduct, createProduct, updateProduct, uploadProductImage,
   listProductVariants, createVariant, updateVariant, deleteVariant,
 } from '@/lib/api';
 import { useImageSlots, type UploadFn, type ImageSlot } from '@/lib/image-slots';
@@ -207,7 +207,10 @@ export default function ProductDetail() {
   const [addingVariant, setAddingVariant] = useState(false);
   const [toast, setToast]         = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
 
+  const isNew = productId === 'new';
+
   const load = useCallback(async () => {
+    if (isNew) { setLoading(false); return; }
     setLoading(true);
     try {
       const [{ product: p }, { variants: vs }] = await Promise.all([
@@ -217,7 +220,7 @@ export default function ProductDetail() {
       setProduct(p); setVariants(vs); setDraft({});
     } catch (e) { setToast({ text: e instanceof Error ? e.message : 'Failed to load', tone: 'error' }); }
     finally { setLoading(false); }
-  }, [productId]);
+  }, [productId, isNew]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -245,15 +248,39 @@ export default function ProductDetail() {
   const { slots, pick, retrySlot, doneUrls, isUploading } = useImageSlots(initialImages, (msg) => setToast({ text: msg, tone: 'error' }));
 
   const save = async () => {
+    if (isNew && !draft.title?.trim()) { setToast({ text: 'Title is required', tone: 'error' }); return; }
+    if (isNew && !draft.price_cents && draft.price_cents !== 0) { setToast({ text: 'Price is required', tone: 'error' }); return; }
     setSaving(true);
     try {
-      const patch: Partial<Product> = {
-        ...draft,
-        media: { ...p.media, primary_image: doneUrls[0] ?? null, gallery: doneUrls },
-      };
-      const { product: updated } = await updateProduct(tok(), productId, patch);
-      setProduct(updated); setDraft({}); setDirty(false);
-      setToast({ text: 'Saved', tone: 'success' });
+      const mediaUpdate = { ...p.media, primary_image: doneUrls[0] ?? null, gallery: doneUrls };
+      if (isNew) {
+        const { product: created } = await createProduct(tok(), {
+          title: draft.title ?? '', description: draft.description ?? '',
+          price_cents: draft.price_cents ?? 0,
+          media: mediaUpdate,
+          status: draft.status ?? 'active', visibility: draft.visibility ?? 'public',
+          product_type: draft.product_type ?? 'physical', featured: draft.featured ?? false,
+          is_digital: draft.is_digital ?? false, active: draft.active ?? true,
+          sku: draft.sku ?? null, slug: draft.slug ?? null, handle: draft.handle ?? null,
+          parent_id: null, gtin: null, mpn: null,
+          compare_at_price_cents: null, cost_price_cents: null,
+          currency: draft.currency ?? currency, tax_class: null, tax_inclusive: true,
+          stock_quantity: draft.stock_quantity ?? 0, stock_status: 'in_stock' as const,
+          track_inventory: true, allow_backorder: false, low_stock_threshold: null,
+          warehouse_location: null, lead_time_days: null, restock_date: null,
+          has_variants: false, variant_options: {}, rating_average: null, rating_count: 0,
+          sales_channels: [], available_regions: [],
+          content: draft.content ?? {}, specifications: draft.specifications ?? {},
+          shipping_info: draft.shipping_info ?? {}, organisation: draft.organisation ?? {},
+          seo: draft.seo ?? {}, social_proof: {}, pricing_meta: {}, digital_product: {}, compliance: {},
+          published_at: null,
+        });
+        router.replace(`/dashboard/commerce/${created.id}` as never);
+      } else {
+        const { product: updated } = await updateProduct(tok(), productId, { ...draft, media: mediaUpdate });
+        setProduct(updated); setDraft({}); setDirty(false);
+        setToast({ text: 'Saved', tone: 'success' });
+      }
     } catch (e) { setToast({ text: e instanceof Error ? e.message : 'Save failed', tone: 'error' }); }
     finally { setSaving(false); }
   };
@@ -264,7 +291,7 @@ export default function ProductDetail() {
     </Screen>
   );
 
-  if (!product) return (
+  if (!isNew && !product) return (
     <Screen toast={toast} onDismissToast={() => setToast(null)}>
       <Text muted>Product not found.</Text>
     </Screen>
@@ -283,10 +310,10 @@ export default function ProductDetail() {
           <Text variant="label" color={t.color.primary}>Store</Text>
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text variant="heading" numberOfLines={1}>{p.title}</Text>
+          <Text variant="heading" numberOfLines={1}>{isNew ? 'New product' : p.title}</Text>
         </View>
-        <Badge label={p.status} tone={p.status === 'active' ? 'success' : 'neutral'} />
-        <Button label={saving ? 'Saving…' : 'Save'} onPress={save} loading={saving} disabled={!dirty && !isUploading} />
+        {!isNew && <Badge label={p.status} tone={p.status === 'active' ? 'success' : 'neutral'} />}
+        <Button label={saving ? 'Saving…' : isNew ? 'Create' : 'Save'} onPress={save} loading={saving} disabled={!isNew && !dirty && !isUploading} />
       </View>
 
       {/* ── Core ── */}
@@ -590,64 +617,67 @@ export default function ProductDetail() {
         </FieldRow>
       </GroupedCard>
 
-      {/* ── Variants ── */}
-      <SectionLabel right={
-        <Pressable onPress={() => setAddingVariant(v => !v)} accessibilityRole="button"
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Ionicons name={addingVariant ? 'close' : 'add'} size={16} color={t.color.primary} />
-          <Text variant="small" color={t.color.primary}>{addingVariant ? 'Cancel' : 'Add variant'}</Text>
-        </Pressable>
-      }>Variants</SectionLabel>
+      {/* ── Variants (existing products only) ── */}
+      {!isNew && (
+        <>
+          <SectionLabel right={
+            <Pressable onPress={() => setAddingVariant(v => !v)} accessibilityRole="button"
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Ionicons name={addingVariant ? 'close' : 'add'} size={16} color={t.color.primary} />
+              <Text variant="small" color={t.color.primary}>{addingVariant ? 'Cancel' : 'Add variant'}</Text>
+            </Pressable>
+          }>Variants</SectionLabel>
 
-      {/* Variant option names — editable if no variants yet */}
-      {variants.length === 0 && (
-        <GroupedCard>
-          <FieldRow label="Option names" displayValue={fromArr(p.variant_options?.option_names)} last>
-            <TextField
-              value={fromArr(p.variant_options?.option_names)}
-              onChangeText={v => setVariantOpts({ option_names: toArr(v) })}
-              placeholder="Size, Colour…"
-            />
-          </FieldRow>
-          {(p.variant_options?.option_names ?? []).map(dim => (
-            <FieldRow key={dim} label={dim} displayValue={fromArr((p.variant_options?.options ?? {})[dim])} last>
-              <TextField
-                value={fromArr((p.variant_options?.options ?? {})[dim])}
-                onChangeText={v => setVariantOpts({ options: { ...(p.variant_options?.options ?? {}), [dim]: toArr(v) } })}
-                placeholder="Comma-separated values"
+          {variants.length === 0 && (
+            <GroupedCard>
+              <FieldRow label="Option names" displayValue={fromArr(p.variant_options?.option_names)} last>
+                <TextField
+                  value={fromArr(p.variant_options?.option_names)}
+                  onChangeText={v => setVariantOpts({ option_names: toArr(v) })}
+                  placeholder="Size, Colour…"
+                />
+              </FieldRow>
+              {(p.variant_options?.option_names ?? []).map(dim => (
+                <FieldRow key={dim} label={dim} displayValue={fromArr((p.variant_options?.options ?? {})[dim])} last>
+                  <TextField
+                    value={fromArr((p.variant_options?.options ?? {})[dim])}
+                    onChangeText={v => setVariantOpts({ options: { ...(p.variant_options?.options ?? {}), [dim]: toArr(v) } })}
+                    placeholder="Comma-separated values"
+                  />
+                </FieldRow>
+              ))}
+            </GroupedCard>
+          )}
+
+          <GroupedCard>
+            {variants.length === 0 && !addingVariant && (
+              <View style={{ paddingHorizontal: t.space.lg, paddingVertical: t.space.md }}>
+                <Text variant="small" muted>No variants yet.</Text>
+              </View>
+            )}
+            {variants.map((v) => (
+              <VariantRow
+                key={v.id}
+                variant={v}
+                productId={productId}
+                onUpdated={updated => setVariants(vs => vs.map(x => x.id === updated.id ? updated : x))}
+                onDeleted={id => setVariants(vs => vs.filter(x => x.id !== id))}
               />
-            </FieldRow>
-          ))}
-        </GroupedCard>
+            ))}
+            {addingVariant && (
+              <AddVariantForm
+                productId={productId}
+                options={variantOptionEntries.length ? Object.fromEntries(variantOptionEntries) : { Size: [] }}
+                onAdded={v => { setVariants(vs => [...vs, v]); setAddingVariant(false); }}
+                onCancel={() => setAddingVariant(false)}
+              />
+            )}
+          </GroupedCard>
+        </>
       )}
 
-      <GroupedCard>
-        {variants.length === 0 && !addingVariant && (
-          <View style={{ paddingHorizontal: t.space.lg, paddingVertical: t.space.md }}>
-            <Text variant="small" muted>No variants yet.</Text>
-          </View>
-        )}
-        {variants.map((v, i) => (
-          <VariantRow
-            key={v.id}
-            variant={v}
-            productId={productId}
-            onUpdated={updated => setVariants(vs => vs.map(x => x.id === updated.id ? updated : x))}
-            onDeleted={id => setVariants(vs => vs.filter(x => x.id !== id))}
-          />
-        ))}
-        {addingVariant && (
-          <AddVariantForm
-            productId={productId}
-            options={variantOptionEntries.length ? Object.fromEntries(variantOptionEntries) : { Size: [] }}
-            onAdded={v => { setVariants(vs => [...vs, v]); setAddingVariant(false); }}
-            onCancel={() => setAddingVariant(false)}
-          />
-        )}
-      </GroupedCard>
-
       {/* Floating save bar when dirty */}
-      {(dirty || isUploading) && (
+      {(dirty || isUploading) && !isNew && (
         <View style={{ flexDirection: 'row', gap: t.space.md }}>
           <Button label={isUploading ? 'Waiting for uploads…' : saving ? 'Saving…' : 'Save changes'} onPress={save} loading={saving} disabled={isUploading} style={{ flex: 1 }} />
           <Button label="Discard" variant="ghost" onPress={() => { setDraft({}); setDirty(false); }} disabled={saving} />

@@ -585,7 +585,7 @@ export function FieldRow({ label, displayValue, last, children }: {
         style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingHorizontal: t.space.lg, gap: t.space.md }}
       >
         <Text variant="label" style={{ flex: 1 }}>{label}</Text>
-        {!!displayValue && <Text variant="body" muted numberOfLines={1}>{displayValue}</Text>}
+        {!!displayValue && <Text variant="body" muted numberOfLines={1} style={{ flexShrink: 1, maxWidth: '55%' }}>{displayValue}</Text>}
         <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={14} color={t.color.textMuted} />
       </Pressable>
       {open && (
