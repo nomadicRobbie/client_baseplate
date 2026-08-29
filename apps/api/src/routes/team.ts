@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { verifyBlnkAuth, requireRole } from '../blnk/auth';
-import { listTenantUsers, createTenantUser, setTenantUserActive } from '../blnk/client';
+import { listTenantUsers, setTenantUserActive } from '../blnk/client';
 
 function bearer(req: FastifyRequest): string {
   return (req.headers.authorization ?? '').slice(7);
@@ -14,25 +14,6 @@ const teamPlugin: FastifyPluginAsync = async (fastify) => {
   }, async (req, reply) => {
     const users = await listTenantUsers(bearer(req));
     return reply.status(200).send({ users });
-  });
-
-  fastify.post('/team', {
-    preHandler: [verifyBlnkAuth, requireRole('admin', 'super')],
-    schema: {
-      body: {
-        type: 'object',
-        required: ['email', 'role'],
-        additionalProperties: false,
-        properties: {
-          email: { type: 'string', format: 'email' },
-          role: { type: 'string', enum: ['admin', 'member'] },
-        },
-      },
-    },
-  }, async (req, reply) => {
-    const { email, role } = req.body as { email: string; role: 'admin' | 'member' };
-    const user = await createTenantUser(bearer(req), { email, role });
-    return reply.status(201).send({ user });
   });
 
   fastify.patch('/team/:id/active', {

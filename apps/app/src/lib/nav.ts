@@ -16,7 +16,7 @@ export type NavGroup = 'home' | 'module' | 'account' | 'admin';
 export type NavHref =
   | '/dashboard' | '/dashboard/feed' | '/dashboard/account' | '/dashboard/billing' | '/dashboard/people'
   | '/dashboard/theme' | '/dashboard/analytics' | '/dashboard/locations' | '/dashboard/compliance'
-  | '/dashboard/commerce' | '/dashboard/asset';
+  | '/dashboard/commerce' | '/dashboard/asset' | '/dashboard/schedule';
 
 export type NavItem = {
   label: string;
@@ -25,6 +25,8 @@ export type NavItem = {
   group: NavGroup;
   adminOnly?: boolean;
   feature?: FeatureKey;
+  // base-access modules skip the myModules gate — all app users can see them.
+  baseAccess?: boolean;
 };
 
 export const NAV: NavItem[] = [
@@ -35,6 +37,7 @@ export const NAV: NavItem[] = [
   { label: 'Locations', href: '/dashboard/locations', icon: 'location-outline', group: 'module', adminOnly: true, feature: 'locations' },
   { label: 'Food compliance', href: '/dashboard/compliance', icon: 'clipboard-outline', group: 'module', feature: 'compliance' },
   { label: 'Asset Manager', href: '/dashboard/asset', icon: 'cube-outline', group: 'module', feature: 'asset' },
+  { label: 'Schedule', href: '/dashboard/schedule', icon: 'calendar-outline', group: 'module', feature: 'schedule', baseAccess: true },
   { label: 'Billing', href: '/dashboard/billing', icon: 'card-outline', group: 'admin', adminOnly: true, feature: 'stripe' },
   { label: 'Account', href: '/dashboard/account', icon: 'person-outline', group: 'account' },
   { label: 'People', href: '/dashboard/people', icon: 'people-outline', group: 'account', adminOnly: true },
@@ -48,7 +51,7 @@ export function visibleNav(isAdmin: boolean, features: FeatureFlags | null, myMo
   return NAV.filter((i) => {
     if (i.adminOnly && !isAdmin) return false;
     if (i.feature && !features?.[i.feature]) return false;
-    if (!isAdmin && i.group === 'module' && i.feature && !(myModules ?? []).includes(i.feature)) return false;
+    if (!isAdmin && i.group === 'module' && i.feature && !i.baseAccess && !(myModules ?? []).includes(i.feature)) return false;
     return true;
   });
 }

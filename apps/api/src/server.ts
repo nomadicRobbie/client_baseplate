@@ -16,6 +16,7 @@ import analyticsPlugin from './modules/analytics'
 import locationsPlugin from './modules/locations/plugin'
 import compliancePlugin from './modules/compliance'
 import assetPlugin from './modules/asset'
+import schedulePlugin from './modules/schedule'
 import feedPlugin from './modules/feed'
 import { buildUpcoming } from './modules/asset/upcoming'
 import { getPushTokensForModules } from './db/queries/people'
@@ -104,6 +105,8 @@ export async function build(): Promise<typeof server> {
   if (config.features.compliance) await server.register(compliancePlugin)
   // Asset management (fleet, faults, maintenance).
   if (config.features.asset) await server.register(assetPlugin)
+  // Schedule register (trip board — services, templates, assignments).
+  if (config.features.schedule) await server.register(schedulePlugin)
   // Feed — always on; item visibility is gated server-side by module membership.
   await server.register(feedPlugin)
 

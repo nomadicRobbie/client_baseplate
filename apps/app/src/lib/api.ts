@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, FoodControlPlan, Product, ProductVariant, Asset, AssetType, AssetFieldDef, AssetFault, AssetFaultStep, AssetMaintenanceLog, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert, AssetComponent, AssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, FoodControlPlan, Product, ProductVariant, Asset, AssetType, AssetFieldDef, AssetFault, AssetFaultStep, AssetMaintenanceLog, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert, AssetComponent, AssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData, ServiceTemplate, ScheduledService, ServiceAssignment, ServiceManifest, AvailabilitySlot } from '@blnk/shared';
 import { getAccessToken, getRefreshToken, setTokens, clearSession } from './session';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
@@ -550,3 +550,47 @@ export const createPostComment = (token: string, postId: string, body: string) =
 
 export const registerPushToken = (token: string, pushToken: string | null) =>
   req<void>('/profile/push-token', { method: 'PATCH', body: { token: pushToken }, token });
+
+// ── Schedule ──────────────────────────────────────────────────────────────────
+export const listServiceTemplates = (token: string, active?: boolean) =>
+  req<{ templates: ServiceTemplate[] }>(`/service-templates${active !== undefined ? `?active=${active}` : ''}`, { method: 'GET', token });
+
+export const createServiceTemplate = (token: string, body: Omit<ServiceTemplate, 'id' | 'created_at' | 'updated_at' | 'created_by'>) =>
+  req<{ template: ServiceTemplate }>('/service-templates', { method: 'POST', body, token });
+
+export const updateServiceTemplate = (token: string, id: string, body: Partial<Omit<ServiceTemplate, 'id' | 'created_at' | 'updated_at' | 'created_by'>>) =>
+  req<{ template: ServiceTemplate }>(`/service-templates/${id}`, { method: 'PATCH', body, token });
+
+export const generateServiceInstances = (token: string, templateId: string, from: string, to: string) =>
+  req<{ created: number; skipped: number }>(`/service-templates/${templateId}/generate`, { method: 'POST', body: { from, to }, token });
+
+export const listServices = (token: string, from: string, to: string, opts?: { status?: string[]; template_id?: string }) => {
+  const params = new URLSearchParams({ from, to });
+  if (opts?.status?.length) opts.status.forEach(s => params.append('status', s));
+  if (opts?.template_id) params.set('template_id', opts.template_id);
+  return req<{ services: ScheduledService[] }>(`/services?${params}`, { method: 'GET', token });
+};
+
+export const getService = (token: string, id: string) =>
+  req<{ service: ScheduledService; assignments: ServiceAssignment[] }>(`/services/${id}`, { method: 'GET', token });
+
+export const createService = (token: string, body: { id: string; name: string; starts_at: string; ends_at: string; timezone: string; template_id?: string | null; location_label?: string | null; capacity?: number; required_roles?: unknown[]; status?: string; notes?: string }) =>
+  req<{ service: ScheduledService }>('/services', { method: 'POST', body, token });
+
+export const updateService = (token: string, id: string, body: Record<string, unknown> & { version: number }) =>
+  req<{ service: ScheduledService }>(`/services/${id}`, { method: 'PATCH', body, token });
+
+export const cancelService = (token: string, id: string, reason: string) =>
+  req<{ service: ScheduledService }>(`/services/${id}/cancel`, { method: 'POST', body: { reason }, token });
+
+export const addServiceAssignment = (token: string, serviceId: string, body: { subject_type: 'person' | 'asset'; subject_id: string; role?: string | null }) =>
+  req<{ assignment: ServiceAssignment }>(`/services/${serviceId}/assignments`, { method: 'POST', body, token });
+
+export const removeServiceAssignment = (token: string, serviceId: string, assignmentId: string) =>
+  req<void>(`/services/${serviceId}/assignments/${assignmentId}`, { method: 'DELETE', token });
+
+export const getServiceManifest = (token: string, serviceId: string) =>
+  req<{ manifest: ServiceManifest }>(`/services/${serviceId}/manifest`, { method: 'GET', token });
+
+export const getAvailability = (token: string, from: string, to: string) =>
+  req<{ slots: AvailabilitySlot[] }>(`/availability?from=${from}&to=${to}`, { method: 'GET', token });

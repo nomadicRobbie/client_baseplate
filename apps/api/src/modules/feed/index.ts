@@ -36,7 +36,7 @@ const feedPlugin: FastifyPluginAsync = async (fastify) => {
     const isAdmin = u.role === 'admin' || u.role === 'super'
     const modules = await myModules(u.userId, isAdmin)
     const items = await listFeedItems({ isAdmin, myModules: modules })
-    // Modules a post can be scoped to — derived from enabled feature flags, not people assignments.
+    // Modules a post can be scoped to — module-gated only (schedule is base access, not scopeable).
     const available_modules = (['asset', 'compliance'] as const).filter(m => config.features[m])
     return { items, my_modules: modules, available_modules }
   })

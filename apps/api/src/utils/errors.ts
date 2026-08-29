@@ -15,6 +15,7 @@ export const Errors = {
   unauthorized: (msg = 'unauthorized') => new AppError('UNAUTHORIZED', msg, 401),
   forbidden: (msg = 'forbidden') => new AppError('FORBIDDEN', msg, 403),
   notFound: (resource: string) => new AppError('NOT_FOUND', `${resource} not found`, 404),
+  conflict: (msg = 'conflict') => new AppError('CONFLICT', msg, 409),
   badGateway: (msg = 'upstream error') => new AppError('BAD_GATEWAY', msg, 502),
   internal: (msg = 'internal server error') => new AppError('INTERNAL_ERROR', msg, 500),
 } as const

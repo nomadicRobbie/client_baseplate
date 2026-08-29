@@ -56,6 +56,7 @@ export interface FeatureFlags {
   compliance: boolean
   locations: boolean
   asset: boolean
+  schedule: boolean
 }
 
 // ── Compliance (food safety records — requires FEATURE_COMPLIANCE) ───────────
@@ -678,13 +679,122 @@ export interface FeedComplianceData {
   due_date: string   // YYYY-MM-DD
 }
 
-export type FeedItemKind = 'fault' | 'maintenance' | 'post' | 'compliance'
+export interface FeedServiceData {
+  service_id: string
+  name: string
+  starts_at: string
+  timezone: string
+  location_label: string | null
+  status: string
+  capacity: number
+  assigned_count: number
+  unfilled_roles: Array<{ role: string; count: number }>
+}
+
+export type FeedItemKind = 'fault' | 'maintenance' | 'post' | 'compliance' | 'service'
 
 export interface FeedItem {
   kind: FeedItemKind
   module: string | null   // source module ('asset', 'compliance', etc.); null for org-wide posts
   created_at: string
-  data: FeedFaultData | FeedMaintenanceData | FeedPost | FeedComplianceData
+  data: FeedFaultData | FeedMaintenanceData | FeedPost | FeedComplianceData | FeedServiceData
+}
+
+// ── Schedule (requires FEATURE_SCHEDULE) ─────────────────────────────────────
+export type ServiceStatus = 'draft' | 'planned' | 'confirmed' | 'completed' | 'cancelled'
+export type ServiceSubjectType = 'person' | 'asset'
+export type ServiceEventType =
+  | 'created' | 'rescheduled' | 'capacity_changed' | 'assigned'
+  | 'unassigned' | 'cancelled' | 'completed' | 'note_added'
+
+export interface RequiredRole { role: string; count: number }
+export interface RequiredAssetType { asset_type_id: string; count: number }
+export interface RecurrencePattern { days: number[]; time: string }  // days: 0=Sun..6=Sat, time: 'HH:MM'
+
+export interface ServiceTemplate {
+  id: string
+  name: string
+  duration_minutes: number
+  default_capacity: number
+  location_label: string | null
+  timezone: string
+  required_roles: RequiredRole[]
+  required_asset_types: RequiredAssetType[]
+  recurrence: RecurrencePattern | null
+  active: boolean
+  created_at: string
+  created_by: string | null
+  updated_at: string
+}
+
+export interface ScheduledService {
+  id: string
+  template_id: string | null
+  name: string
+  starts_at: string
+  ends_at: string
+  timezone: string
+  location_label: string | null
+  capacity: number
+  required_roles: RequiredRole[]
+  status: ServiceStatus
+  cancellation_reason: string | null
+  external_ref: string | null
+  notes: string
+  version: number
+  created_at: string
+  created_by: string | null
+  updated_at: string
+  updated_by: string | null
+}
+
+export interface ServiceAssignment {
+  id: string
+  service_id: string
+  subject_type: ServiceSubjectType
+  subject_id: string
+  role: string | null
+  assigned_at: string
+  assigned_by: string | null
+  removed_at: string | null
+  removed_by: string | null
+}
+
+export interface ServiceEvent {
+  id: string
+  service_id: string
+  event_type: ServiceEventType
+  payload: Record<string, unknown>
+  actor_id: string | null
+  occurred_at: string
+}
+
+export interface ManifestPerson {
+  assignment_id: string
+  person_id: string
+  name: string
+  role: string | null
+}
+
+export interface ManifestAsset {
+  assignment_id: string
+  asset_id: string
+  name: string
+  role: string | null
+}
+
+export interface ServiceManifest {
+  service: ScheduledService
+  crew: ManifestPerson[]
+  assets: ManifestAsset[]
+}
+
+export interface AvailabilitySlot {
+  service_id: string
+  starts_at: string
+  capacity: number
+  assigned_count: number
+  remaining: number
 }
 
 // ── Helpers (pure — safe everywhere) ────────────────────────────────────────

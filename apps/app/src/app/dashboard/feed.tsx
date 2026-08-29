@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Pressable, ActivityIndicator, TextInput, ScrollView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { FeedItem, FeedFaultData, FeedMaintenanceData, FeedPost, FeedPostComment, FeedComplianceData, Person } from '@blnk/shared';
+import type { FeedItem, FeedFaultData, FeedMaintenanceData, FeedPost, FeedPostComment, FeedComplianceData, FeedServiceData, Person } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { useFeedBadge } from '@/lib/feed-badge-context';
 import { getAccessToken } from '@/lib/session';
@@ -280,6 +280,35 @@ function ComplianceItem({ data, t, s }: { data: FeedComplianceData; t: ThemeT; s
   )
 }
 
+// ── Service item — upcoming service with crew gaps ────────────────────────────
+function ServiceItem({ data, t, s }: { data: FeedServiceData; t: ThemeT; s: ReturnType<typeof makeStyles> }) {
+  const router = useRouter()
+  const gapCount = data.unfilled_roles.reduce((n, r) => n + r.count, 0)
+  const when = new Date(data.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const date = formatDMY(data.starts_at.slice(0, 10))
+  const gapLabel = gapCount > 0 ? `${gapCount} role${gapCount !== 1 ? 's' : ''} unfilled` : 'Needs confirmation'
+  return (
+    <Pressable
+      onPress={() => router.push({ pathname: '/dashboard/schedule/[serviceId]', params: { serviceId: data.service_id } })}
+      accessibilityRole="button"
+      accessibilityLabel={`View service: ${data.name}`}
+    >
+      <View style={s.itemRow}>
+        <Ionicons name="calendar-outline" size={18} color={t.color.primary} style={s.itemIcon} />
+        <View style={s.itemBody}>
+          <Text variant="label">{data.name}</Text>
+          <Text variant="body">{date} · {when}{data.location_label ? ` · ${data.location_label}` : ''}</Text>
+          <View style={s.itemMeta}>
+            <StatusBadge level="due" label={gapLabel} />
+            <Badge label="Schedule" tone="neutral" />
+          </View>
+        </View>
+        <Ionicons name="chevron-forward-outline" size={16} color={t.color.textMuted} />
+      </View>
+    </Pressable>
+  )
+}
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 type Msg = { text: string; tone: 'success' | 'error' }
 const tok = () => getAccessToken()!
@@ -522,6 +551,7 @@ export default function FeedScreen() {
             item.kind === 'fault'       ? { backgroundColor: t.color.warningMuted + '40' } :
             item.kind === 'maintenance' ? { backgroundColor: t.color.successMuted + '40' } :
             item.kind === 'compliance'  ? { backgroundColor: t.color.dangerMuted  + '40' } :
+            item.kind === 'service'     ? { backgroundColor: t.color.primary      + '18' } :
             undefined
           return (
             <Card key={`${item.kind}-${idx}`} style={tint}>
@@ -542,6 +572,9 @@ export default function FeedScreen() {
                 )}
                 {item.kind === 'compliance' && (
                   <ComplianceItem data={item.data as FeedComplianceData} t={t} s={s} />
+                )}
+                {item.kind === 'service' && (
+                  <ServiceItem data={item.data as FeedServiceData} t={t} s={s} />
                 )}
                 {item.kind !== 'post' && <Text variant="small" muted>{relativeTime(item.created_at)}</Text>}
               </View>

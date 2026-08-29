@@ -1,8 +1,10 @@
 import { query } from '../pool'
+import { config } from '../../config'
 import type { FeedPost, FeedPostComment, FeedItem } from '@blnk/shared'
 import { buildUpcoming } from '../../modules/asset/upcoming'
 import { listActiveSchedules, scheduleDoneCounts } from './compliance'
 import { isDueOn } from '../../modules/compliance/schedule'
+import { buildTodayServices } from './schedule'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface FaultRow {
@@ -94,6 +96,7 @@ export async function listFeedItems(opts: {
   const { isAdmin, myModules, limit = 50 } = opts
   const hasAsset = isAdmin || myModules.includes('asset')
   const hasCompliance = isAdmin || myModules.includes('compliance')
+  const hasSchedule = config.features.schedule
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
   const items: FeedItem[] = []
@@ -186,6 +189,12 @@ export async function listFeedItems(opts: {
         },
       })
     }
+  }
+
+  // ── Schedule: services starting within 24h with gaps ───────────────────────
+  if (hasSchedule) {
+    const scheduleItems = await buildTodayServices()
+    items.push(...scheduleItems)
   }
 
   // ── Posts (with comment count + latest comment preview) ───────────────────
