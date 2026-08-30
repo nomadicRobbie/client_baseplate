@@ -8,7 +8,7 @@ import type { Asset, AssetType, AssetFault, AssetUpcomingItem, FoodControlPlan }
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
 import { listAssetFaults, listAssetTypes, getAssetUpcoming, updateAsset, deleteAsset, uploadAssetImage, listPlans } from '@/lib/api';
-import { readThrough } from '@/lib/mirror';
+import { readThrough, readCache } from '@/lib/mirror';
 import { pendingCount } from '@/lib/outbox';
 import { syncAssetOutbox, loadAsset } from '@/lib/asset-sync';
 import { formatDMY } from '@/lib/format';
@@ -71,24 +71,37 @@ export default function AssetHome() {
   const load = async () => {
     setLoading(true);
     try {
-      const [{ asset, offline: o1 }, f, u, types] = await Promise.all([
+      // Derive faults/upcoming from the all-assets cache when available — avoids
+      // 2 extra requests on the common path (list visited before detail).
+      const allFaultsCache = readCache<{ faults: AssetFault[] }>('asset:faults:all');
+      const allUpcomingCache = readCache<{ items: AssetUpcomingItem[] }>('asset:upcoming:all');
+
+      const faultsFetcher = allFaultsCache
+        ? () => Promise.resolve({ faults: allFaultsCache.value.faults.filter(f => f.asset_id === assetId) })
+        : () => listAssetFaults(tok(), { asset_id: assetId });
+      const upcomingFetcher = allUpcomingCache
+        ? () => Promise.resolve({ items: allUpcomingCache.value.items.filter(u => u.asset_id === assetId) })
+        : () => getAssetUpcoming(tok(), assetId);
+
+      const [{ asset, offline: o1 }, f, u, types, plansRes] = await Promise.all([
         loadAsset(assetId),
-        readThrough('asset:faults:' + assetId, () => listAssetFaults(tok(), { asset_id: assetId })),
-        readThrough('asset:upcoming:' + assetId, () => getAssetUpcoming(tok(), assetId)),
+        readThrough('asset:faults:' + assetId, faultsFetcher),
+        readThrough('asset:upcoming:' + assetId, upcomingFetcher),
         readThrough('asset:asset-types', () => listAssetTypes(tok())),
+        features?.compliance ? listPlans(tok()).catch(() => null) : Promise.resolve(null),
       ]);
       setAsset(asset); setFaults(f.value.faults); setUpcoming(u.value.items);
       setOffline(o1 || f.stale || u.stale);
       const matched = asset ? types.value.asset_types.find((ty) => ty.id === asset.asset_type_id) ?? null : null;
       setAssetType(matched);
-      if (features?.compliance) {
-        try { setPlans((await listPlans(tok())).plans); } catch { /* non-fatal */ }
-      }
+      if (plansRes) setPlans(plansRes.plans);
     } finally { setLoading(false); }
   };
-  const doSync = async () => { const { remaining } = await syncAssetOutbox(); setPending(remaining); await load(); };
-  useEffect(() => { void load(); void doSync(); }, [assetId]);
-  useOnReconnect(() => { void doSync(); });
+  // Drain the outbox first, then load once — avoids the double-load from calling
+  // load() at mount and again at the end of doSync.
+  const doSync = async () => { const { remaining } = await syncAssetOutbox(); setPending(remaining); };
+  useEffect(() => { void doSync().then(() => load()); }, [assetId]);
+  useOnReconnect(() => { void doSync().then(() => load()); });
 
   if (features && !features.asset) return <Redirect href="/dashboard" />;
 

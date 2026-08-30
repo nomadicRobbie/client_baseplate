@@ -19,6 +19,9 @@ export function readCache<T>(key: string): CacheEntry<T> | null {
   try { const raw = getItem(k(key)); return raw ? (JSON.parse(raw) as CacheEntry<T>) : null; } catch { return null; }
 }
 
+// ponytail: collapses concurrent calls with the same key into one in-flight fetch
+const _inflight = new Map<string, Promise<unknown>>();
+
 // Try the network; cache on success. On failure serve the cached value marked
 // `stale`. Throws only when the fetch fails AND nothing is cached (genuinely
 // nothing to show). `at` is the timestamp the served value was fetched.
@@ -27,7 +30,12 @@ export async function readThrough<T>(
   fetcher: () => Promise<T>,
 ): Promise<{ value: T; stale: boolean; at: number }> {
   try {
-    const value = await fetcher();
+    let p = _inflight.get(key) as Promise<T> | undefined;
+    if (!p) {
+      p = fetcher().finally(() => _inflight.delete(key));
+      _inflight.set(key, p);
+    }
+    const value = await p;
     writeCache(key, value);
     return { value, stale: false, at: Date.now() };
   } catch (e) {

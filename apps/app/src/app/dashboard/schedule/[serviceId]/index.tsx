@@ -20,16 +20,105 @@ const makeStyles = (t: ThemeT) => ({
   avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: t.color.surfaceAlt, alignItems: 'center' as const, justifyContent: 'center' as const },
   assetRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
   actions: { flexDirection: 'row' as const, gap: t.space.sm, flexWrap: 'wrap' as const },
+  tlRow: { gap: 6, marginTop: t.space.xs },
+  tlTrack: { flexDirection: 'row' as const, height: 12, borderRadius: 6, overflow: 'hidden' as const, backgroundColor: t.color.surfaceAlt },
+  tlSegment: { backgroundColor: t.color.primary },
+  tlLabels: { flexDirection: 'row' as const },
+  tlLabelInner: { flexDirection: 'row' as const, justifyContent: 'space-between' as const },
 });
 
 const STATUS_LABEL: Record<string, string> = {
   draft: 'Draft', planned: 'Planned', confirmed: 'Confirmed', completed: 'Completed', cancelled: 'Cancelled',
 };
 
-function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' }) +
-    ' · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+// ── Timeline helpers ────────────────────────────────────────────────────────
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const fmt = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const dateLabel = (d: Date) => d.toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' });
+const midnight = (d: Date) => { const m = new Date(d); m.setHours(0, 0, 0, 0); return m; };
+
+type Segment = { date: string; startFrac: number; endFrac: number; startLabel: string | null; endLabel: string | null; nowFrac: number | null };
+
+function buildSegments(starts: Date, ends: Date): Segment[] {
+  const now = Date.now();
+  const segments: Segment[] = [];
+  const dayStart = midnight(starts);
+  const dayEnd = midnight(ends);
+  const totalDays = Math.round((dayEnd.getTime() - dayStart.getTime()) / DAY_MS);
+
+  for (let i = 0; i <= totalDays; i++) {
+    const d = new Date(dayStart.getTime() + i * DAY_MS);
+    const dMs = d.getTime();
+    const segStart = Math.max(starts.getTime(), dMs);
+    const segEnd = Math.min(ends.getTime(), dMs + DAY_MS);
+    if (segStart >= segEnd) continue;
+
+    const sf = (segStart - dMs) / DAY_MS;
+    const ef = (segEnd - dMs) / DAY_MS;
+    const nf = now >= dMs && now <= dMs + DAY_MS ? (now - dMs) / DAY_MS : null;
+
+    segments.push({
+      date: dateLabel(d),
+      startFrac: sf,
+      endFrac: ef,
+      startLabel: sf < 0.01 ? null : fmt(segStart),
+      endLabel: ef > 0.99 ? null : fmt(segEnd),
+      nowFrac: nf,
+    });
+  }
+  return segments;
+}
+
+function ServiceTimeline({ starts_at, ends_at, t, s }: { starts_at: string; ends_at: string; t: ThemeT; s: ReturnType<typeof makeStyles> }) {
+  const segments = buildSegments(new Date(starts_at), new Date(ends_at));
+
+  return (
+    <View style={{ gap: t.space.sm }}>
+      {segments.map((seg, i) => {
+        const midFlex = seg.endFrac - seg.startFrac;
+        const hasNow = seg.nowFrac !== null && seg.nowFrac >= seg.startFrac && seg.nowFrac <= seg.endFrac;
+        // now position within the segment (0–1)
+        const nowInSeg = hasNow ? (seg.nowFrac! - seg.startFrac) / midFlex : null;
+
+        return (
+          <View key={i} style={s.tlRow}>
+            <Text variant="small" muted>{seg.date}</Text>
+
+            {/* Track */}
+            <View style={s.tlTrack}>
+              {seg.startFrac > 0 && <View style={{ flex: seg.startFrac }} />}
+              <View style={[s.tlSegment, { flex: midFlex }]}>
+                {/* "Now" tick inside segment */}
+                {nowInSeg !== null && (
+                  <View style={{ position: 'absolute', top: 0, bottom: 0, left: `${nowInSeg * 100}%` as unknown as number, width: 2, backgroundColor: 'rgba(255,255,255,0.7)' }} />
+                )}
+              </View>
+              {seg.endFrac < 1 && <View style={{ flex: 1 - seg.endFrac }} />}
+            </View>
+
+            {/* Edge labels: always 00:00 … 24:00 */}
+            <View style={[s.tlLabels, { justifyContent: 'space-between' }]}>
+              <Text variant="small" muted>00:00</Text>
+              <Text variant="small" muted>24:00</Text>
+            </View>
+
+            {/* Segment time labels pinned to segment boundaries */}
+            {(seg.startLabel || seg.endLabel) && (
+              <View style={s.tlLabels}>
+                {seg.startFrac > 0 && <View style={{ flex: seg.startFrac }} />}
+                <View style={[s.tlLabelInner, { flex: midFlex }]}>
+                  {seg.startLabel && <Text variant="small" color={t.color.primary}>{seg.startLabel}</Text>}
+                  {seg.endLabel && <Text variant="small" color={t.color.primary}>{seg.endLabel}</Text>}
+                </View>
+                {seg.endFrac < 1 && <View style={{ flex: 1 - seg.endFrac }} />}
+              </View>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
 }
 
 export default function ServiceDetailScreen() {
@@ -103,9 +192,8 @@ export default function ServiceDetailScreen() {
 
           <Card>
             <Text variant="label">When</Text>
-            <Text variant="body">{formatDateTime(svc.starts_at)}</Text>
-            <Text variant="body" muted>→ {formatDateTime(svc.ends_at)}</Text>
-            {svc.notes ? <Text variant="body" muted>{svc.notes}</Text> : null}
+            <ServiceTimeline starts_at={svc.starts_at} ends_at={svc.ends_at} t={t} s={s} />
+            {svc.notes ? <Text variant="body" muted style={{ marginTop: t.space.xs }}>{svc.notes}</Text> : null}
           </Card>
 
           {/* Crew */}
