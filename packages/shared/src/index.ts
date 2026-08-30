@@ -604,6 +604,7 @@ export type AssetScheduleAlert = { value: number; unit: 'hours' | 'days' | 'week
 export interface AssetMaintenanceSchedule {
   id: string; asset_id: string; component_id: string | null; task_name: string
   interval_type: string | null; interval_value: string | null; initial_due_date: string | null
+  weekdays: number[] | null; recurrence_end_date: string | null
   alert_days: number | null; alert_hours: string | null; alerts: AssetScheduleAlert[]; active: boolean
   task_notes: string | null; document_urls: string[]; form_schema: FormSchema | null
 }
@@ -709,7 +710,12 @@ export type ServiceEventType =
 
 export interface RequiredRole { role: string; count: number }
 export interface RequiredAssetType { asset_type_id: string; count: number }
-export interface RecurrencePattern { days: number[]; time: string }  // days: 0=Sun..6=Sat, time: 'HH:MM'
+export interface RecurrencePattern {
+  days: number[];          // 0=Sun..6=Sat, time: 'HH:MM'
+  time: string;
+  startDate?: string;      // YYYY-MM-DD — generation range start
+  endDate?: string | null; // YYYY-MM-DD — null = indefinite
+}
 
 export interface ServiceTemplate {
   id: string

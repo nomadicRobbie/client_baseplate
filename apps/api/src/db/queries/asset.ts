@@ -45,6 +45,7 @@ export type ScheduleAlert = { value: number; unit: 'hours' | 'days' | 'weeks' }
 export interface MaintenanceSchedule {
   id: string; asset_id: string; component_id: string | null; task_name: string
   interval_type: string | null; interval_value: string | null; initial_due_date: string | null
+  weekdays: number[] | null; recurrence_end_date: string | null
   alert_days: number | null; alert_hours: string | null; alerts: ScheduleAlert[]; active: boolean
   created_by: string | null; created_at: string; updated_by: string | null; updated_at: string
 }
@@ -194,11 +195,11 @@ export const schedulesWithLastCompleted = (assetId?: string) =>
 
 export const createSchedule = (d: Record<string, unknown>, createdBy: string | null) =>
   one<MaintenanceSchedule>(
-    `INSERT INTO asset_maintenance_schedules (asset_id, component_id, task_name, interval_type, interval_value, initial_due_date, alert_days, alert_hours, alerts, task_notes, document_urls, form_schema, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-    [d.asset_id, d.component_id ?? null, d.task_name, d.interval_type ?? null, d.interval_value ?? null, d.initial_due_date ?? null, d.alert_days ?? null, d.alert_hours ?? null, JSON.stringify(d.alerts ?? []), d.task_notes ?? null, JSON.stringify(d.document_urls ?? []), d.form_schema ? JSON.stringify(d.form_schema) : null, createdBy],
+    `INSERT INTO asset_maintenance_schedules (asset_id, component_id, task_name, interval_type, interval_value, initial_due_date, weekdays, recurrence_end_date, alert_days, alert_hours, alerts, task_notes, document_urls, form_schema, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+    [d.asset_id, d.component_id ?? null, d.task_name, d.interval_type ?? null, d.interval_value ?? null, d.initial_due_date ?? null, d.weekdays ?? null, d.recurrence_end_date ?? null, d.alert_days ?? null, d.alert_hours ?? null, JSON.stringify(d.alerts ?? []), d.task_notes ?? null, JSON.stringify(d.document_urls ?? []), d.form_schema ? JSON.stringify(d.form_schema) : null, createdBy],
   )
-const SCHED_COLS = ['component_id', 'task_name', 'interval_type', 'interval_value', 'initial_due_date', 'alert_days', 'alert_hours', 'active', 'task_notes', 'document_urls', 'form_schema'] as const
+const SCHED_COLS = ['component_id', 'task_name', 'interval_type', 'interval_value', 'initial_due_date', 'weekdays', 'recurrence_end_date', 'alert_days', 'alert_hours', 'active', 'task_notes', 'document_urls', 'form_schema'] as const
 export const updateSchedule = (id: string, body: object, updatedBy: string | null) => patch<MaintenanceSchedule>('asset_maintenance_schedules', id, SCHED_COLS, body as never, updatedBy)
 
 // ── Maintenance logs (append-only evidence) ─────────────────────────────────

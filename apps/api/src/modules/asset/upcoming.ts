@@ -31,7 +31,26 @@ function addInterval(fromISO: string, type: string | null, value: string | null)
   }
 }
 
+// Find the next occurrence of any of the given weekdays (0=Sun..6=Sat) on or after `from`.
+function nextWeekday(from: Date, days: number[]): Date {
+  const d = new Date(from)
+  for (let i = 0; i < 7; i++) {
+    if (days.includes(d.getUTCDay())) return d
+    d.setUTCDate(d.getUTCDate() + 1)
+  }
+  return d // unreachable if days is non-empty
+}
+
 function nextDue(sc: ScheduleDueRow): Date | null {
+  // Weekday recurrence: next matching weekday after last completion (or initial_due_date)
+  if (sc.interval_type === 'weekday' && sc.weekdays?.length) {
+    const from = sc.last_completed
+      ? (() => { const d = new Date(sc.last_completed); d.setUTCDate(d.getUTCDate() + 1); return d })()
+      : sc.initial_due_date ? new Date(sc.initial_due_date) : new Date()
+    const next = nextWeekday(from, sc.weekdays)
+    if (sc.recurrence_end_date && next.toISOString().slice(0, 10) > sc.recurrence_end_date) return null
+    return next
+  }
   if (sc.last_completed) {
     const next = addInterval(sc.last_completed, sc.interval_type, sc.interval_value)
     if (next) return next

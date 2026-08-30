@@ -14,10 +14,12 @@ import { useTheme } from '@/theme';
 import { Screen, Text, GroupedCard, SectionLabel, Button, FieldRow, Badge, Pill, Stepper, Toggle } from '@/ui/components';
 import { DateField } from '@/ui/date-field';
 import { StatusBadge, OfflineBanner } from '@/ui/status';
+import { WeekdayRecurrencePicker, type RecurrenceValue } from '@/ui/weekday-recurrence-picker';
 
 type Msg = { text: string; tone: 'success' | 'error' | 'info' };
 type ThemeT = ReturnType<typeof useTheme>;
-const INTERVALS = ['Day', 'Week', 'Month', 'Year'];
+const INTERVALS = ['One-off', 'Day', 'Week', 'Month', 'Year', 'Weekday'];
+const today = () => new Date().toISOString().slice(0, 10);
 const tok = () => getAccessToken()!;
 
 const makeStyles = (t: ThemeT) => ({
@@ -73,6 +75,7 @@ export default function AssetMaintenance() {
   const [alerts, setAlerts] = useState<AssetScheduleAlert[]>([{ value: 7, unit: 'days' }]);
   const [aVal, setAVal] = useState('1');
   const [notifyManager, setNotifyManager] = useState(false);
+  const [weekdayRec, setWeekdayRec] = useState<RecurrenceValue>({ days: [], time: '09:00', startDate: today(), endDate: null });
   const [docUrls, setDocUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
 
@@ -134,11 +137,16 @@ export default function AssetMaintenance() {
     if (!task.trim()) { setMsg({ text: 'Task name is required.', tone: 'error' }); return null; }
     setBusy(true); setMsg(null);
     try {
+      const isOneOff = intervalType === 'One-off';
+      const isWeekday = intervalType === 'Weekday';
       const { schedule } = await createAssetSchedule(tok(), {
         asset_id: assetId, task_name: task.trim(),
-        interval_type: intervalType, interval_value: Number(intervalValue) || 1,
-        initial_due_date: dueDate.trim() || undefined, alerts,
-
+        interval_type: isOneOff ? undefined : isWeekday ? 'weekday' : intervalType,
+        interval_value: isOneOff || isWeekday ? undefined : (Number(intervalValue) || 1),
+        initial_due_date: isWeekday ? (weekdayRec.startDate || undefined) : (dueDate.trim() || undefined),
+        weekdays: isWeekday ? weekdayRec.days : undefined,
+        recurrence_end_date: isWeekday ? (weekdayRec.endDate || null) : undefined,
+        alerts,
         document_urls: docUrls.length ? docUrls : undefined,
         form_schema: opts.formSchema,
       });
@@ -185,7 +193,13 @@ export default function AssetMaintenance() {
                 {schedules.map((sc, i) => {
                   const due = dueById[sc.id];
                   const level = due?.level === 'over' ? 'over' : due?.level === 'due' ? 'due' : 'ok';
-                  const sub = [`Every ${sc.interval_value ?? ''} ${sc.interval_type ?? ''}`.trim(), due?.due_date ? `Due ${formatDMY(due.due_date)}` : null].filter(Boolean).join(' · ');
+                  const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                  const repeatLabel = !sc.interval_type
+                    ? 'One-off'
+                    : sc.interval_type === 'weekday' && sc.weekdays?.length
+                      ? `Every ${sc.weekdays.map(d => DAY_NAMES[d]).join(', ')}`
+                      : `Every ${sc.interval_value ?? ''} ${sc.interval_type}`.trim();
+                  const sub = [repeatLabel, due?.due_date ? `Due ${formatDMY(due.due_date)}` : null].filter(Boolean).join(' · ');
                   return (
                     <View key={sc.id} style={[s.scheduleRow, i === schedules.length - 1 && s.scheduleRowLast]}>
                       <View style={s.scheduleItem}>
@@ -251,9 +265,11 @@ export default function AssetMaintenance() {
                 <TextInput value={task} onChangeText={setTask} placeholder="Weekly inspection"
                   autoCapitalize="sentences" placeholderTextColor={t.color.textMuted} style={s.input} />
               </FieldRow>
-              <FieldRow label="Starts" displayValue={dueDate} last>
-                <DateField value={dueDate} onChange={setDueDate} placeholder="Select date" />
-              </FieldRow>
+              {intervalType !== 'Weekday' && (
+                <FieldRow label="Starts" displayValue={dueDate} last>
+                  <DateField value={dueDate} onChange={setDueDate} placeholder="Select date" />
+                </FieldRow>
+              )}
             </GroupedCard>
           </View>
 
@@ -269,6 +285,9 @@ export default function AssetMaintenance() {
                     <Text variant="label" muted style={s.flex1}>Custom interval (days)</Text>
                     <Stepper value={Number(intervalValue) || 1} onChange={(v) => setIntervalValue(String(v))} min={1} />
                   </View>
+                )}
+                {intervalType === 'Weekday' && (
+                  <WeekdayRecurrencePicker value={weekdayRec} onChange={setWeekdayRec} />
                 )}
               </View>
             </GroupedCard>

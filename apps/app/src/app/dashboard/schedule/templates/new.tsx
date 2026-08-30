@@ -6,15 +6,13 @@ import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
 import { createServiceTemplate } from '@/lib/api';
 import { useTheme } from '@/theme';
-import { Screen, Text, Button, Badge } from '@/ui/components';
+import { Screen, Text, Button } from '@/ui/components';
+import { WeekdayRecurrencePicker, type RecurrenceValue } from '@/ui/weekday-recurrence-picker';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' };
 
-const DAYS = [
-  { label: 'Sun', value: 0 }, { label: 'Mon', value: 1 }, { label: 'Tue', value: 2 },
-  { label: 'Wed', value: 3 }, { label: 'Thu', value: 4 }, { label: 'Fri', value: 5 }, { label: 'Sat', value: 6 },
-];
+function today(): string { return new Date().toISOString().slice(0, 10); }
 
 const makeStyles = (t: ThemeT) => ({
   backBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, alignSelf: 'flex-start' as const, marginBottom: -4 },
@@ -22,9 +20,7 @@ const makeStyles = (t: ThemeT) => ({
   input: { backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.md, color: t.color.text, fontSize: 14 },
   row: { flexDirection: 'row' as const, gap: t.space.sm },
   flex1: { flex: 1 },
-  dayRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm },
-  dayBtn: (sel: boolean) => ({ paddingVertical: t.space.sm, paddingHorizontal: t.space.md, borderRadius: t.radius.pill, borderWidth: 1, borderColor: sel ? t.color.primary : t.color.border, backgroundColor: sel ? t.color.primary : 'transparent' }),
-  sectionHead: { marginTop: t.space.sm },
+  divider: { height: 1, backgroundColor: t.color.border, marginVertical: t.space.sm },
 });
 
 export default function NewTemplateScreen() {
@@ -39,25 +35,24 @@ export default function NewTemplateScreen() {
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [location, setLocation] = useState('');
   const [capacity, setCapacity] = useState('0');
-  // Recurrence
   const [useRecurrence, setUseRecurrence] = useState(false);
-  const [days, setDays] = useState<number[]>([]);
-  const [time, setTime] = useState('09:00');
+  const [recurrence, setRecurrence] = useState<RecurrenceValue>({ days: [], time: '09:00', startDate: today(), endDate: null });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<Msg | null>(null);
 
   if (!isAdmin) return <Redirect href="/dashboard/schedule" />;
 
-  const toggleDay = (d: number) => setDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
-
   const validate = () => {
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = 'Name is required';
     if (!duration || isNaN(Number(duration)) || Number(duration) < 1) e.duration = 'Must be a positive number';
     if (!timezone.trim()) e.timezone = 'Timezone is required';
-    if (useRecurrence && days.length === 0) e.days = 'Select at least one day';
-    if (useRecurrence && !time.match(/^\d{2}:\d{2}$/)) e.time = 'Use HH:MM format';
+    if (useRecurrence) {
+      if (recurrence.days.length === 0) e.days = 'Select at least one day';
+      if (!recurrence.time.match(/^\d{2}:\d{2}$/)) e.time = 'Use HH:MM format';
+      if (!recurrence.startDate) e.startDate = 'Start date is required';
+    }
     return e;
   };
 
@@ -74,7 +69,9 @@ export default function NewTemplateScreen() {
         timezone: timezone.trim(),
         required_roles: [],
         required_asset_types: [],
-        recurrence: useRecurrence ? { days: days.sort((a, b) => a - b), time } : null,
+        recurrence: useRecurrence
+          ? { days: recurrence.days, time: recurrence.time, startDate: recurrence.startDate, endDate: recurrence.endDate }
+          : null,
         active: true,
       });
       router.back();
@@ -154,57 +151,29 @@ export default function NewTemplateScreen() {
         />
       </View>
 
+      <View style={s.divider} />
+
       {/* Recurrence toggle */}
-      <View style={s.sectionHead}>
-        <Pressable
-          onPress={() => setUseRecurrence(v => !v)}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: useRecurrence }}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}
-        >
-          <Ionicons
-            name={useRecurrence ? 'checkbox' : 'square-outline'}
-            size={20}
-            color={useRecurrence ? t.color.primary : t.color.textMuted}
-          />
-          <Text variant="label">Recurring schedule</Text>
-        </Pressable>
-      </View>
+      <Pressable
+        onPress={() => setUseRecurrence(v => !v)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: useRecurrence }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}
+      >
+        <Ionicons
+          name={useRecurrence ? 'checkbox' : 'square-outline'}
+          size={20}
+          color={useRecurrence ? t.color.primary : t.color.textMuted}
+        />
+        <Text variant="label">Recurring schedule</Text>
+      </Pressable>
 
       {useRecurrence && (
-        <>
-          <View style={s.field}>
-            <Text variant="label">Repeat on</Text>
-            <View style={s.dayRow}>
-              {DAYS.map(d => (
-                <Pressable
-                  key={d.value}
-                  onPress={() => { toggleDay(d.value); setErrors(prev => ({ ...prev, days: '' })); }}
-                  style={s.dayBtn(days.includes(d.value))}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: days.includes(d.value) }}
-                >
-                  <Text variant="small" color={days.includes(d.value) ? t.color.bg : t.color.text}>
-                    {d.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            {errors.days ? <Text variant="small" color={t.color.danger}>{errors.days}</Text> : null}
-          </View>
-
-          <View style={s.field}>
-            <Text variant="label">Start time (HH:MM)</Text>
-            <TextInput
-              value={time}
-              onChangeText={v => { setTime(v); setErrors(prev => ({ ...prev, time: '' })); }}
-              placeholder="09:00"
-              placeholderTextColor={t.color.textMuted}
-              style={[s.input, errors.time ? { borderColor: t.color.danger } : undefined]}
-            />
-            {errors.time ? <Text variant="small" color={t.color.danger}>{errors.time}</Text> : null}
-          </View>
-        </>
+        <WeekdayRecurrencePicker
+          value={recurrence}
+          onChange={v => { setRecurrence(v); setErrors(prev => ({ ...prev, days: '', time: '', startDate: '', endDate: '' })); }}
+          errors={errors}
+        />
       )}
 
       <Button label="Create template" onPress={save} loading={saving} />

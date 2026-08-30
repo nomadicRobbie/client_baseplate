@@ -116,14 +116,14 @@ export default function TemplatesScreen() {
                       <View style={{ flex: 1 }}>
                         <DateField
                           label="From"
-                          value={genFrom[tmpl.id] ?? today()}
+                          value={genFrom[tmpl.id] ?? (rec as { startDate?: string }).startDate ?? today()}
                           onChange={v => setGenFrom(prev => ({ ...prev, [tmpl.id]: v }))}
                         />
                       </View>
                       <View style={{ flex: 1 }}>
                         <DateField
                           label="To"
-                          value={genTo[tmpl.id] ?? inDays(14)}
+                          value={genTo[tmpl.id] ?? (rec as { endDate?: string | null }).endDate ?? inDays(14)}
                           onChange={v => setGenTo(prev => ({ ...prev, [tmpl.id]: v }))}
                         />
                       </View>

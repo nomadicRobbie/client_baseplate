@@ -314,7 +314,7 @@ export const getAssetUpcoming = (token: string, assetId?: string) =>
 
 export const listAssetSchedules = (token: string, assetId?: string) =>
   req<{ schedules: AssetMaintenanceSchedule[] }>(`/asset/maintenance-schedules${assetId ? `?asset_id=${assetId}` : ''}`, { method: 'GET', token });
-export const createAssetSchedule = (token: string, body: { asset_id: string; task_name: string; interval_type?: string; interval_value?: number; initial_due_date?: string; alert_days?: number; alerts?: AssetScheduleAlert[]; task_notes?: string; document_urls?: string[]; form_schema?: FormSchema }) =>
+export const createAssetSchedule = (token: string, body: { asset_id: string; task_name: string; interval_type?: string; interval_value?: number; initial_due_date?: string; weekdays?: number[]; recurrence_end_date?: string | null; alert_days?: number; alerts?: AssetScheduleAlert[]; task_notes?: string; document_urls?: string[]; form_schema?: FormSchema }) =>
   req<{ schedule: AssetMaintenanceSchedule }>('/asset/maintenance-schedules', { method: 'POST', body, token });
 export const updateAssetSchedule = (token: string, id: string, body: { task_notes?: string | null; document_urls?: string[]; form_schema?: FormSchema | null; active?: boolean }) =>
   req<{ schedule: AssetMaintenanceSchedule }>(`/asset/maintenance-schedules/${id}`, { method: 'PATCH', body, token });
