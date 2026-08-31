@@ -107,7 +107,7 @@ export default function ScheduleScreen() {
       const tok = getAccessToken()!;
       const { from, to } = isoWindow(tab);
       const r = await listServices(tok, from, to);
-      setServices(r.services);
+      setServices(r.services.filter(s => s.status !== 'cancelled'));
     } catch (e) {
       setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' });
     } finally {
@@ -165,10 +165,7 @@ export default function ScheduleScreen() {
       <View style={s.header}>
         <Text variant="title">Schedule</Text>
         {isAdmin && (
-          <View style={{ flexDirection: 'row', gap: t.space.sm }}>
-            <Button label="Templates" onPress={() => router.push('/dashboard/schedule/templates')} />
-            <Button label="New" onPress={() => router.push('/dashboard/schedule/new')} />
-          </View>
+          <Button label="Add" onPress={() => router.push('/dashboard/schedule/add')} />
         )}
       </View>
 

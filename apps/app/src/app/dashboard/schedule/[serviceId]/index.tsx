@@ -5,9 +5,9 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ServiceManifest } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { getServiceManifest, cancelService } from '@/lib/api';
+import { getServiceManifest, cancelService, listServices, updateService } from '@/lib/api';
 import { useTheme } from '@/theme';
-import { Screen, Text, Card, GroupedCard, GRow, Button, Badge } from '@/ui/components';
+import { Screen, Text, Card, GroupedCard, GRow, Button, Badge, Toggle, Notice } from '@/ui/components';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' };
@@ -133,6 +133,8 @@ export default function ServiceDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<Msg | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [cancelSeries, setCancelSeries] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   const load = useCallback(async () => {
     if (!serviceId) return;
@@ -154,22 +156,51 @@ export default function ServiceDetailScreen() {
     if (!manifest) return;
     setCancelling(true);
     try {
-      await cancelService(getAccessToken()!, manifest.service.id, 'Cancelled via app');
-      setManifest(prev => prev ? { ...prev, service: { ...prev.service, status: 'cancelled' } } : prev);
-      setMsg({ text: 'Service cancelled', tone: 'success' });
+      const tok = getAccessToken()!;
+      await cancelService(tok, manifest.service.id, 'Cancelled via app');
+
+      if (cancelSeries && manifest.service.template_id) {
+        const today = new Date().toISOString().slice(0, 10);
+        const farFuture = new Date(Date.now() + 365 * 86_400_000).toISOString().slice(0, 10);
+        const { services } = await listServices(tok, `${today}T00:00:00.000Z`, `${farFuture}T23:59:59.999Z`, { template_id: manifest.service.template_id });
+        await Promise.allSettled(
+          services
+            .filter(s => s.id !== manifest.service.id && s.status !== 'cancelled' && s.status !== 'completed')
+            .map(s => cancelService(tok, s.id, 'Cancelled via app — series cancelled')),
+        );
+      }
+
+      router.replace('/dashboard/schedule');
+    } catch (e) {
+      setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' });
+      setCancelling(false);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!manifest) return;
+    setConfirming(true);
+    try {
+      const updated = await updateService(getAccessToken()!, manifest.service.id, {
+        status: 'confirmed',
+        version: manifest.service.version,
+      });
+      setManifest(prev => prev ? { ...prev, service: updated.service } : prev);
     } catch (e) {
       setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' });
     } finally {
-      setCancelling(false);
+      setConfirming(false);
     }
   };
 
   const svc = manifest?.service;
   const canCancel = isAdmin && svc && svc.status !== 'cancelled' && svc.status !== 'completed';
+  const canConfirm = isAdmin && svc?.status === 'planned';
+  const hasCrew = (manifest?.crew.length ?? 0) > 0;
 
   return (
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
-      <Pressable onPress={() => router.back()} style={s.backBtn} accessibilityRole="button">
+      <Pressable onPress={() => router.replace('/dashboard/schedule')} style={s.backBtn} accessibilityRole="button">
         <Ionicons name="chevron-back-outline" size={16} color={t.color.primary} />
         <Text variant="small" color={t.color.primary}>Schedule</Text>
       </Pressable>
@@ -188,6 +219,16 @@ export default function ServiceDetailScreen() {
                 {svc.location_label && <Badge label={svc.location_label} tone="neutral" />}
               </View>
             </View>
+            {isAdmin && svc.status !== 'cancelled' && svc.status !== 'completed' && (
+              <Pressable
+                onPress={() => router.push({ pathname: '/dashboard/schedule/[serviceId]/edit', params: { serviceId: svc.id } })}
+                accessibilityRole="button"
+                accessibilityLabel="Edit event"
+                style={{ padding: 4 }}
+              >
+                <Ionicons name="create-outline" size={22} color={t.color.primary} />
+              </Pressable>
+            )}
           </View>
 
           <Card>
@@ -240,9 +281,25 @@ export default function ServiceDetailScreen() {
             </GroupedCard>
           )}
 
-          {canCancel && (
-            <View style={s.actions}>
-              <Button label="Cancel service" onPress={handleCancel} loading={cancelling} />
+          {isAdmin && svc.status !== 'cancelled' && svc.status !== 'completed' && (
+            <View style={{ gap: t.space.sm }}>
+              {canConfirm && (
+                hasCrew
+                  ? <Button label="Confirm service" onPress={handleConfirm} loading={confirming} />
+                  : <Notice tone="info" message="Assign at least one crew member before confirming this service." />
+              )}
+              {canCancel && (
+                <>
+                  {svc.template_id && (
+                    <Toggle
+                      value={cancelSeries}
+                      onChange={setCancelSeries}
+                      label="Cancel all future events in this series"
+                    />
+                  )}
+                  <Button variant="ghost" label={cancelSeries ? 'Cancel series' : 'Cancel service'} onPress={handleCancel} loading={cancelling} />
+                </>
+              )}
             </View>
           )}
         </>
