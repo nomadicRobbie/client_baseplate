@@ -19,6 +19,7 @@ import { DateField } from '@/ui/date-field';
 import { TempPicker } from '@/ui/temp-picker';
 import { recordIcon } from '@/ui/record-icon';
 import { useTheme } from '@/theme';
+import { localDate } from '@/lib/format';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' | 'info' } | null;
@@ -50,10 +51,7 @@ function rangeStart(range: HistoryRange): Date | null {
   if (range === '30d') { const d = new Date(now); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - 30); return d; }
   return null;
 }
-function todayLocal(): string {
-  const d = new Date(), p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+const todayLocal = localDate;
 function cadenceText(sc: ComplianceSchedule): string {
   if (sc.cadence === 'weekly') return 'Weekly · ' + sc.weekdays.map((d) => WEEKDAYS[d]).join(' ');
   if (sc.cadence === 'monthly') return `Monthly · day ${sc.day_of_month}`;

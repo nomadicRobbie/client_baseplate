@@ -9,6 +9,7 @@ import { getAccessToken } from '@/lib/session';
 import { listServices } from '@/lib/api';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, Badge } from '@/ui/components';
+import { localDate, isoToLocalDate } from '@/lib/format';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' };
@@ -44,18 +45,19 @@ function formatDateLabel(iso: string): string {
   return d.toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function isoWindow(tab: Tab): { from: string; to: string } {
-  const today = todayStr();
+  const today = localDate();
   if (tab === 'today') {
-    return { from: `${today}T00:00:00.000Z`, to: `${today}T23:59:59.999Z` };
+    // local midnight → local midnight via Date constructor (no Z = local time)
+    const fromMs = new Date(`${today}T00:00:00`).toISOString();
+    const toMs = new Date(`${today}T23:59:59.999`).toISOString();
+    return { from: fromMs, to: toMs };
   }
-  // upcoming: today through next 60 days
-  const to = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  return { from: `${today}T00:00:00.000Z`, to: `${to}T23:59:59.999Z` };
+  const to = localDate(new Date(Date.now() + 60 * 24 * 60 * 60 * 1000));
+  return {
+    from: new Date(`${today}T00:00:00`).toISOString(),
+    to: new Date(`${to}T23:59:59.999`).toISOString(),
+  };
 }
 
 function ServiceCard({ svc, router, s, t }: { svc: ScheduledService; router: ReturnType<typeof useRouter>; s: ReturnType<typeof makeStyles>; t: ThemeT }) {
@@ -98,7 +100,7 @@ export default function ScheduleScreen() {
   const [services, setServices] = useState<ScheduledService[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<Msg | null>(null);
-  const [selectedDate, setSelectedDate] = useState(todayStr());
+  const [selectedDate, setSelectedDate] = useState(localDate());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -119,13 +121,13 @@ export default function ScheduleScreen() {
 
   // Reset selected date when switching to upcoming
   useEffect(() => {
-    if (tab === 'upcoming') setSelectedDate(todayStr());
+    if (tab === 'upcoming') setSelectedDate(localDate());
   }, [tab]);
 
   const markedDates = useMemo(() => {
     const marks: Record<string, { dots: Array<{ color: string }>; selected?: boolean; selectedColor?: string }> = {};
     services.forEach(svc => {
-      const d = svc.starts_at.slice(0, 10);
+      const d = isoToLocalDate(svc.starts_at);
       if (!marks[d]) marks[d] = { dots: [] };
       if (!marks[d].dots.some(dot => dot.color === t.color.primary)) {
         marks[d].dots.push({ color: t.color.primary });
@@ -140,7 +142,7 @@ export default function ScheduleScreen() {
   }, [services, selectedDate, t.color.primary]);
 
   const selectedDayServices = useMemo(
-    () => services.filter(svc => svc.starts_at.slice(0, 10) === selectedDate),
+    () => services.filter(svc => isoToLocalDate(svc.starts_at) === selectedDate),
     [services, selectedDate],
   );
 

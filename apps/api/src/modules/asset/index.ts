@@ -209,8 +209,8 @@ const assetPlugin: FastifyPluginAsync = async (fastify) => {
 
   // ── Coming up — derived due/overdue services for the dashboard ─────────────
   fastify.get('/asset/upcoming', { preHandler: member }, async (req, reply) => {
-    const { asset_id } = req.query as { asset_id?: string }
-    return reply.send({ items: await buildUpcoming(asset_id) })
+    const { asset_id, as_of } = req.query as { asset_id?: string; as_of?: string }
+    return reply.send({ items: await buildUpcoming(asset_id, as_of) })
   })
 
   // ── Maintenance schedules ──────────────────────────────────────────────────

@@ -8,6 +8,7 @@ import { getAccessToken } from '@/lib/session';
 import { getServiceManifest, cancelService, listServices, updateService } from '@/lib/api';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, GroupedCard, GRow, Button, Badge, Toggle, Notice } from '@/ui/components';
+import { localDate } from '@/lib/format';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' };
@@ -160,8 +161,8 @@ export default function ServiceDetailScreen() {
       await cancelService(tok, manifest.service.id, 'Cancelled via app');
 
       if (cancelSeries && manifest.service.template_id) {
-        const today = new Date().toISOString().slice(0, 10);
-        const farFuture = new Date(Date.now() + 365 * 86_400_000).toISOString().slice(0, 10);
+        const today = localDate();
+        const farFuture = localDate(new Date(Date.now() + 365 * 86_400_000));
         const { services } = await listServices(tok, `${today}T00:00:00.000Z`, `${farFuture}T23:59:59.999Z`, { template_id: manifest.service.template_id });
         await Promise.allSettled(
           services

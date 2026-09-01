@@ -1,5 +1,8 @@
-import { Pool, QueryResultRow } from 'pg'
+import pg, { Pool, QueryResultRow } from 'pg'
 import { config } from '../config'
+
+// ponytail: DATE (oid 1082) as plain string — prevents timezone-shift bug in +offset zones
+pg.types.setTypeParser(1082, (v: string) => v)
 
 let pool: Pool | null = null
 
