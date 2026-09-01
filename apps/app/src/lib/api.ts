@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, FoodControlPlan, Product, ProductVariant, Asset, AssetType, AssetFieldDef, AssetFault, AssetFaultStep, AssetMaintenanceLog, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert, AssetComponent, AssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData, ServiceTemplate, ScheduledService, ServiceAssignment, ServiceManifest, AvailabilitySlot } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, FoodControlPlan, Product, ProductVariant, Asset, AssetType, AssetFieldDef, AssetFault, AssetFaultStep, AssetMaintenanceLog, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert, AssetComponent, AssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData, ServiceTemplate, ScheduledService, ServiceAssignment, ServiceManifest, AvailabilitySlot, PersonUnavailability, UnavailabilityKind, Roster, RosterDetail, RosterShift, EligibleCrew, OpenShift } from '@blnk/shared';
 import { getAccessToken, getRefreshToken, setTokens, clearSession } from './session';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
@@ -574,7 +574,7 @@ export const listServices = (token: string, from: string, to: string, opts?: { s
 export const getService = (token: string, id: string) =>
   req<{ service: ScheduledService; assignments: ServiceAssignment[] }>(`/services/${id}`, { method: 'GET', token });
 
-export const createService = (token: string, body: { id: string; name: string; starts_at: string; ends_at: string; timezone: string; template_id?: string | null; location_label?: string | null; capacity?: number; required_roles?: unknown[]; status?: string; notes?: string }) =>
+export const createService = (token: string, body: { id: string; name: string; starts_at: string; ends_at: string; timezone: string; template_id?: string | null; location_label?: string | null; capacity?: number; required_roles?: unknown[]; status?: string; notes?: string; asset_id?: string | null }) =>
   req<{ service: ScheduledService }>('/services', { method: 'POST', body, token });
 
 export const updateService = (token: string, id: string, body: Record<string, unknown> & { version: number }) =>
@@ -594,3 +594,61 @@ export const getServiceManifest = (token: string, serviceId: string) =>
 
 export const getAvailability = (token: string, from: string, to: string) =>
   req<{ slots: AvailabilitySlot[] }>(`/availability?from=${from}&to=${to}`, { method: 'GET', token });
+
+// ── Roster ────────────────────────────────────────────────────────────────────
+// Members always get their own days back regardless of person_id — the server
+// scopes it. Admins get the whole team, or one person when person_id is given.
+export const listUnavailability = (token: string, from: string, to: string, personId?: string) => {
+  const q = new URLSearchParams({ from, to });
+  if (personId) q.set('person_id', personId);
+  return req<{ unavailability: PersonUnavailability[] }>(`/unavailability?${q}`, { method: 'GET', token });
+};
+
+export const addUnavailability = (token: string, body: { date: string; kind?: UnavailabilityKind; reason?: string | null; person_id?: string }) =>
+  req<{ unavailability: PersonUnavailability }>('/unavailability', { method: 'POST', token, body });
+
+export const removeUnavailability = (token: string, id: string) =>
+  req<void>(`/unavailability/${id}`, { method: 'DELETE', token });
+
+export const listRosters = (token: string) =>
+  req<{ rosters: Roster[] }>('/rosters', { method: 'GET', token });
+
+// `week` is any date inside the target week — the server normalises to the Monday.
+export const generateRoster = (token: string, week: string) =>
+  req<{ roster: Roster; shifts: number; servicesWithGaps: number }>(
+    '/rosters/generate', { method: 'POST', token, body: { week } });
+
+export const deleteRoster = (token: string, id: string) =>
+  req<void>(`/rosters/${id}`, { method: 'DELETE', token });
+
+// Members get the same week back, filtered to the services they are on.
+export const getRoster = (token: string, id: string) =>
+  req<RosterDetail>(`/rosters/${id}`, { method: 'GET', token });
+
+export const getEligibleCrew = (token: string, rosterId: string, serviceId: string, override = false) =>
+  req<{ crew: EligibleCrew[] }>(
+    `/rosters/${rosterId}/services/${serviceId}/eligible${override ? '?override=true' : ''}`, { method: 'GET', token });
+
+export const addRosterShift = (token: string, rosterId: string, body: { service_id: string; person_id: string; asset_id?: string | null; role?: string | null; rule_override?: boolean }) =>
+  req<{ shift: RosterShift }>(`/rosters/${rosterId}/shifts`, { method: 'POST', token, body });
+
+export const removeRosterShift = (token: string, rosterId: string, shiftId: string) =>
+  req<void>(`/rosters/${rosterId}/shifts/${shiftId}`, { method: 'DELETE', token });
+
+export const publishRoster = (token: string, rosterId: string) =>
+  req<{ roster: Roster }>(`/rosters/${rosterId}/publish`, { method: 'POST', token });
+
+export const respondToAssignment = (token: string, rosterId: string, assignmentId: string, action: 'confirm' | 'decline') =>
+  req<{ assignment: { id: string; confirmed_at: string | null; declined_at: string | null } }>(
+    `/rosters/${rosterId}/assignments/${assignmentId}/respond`, { method: 'POST', token, body: { action } });
+
+export const listOpenShifts = (token: string, rosterId: string) =>
+  req<{ shifts: OpenShift[] }>(`/rosters/${rosterId}/open-shifts`, { method: 'GET', token });
+
+export const getOpenShiftEligible = (token: string, rosterId: string, assignmentId: string) =>
+  req<{ crew: EligibleCrew[] }>(
+    `/rosters/${rosterId}/open-shifts/${assignmentId}/eligible`, { method: 'GET', token });
+
+export const acceptShiftCover = (token: string, rosterId: string, assignmentId: string) =>
+  req<{ assignment: { id: string } }>(
+    `/rosters/${rosterId}/open-shifts/${assignmentId}/cover`, { method: 'POST', token });

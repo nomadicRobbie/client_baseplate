@@ -196,7 +196,10 @@ export default function ServiceDetailScreen() {
   const svc = manifest?.service;
   const canCancel = isAdmin && svc && svc.status !== 'cancelled' && svc.status !== 'completed';
   const canConfirm = isAdmin && svc?.status === 'planned';
-  const hasCrew = (manifest?.crew.length ?? 0) > 0;
+  // The asset is what gates confirmation, not the crew. Crew is worked out from
+  // whoever is assigned to the asset, so without one there is nothing to work
+  // from — and an empty crew list is a consequence of that, not a separate task.
+  const hasAsset = (manifest?.assets.length ?? 0) > 0;
 
   return (
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
@@ -284,9 +287,18 @@ export default function ServiceDetailScreen() {
           {isAdmin && svc.status !== 'cancelled' && svc.status !== 'completed' && (
             <View style={{ gap: t.space.sm }}>
               {canConfirm && (
-                hasCrew
+                hasAsset
                   ? <Button label="Confirm service" onPress={handleConfirm} loading={confirming} />
-                  : <Notice tone="info" message="Assign at least one crew member before confirming this service." />
+                  : (
+                    <>
+                      <Notice tone="info" message="This service needs an asset before it can be confirmed. Crew are worked out from whoever is assigned to it." />
+                      <Button
+                        variant="ghost"
+                        label="Assign an asset"
+                        onPress={() => router.push({ pathname: '/dashboard/schedule/[serviceId]/assign', params: { serviceId: svc.id } })}
+                      />
+                    </>
+                  )
               )}
               {canCancel && (
                 <>

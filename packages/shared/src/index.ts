@@ -57,6 +57,7 @@ export interface FeatureFlags {
   locations: boolean
   asset: boolean
   schedule: boolean
+  roster: boolean
 }
 
 // ── Compliance (food safety records — requires FEATURE_COMPLIANCE) ───────────
@@ -690,6 +691,9 @@ export interface FeedServiceData {
   capacity: number
   assigned_count: number
   unfilled_roles: Array<{ role: string; count: number }>
+  // No asset means crew cannot be worked out at all — it blocks everything
+  // downstream, so the feed calls it out ahead of an unfilled-roles count.
+  has_asset: boolean
 }
 
 export type FeedItemKind = 'fault' | 'maintenance' | 'post' | 'compliance' | 'service'
@@ -727,6 +731,7 @@ export interface ServiceTemplate {
   required_roles: RequiredRole[]
   required_asset_types: RequiredAssetType[]
   recurrence: RecurrencePattern | null
+  default_asset_id: string | null
   active: boolean
   created_at: string
   created_by: string | null
@@ -764,6 +769,9 @@ export interface ServiceAssignment {
   assigned_by: string | null
   removed_at: string | null
   removed_by: string | null
+  roster_id: string | null
+  confirmed_at: string | null
+  declined_at: string | null
 }
 
 export interface ServiceEvent {
@@ -801,6 +809,97 @@ export interface AvailabilitySlot {
   capacity: number
   assigned_count: number
   remaining: number
+}
+
+// ── Roster (requires FEATURE_ROSTER) ─────────────────────────────────────────
+// Crew declare only the days they CANNOT work — no row means available.
+// 'planned' is leave booked ahead; 'sick' is called in against a live roster.
+export type UnavailabilityKind = 'planned' | 'sick'
+
+export interface PersonUnavailability {
+  id: string
+  person_id: string
+  person_name: string      // joined from people — the admin view lists by name
+  date: string             // YYYY-MM-DD
+  kind: UnavailabilityKind
+  reason: string | null
+  created_at: string
+  created_by: string | null
+}
+
+// Two states only: a published roster stays editable, so there is no third
+// status implying it is locked.
+export type RosterStatus = 'draft' | 'published'
+
+export interface Roster {
+  id: string
+  week_start: string       // YYYY-MM-DD, always a Monday
+  status: RosterStatus
+  generated_at: string
+  published_at: string | null
+  deleted_at: string | null
+  created_at: string
+  created_by: string | null
+}
+
+export interface RosterShift {
+  id: string
+  roster_id: string
+  service_id: string
+  person_id: string
+  person_name: string      // joined
+  asset_id: string | null  // the asset this person crews — why they were picked
+  asset_name: string | null
+  role: string | null
+  rule_override: boolean
+  confirmed_at: string | null
+  declined_at: string | null
+  created_at: string
+}
+
+// One service in a roster week, with whoever is on it. `required` is the crew
+// count the service asks for; `shortfall` is how many of those went unfilled.
+export interface RosterServiceRow {
+  service_id: string
+  name: string
+  starts_at: string
+  ends_at: string
+  timezone: string
+  location_label: string | null
+  status: ServiceStatus
+  has_asset: boolean
+  required: number
+  shortfall: number
+  gap_reason: string | null
+  shifts: RosterShift[]
+}
+
+export interface RosterDetail {
+  roster: Roster
+  services: RosterServiceRow[]
+}
+
+// A shift where someone declined but hasn't been removed — needs cover.
+export interface OpenShift {
+  assignment_id: string
+  service_id: string
+  service_name: string
+  starts_at: string
+  ends_at: string
+  timezone: string
+  location_label: string | null
+  declined_person_name: string
+  role: string | null
+}
+
+// A person the generator could put on a service, and the asset that qualifies them.
+export interface EligibleCrew {
+  person_id: string
+  name: string
+  asset_id: string
+  asset_name: string
+  role: string | null
+  blocked_reason: string | null  // null = eligible; set when returned via skipRules override
 }
 
 // ── Helpers (pure — safe everywhere) ────────────────────────────────────────

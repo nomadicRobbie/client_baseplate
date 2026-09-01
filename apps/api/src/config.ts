@@ -72,6 +72,7 @@ export const config = {
     locations: flag('FEATURE_LOCATIONS'),
     asset:       flag('FEATURE_ASSET'),
     schedule:    flag('FEATURE_SCHEDULE'),
+    roster:      flag('FEATURE_ROSTER'),
   } satisfies FeatureFlags,
 
   get stripe() {

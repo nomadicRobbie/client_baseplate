@@ -33,14 +33,15 @@ export const createTemplate = (d: Record<string, unknown>, createdBy: string | n
   one<ServiceTemplate>(
     `INSERT INTO service_templates
        (name, duration_minutes, default_capacity, location_label, timezone,
-        required_roles, required_asset_types, recurrence, active, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9,true),$10) RETURNING *`,
+        required_roles, required_asset_types, recurrence, default_asset_id, active, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,true),$11) RETURNING *`,
     [d.name, d.duration_minutes, d.default_capacity ?? 0, d.location_label ?? null,
      d.timezone, JSON.stringify(d.required_roles ?? []), JSON.stringify(d.required_asset_types ?? []),
-     d.recurrence ? JSON.stringify(d.recurrence) : null, d.active ?? null, createdBy],
+     d.recurrence ? JSON.stringify(d.recurrence) : null, d.default_asset_id ?? null,
+     d.active ?? null, createdBy],
   )
 
-const TEMPLATE_COLS = ['name', 'duration_minutes', 'default_capacity', 'location_label', 'timezone', 'required_roles', 'required_asset_types', 'recurrence', 'active'] as const
+const TEMPLATE_COLS = ['name', 'duration_minutes', 'default_capacity', 'location_label', 'timezone', 'required_roles', 'required_asset_types', 'recurrence', 'default_asset_id', 'active'] as const
 export const updateTemplate = (id: string, body: object) =>
   patch<ServiceTemplate>('service_templates', id, TEMPLATE_COLS, body as never)
 
@@ -83,13 +84,19 @@ export const createService = (d: Record<string, unknown>, createdBy: string | nu
 // Version-guarded update — WHERE includes version so a stale version returns null (caller 409s).
 export async function updateService(
   id: string,
-  body: Partial<Pick<ScheduledService, 'name' | 'starts_at' | 'ends_at' | 'timezone' | 'location_label' | 'capacity' | 'notes' | 'status' | 'external_ref'>>,
+  body: Partial<Pick<ScheduledService, 'name' | 'starts_at' | 'ends_at' | 'timezone' | 'location_label' | 'capacity' | 'notes' | 'status' | 'external_ref' | 'required_roles'>>,
   currentVersion: number,
   updatedBy: string | null,
 ): Promise<ScheduledService | null> {
-  const allowed = ['name', 'starts_at', 'ends_at', 'timezone', 'location_label', 'capacity', 'notes', 'status', 'external_ref'] as const
+  const allowed = ['name', 'starts_at', 'ends_at', 'timezone', 'location_label', 'capacity', 'notes', 'status', 'external_ref', 'required_roles'] as const
   const cols: string[] = []; const vals: unknown[] = []; let i = 1
-  for (const k of allowed) if ((body as Record<string, unknown>)[k] !== undefined) { cols.push(`${k} = $${i++}`); vals.push((body as Record<string, unknown>)[k]) }
+  for (const k of allowed) {
+    const v = (body as Record<string, unknown>)[k]
+    if (v !== undefined) {
+      cols.push(`${k} = $${i++}`)
+      vals.push(k === 'required_roles' ? JSON.stringify(v) : v)
+    }
+  }
   if (cols.length === 0) return getService(id)
   cols.push(`updated_by = $${i++}`, `updated_at = now()`, `version = version + 1`)
   vals.push(updatedBy, id, currentVersion)
@@ -152,12 +159,22 @@ export async function generateInstances(
            ($3 || ' ' || $4)::timestamp AT TIME ZONE $5 + ($6 || ' minutes')::interval,
            $5, $7, $8, $9, 'planned'::service_status_enum
          )
-         ON CONFLICT (template_id, starts_at) WHERE template_id IS NOT NULL DO NOTHING`,
+         ON CONFLICT (template_id, starts_at) WHERE template_id IS NOT NULL DO NOTHING
+         RETURNING id`,
         [template.id, template.name, date, time, template.timezone,
          template.duration_minutes.toString(), template.location_label ?? null,
          template.default_capacity, JSON.stringify(template.required_roles)],
       )
-      created += res.rowCount ?? 0
+      if (res.rowCount && res.rowCount > 0) {
+        created++
+        if (template.default_asset_id) {
+          await client.query(
+            `INSERT INTO service_assignments (service_id, subject_type, subject_id)
+             VALUES ($1, 'asset'::service_subject_type_enum, $2)`,
+            [res.rows[0].id, template.default_asset_id],
+          )
+        }
+      }
     }
     await client.query('COMMIT')
   } catch (err) {
@@ -277,9 +294,10 @@ export async function buildTodayServices(): Promise<FeedItem[]> {
   const now = new Date()
   const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 
-  const services = await query<ScheduledService & { assigned_count: string }>(
+  const services = await query<ScheduledService & { assigned_count: string; asset_count: string }>(
     `SELECT s.*,
-       COUNT(sa.id) FILTER (WHERE sa.removed_at IS NULL AND sa.subject_type = 'person') AS assigned_count
+       COUNT(sa.id) FILTER (WHERE sa.removed_at IS NULL AND sa.subject_type = 'person') AS assigned_count,
+       COUNT(sa.id) FILTER (WHERE sa.removed_at IS NULL AND sa.subject_type = 'asset')  AS asset_count
      FROM scheduled_services s
      LEFT JOIN service_assignments sa ON sa.service_id = s.id
      WHERE s.starts_at >= $1 AND s.starts_at < $2 AND s.status IN ('draft','planned','confirmed')
@@ -291,12 +309,14 @@ export async function buildTodayServices(): Promise<FeedItem[]> {
   const items: FeedItem[] = []
   for (const s of services) {
     const assignedCount = parseInt(s.assigned_count, 10)
+    const hasAsset = parseInt(s.asset_count, 10) > 0
     const requiredTotal = (s.required_roles as RequiredRole[]).reduce((n, r) => n + r.count, 0)
     // ponytail: simple check — if total assigned < total required, surface all roles as unfilled
     const unfilledRoles = requiredTotal > assignedCount ? (s.required_roles as RequiredRole[]) : []
 
-    // Only surface if there's a gap or the service is unconfirmed
-    if (assignedCount >= requiredTotal && s.status === 'confirmed') continue
+    // Only surface if something needs doing. A service with no asset always does:
+    // crew can't be worked out without one, so it blocks everything downstream.
+    if (hasAsset && assignedCount >= requiredTotal && s.status === 'confirmed') continue
 
     items.push({
       kind: 'service',
@@ -312,6 +332,7 @@ export async function buildTodayServices(): Promise<FeedItem[]> {
         capacity: s.capacity,
         assigned_count: assignedCount,
         unfilled_roles: unfilledRoles,
+        has_asset: hasAsset,
       },
     })
   }

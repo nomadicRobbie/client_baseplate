@@ -56,10 +56,22 @@ test('event log rejects DELETE at the database level', async (t) => {
     const { rows } = await pool.query('SELECT id FROM scheduled_service_events WHERE id = $1', [evt.id])
     assert.equal(rows.length, 1, 'event row must still exist after blocked DELETE')
 
-    // Cleanup: event can't be deleted (trigger), so we truncate test data directly.
-    // FK is RESTRICT so we must delete the event first — but the trigger blocks that.
-    // Use TRUNCATE CASCADE (bypasses FK checks) to clean test rows.
-    await pool.query('TRUNCATE scheduled_service_events, scheduled_services CASCADE').catch(() => {/* non-critical cleanup */})
+    // Cleanup, scoped to this test's own rows. The FK is RESTRICT so the event
+    // has to go first, and the append-only trigger blocks deleting it — so the
+    // trigger is disabled just long enough to remove this one service's events.
+    //
+    // This used to be `TRUNCATE scheduled_service_events, scheduled_services
+    // CASCADE`, which emptied BOTH tables entirely (and everything referencing
+    // them) rather than the two rows created here. Test files run in parallel, so
+    // it deleted other tests' fixtures mid-run — and against a dev database it
+    // wiped every real scheduled service too.
+    try {
+      await pool.query('ALTER TABLE scheduled_service_events DISABLE TRIGGER no_delete_scheduled_service_events')
+      await pool.query('DELETE FROM scheduled_service_events WHERE service_id = $1', [svc.id])
+    } finally {
+      await pool.query('ALTER TABLE scheduled_service_events ENABLE TRIGGER no_delete_scheduled_service_events')
+    }
+    await pool.query('DELETE FROM scheduled_services WHERE id = $1', [svc.id])
   } finally {
     await pool.end()
   }

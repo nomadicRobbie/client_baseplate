@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Pressable, TextInput } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import type { Asset, RequiredRole } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { createService, createServiceTemplate, generateServiceInstances } from '@/lib/api';
+import { createService, createServiceTemplate, generateServiceInstances, listAssets } from '@/lib/api';
 import { useTheme } from '@/theme';
 import { Screen, Text, Button } from '@/ui/components';
 import { DateTimeField } from '@/ui/datetime-field';
+import { SelectField } from '@/ui/select-field';
 import { WeekdayRecurrencePicker, type RecurrenceValue } from '@/ui/weekday-recurrence-picker';
 
 // ponytail: UUIDv4 — sufficient for offline-safe IDs here
@@ -40,6 +42,15 @@ const makeStyles = (t: ThemeT) => ({
   inputError: { borderColor: t.color.danger },
   divider: { height: 1, backgroundColor: t.color.border, marginVertical: t.space.xs },
   toggle: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
+  roleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
+  roleChip: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.xs,
+    backgroundColor: t.color.surfaceAlt, borderRadius: t.radius.pill,
+    paddingHorizontal: t.space.md, paddingVertical: t.space.xs,
+  },
+  roleInputRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
+  roleNameInput: { flex: 1, backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.sm, color: t.color.text, fontSize: 14 },
+  roleCountInput: { width: 48, backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.sm, color: t.color.text, fontSize: 14, textAlign: 'center' as const },
 });
 
 export default function AddServiceScreen() {
@@ -58,14 +69,39 @@ export default function AddServiceScreen() {
   const [recurrence, setRecurrence] = useState<RecurrenceValue>({
     days: [], time: '09:00', startDate: todayStr(), endDate: null,
   });
+  const [assetId, setAssetId] = useState<string | null>(null);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [roles, setRoles] = useState<RequiredRole[]>([]);
+  const [newRole, setNewRole] = useState('');
+  const [newRoleCount, setNewRoleCount] = useState('1');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<Msg | null>(null);
+
+  useEffect(() => {
+    listAssets(getAccessToken()!).then(r => setAssets(r.assets)).catch(() => {});
+  }, []);
 
   if (!isAdmin) return <Redirect href="/dashboard/schedule" />;
 
   const clearErr = (...keys: string[]) =>
     setErrors(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => !keys.includes(k))));
+
+  const addRole = () => {
+    const r = newRole.trim();
+    if (!r) return;
+    const c = Math.max(1, parseInt(newRoleCount, 10) || 1);
+    const existing = roles.find(x => x.role.toLowerCase() === r.toLowerCase());
+    if (existing) {
+      setRoles(roles.map(x => x === existing ? { ...x, count: x.count + c } : x));
+    } else {
+      setRoles([...roles, { role: r, count: c }]);
+    }
+    setNewRole('');
+    setNewRoleCount('1');
+  };
+
+  const removeRole = (idx: number) => setRoles(roles.filter((_, i) => i !== idx));
 
   const validate = (): Record<string, string> => {
     const e: Record<string, string> = {};
@@ -102,6 +138,8 @@ export default function AddServiceScreen() {
           location_label: location.trim() || null,
           notes: notes.trim(),
           status: 'planned',
+          asset_id: assetId,
+          required_roles: roles,
         });
         router.replace({ pathname: '/dashboard/schedule/[serviceId]', params: { serviceId: r.service.id } });
       } else {
@@ -111,8 +149,9 @@ export default function AddServiceScreen() {
           default_capacity: 0,
           location_label: location.trim() || null,
           timezone: tz,
-          required_roles: [],
+          required_roles: roles,
           required_asset_types: [],
+          default_asset_id: assetId,
           recurrence: {
             days: recurrence.days,
             time: recurrence.time,
@@ -201,6 +240,52 @@ export default function AddServiceScreen() {
           multiline
           style={[s.input, { minHeight: 72, textAlignVertical: 'top' }]}
         />
+      </View>
+
+      {/* Asset */}
+      {assets.length > 0 && (
+        <SelectField
+          label="Asset (optional)"
+          value={assetId}
+          onChange={setAssetId}
+          placeholder="None"
+          options={assets.map(a => ({ label: a.name, value: a.id }))}
+        />
+      )}
+
+      {/* Required roles */}
+      <View style={s.field}>
+        <Text variant="label">Required crew (optional)</Text>
+        {roles.length > 0 && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.xs }}>
+            {roles.map((r, i) => (
+              <Pressable key={i} onPress={() => removeRole(i)} style={s.roleChip} accessibilityRole="button">
+                <Text variant="small">{r.count}x {r.role}</Text>
+                <Ionicons name="close" size={14} color={t.color.textMuted} />
+              </Pressable>
+            ))}
+          </View>
+        )}
+        <View style={s.roleInputRow}>
+          <TextInput
+            value={newRole}
+            onChangeText={setNewRole}
+            placeholder="e.g. Skipper"
+            placeholderTextColor={t.color.textMuted}
+            style={s.roleNameInput}
+            onSubmitEditing={addRole}
+          />
+          <TextInput
+            value={newRoleCount}
+            onChangeText={setNewRoleCount}
+            keyboardType="numeric"
+            placeholderTextColor={t.color.textMuted}
+            style={s.roleCountInput}
+          />
+          <Pressable onPress={addRole} accessibilityRole="button" accessibilityLabel="Add role">
+            <Ionicons name="add-circle-outline" size={24} color={t.color.primary} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={s.divider} />

@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { View, Pressable, TextInput, ActivityIndicator } from 'react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import type { Asset, RequiredRole } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { getServiceManifest, updateService, updateServiceTemplate, generateServiceInstances } from '@/lib/api';
+import { getServiceManifest, updateService, updateServiceTemplate, generateServiceInstances, listAssets, addServiceAssignment, removeServiceAssignment } from '@/lib/api';
 import { useTheme } from '@/theme';
 import { Screen, Text, Button, Toggle } from '@/ui/components';
 import { DateTimeField } from '@/ui/datetime-field';
+import { SelectField } from '@/ui/select-field';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' };
@@ -27,6 +29,14 @@ const makeStyles = (t: ThemeT) => ({
   field: { gap: t.space.xs },
   input: { backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.md, color: t.color.text, fontSize: 14 },
   inputError: { borderColor: t.color.danger },
+  roleChip: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.xs,
+    backgroundColor: t.color.surfaceAlt, borderRadius: t.radius.pill,
+    paddingHorizontal: t.space.md, paddingVertical: t.space.xs,
+  },
+  roleInputRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
+  roleNameInput: { flex: 1, backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.sm, color: t.color.text, fontSize: 14 },
+  roleCountInput: { width: 48, backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.sm, color: t.color.text, fontSize: 14, textAlign: 'center' as const },
 });
 
 export default function EditServiceScreen() {
@@ -45,6 +55,13 @@ export default function EditServiceScreen() {
   const [notes, setNotes] = useState('');
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
+  const [assetId, setAssetId] = useState<string | null>(null);
+  const [origAssetId, setOrigAssetId] = useState<string | null>(null);
+  const [origAssetAssignmentId, setOrigAssetAssignmentId] = useState<string | null>(null);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [roles, setRoles] = useState<RequiredRole[]>([]);
+  const [newRole, setNewRole] = useState('');
+  const [newRoleCount, setNewRoleCount] = useState('1');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [applyToAll, setApplyToAll] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -54,7 +71,11 @@ export default function EditServiceScreen() {
     if (!serviceId) return;
     void (async () => {
       try {
-        const r = await getServiceManifest(getAccessToken()!, serviceId);
+        const tok = getAccessToken()!;
+        const [r, assetRes] = await Promise.all([
+          getServiceManifest(tok, serviceId),
+          listAssets(tok),
+        ]);
         const svc = r.manifest.service;
         const durationMin = Math.round((new Date(svc.ends_at).getTime() - new Date(svc.starts_at).getTime()) / 60_000);
         setName(svc.name);
@@ -64,6 +85,14 @@ export default function EditServiceScreen() {
         setNotes(svc.notes ?? '');
         setTemplateId(svc.template_id);
         setVersion(svc.version);
+        setRoles((svc.required_roles as RequiredRole[]) ?? []);
+        setAssets(assetRes.assets);
+        const currentAsset = r.manifest.assets[0];
+        if (currentAsset) {
+          setAssetId(currentAsset.asset_id);
+          setOrigAssetId(currentAsset.asset_id);
+          setOrigAssetAssignmentId(currentAsset.assignment_id);
+        }
       } catch (e) {
         setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' });
       } finally {
@@ -76,6 +105,22 @@ export default function EditServiceScreen() {
 
   const clearErr = (...keys: string[]) =>
     setErrors(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => !keys.includes(k))));
+
+  const addRole = () => {
+    const r = newRole.trim();
+    if (!r) return;
+    const c = Math.max(1, parseInt(newRoleCount, 10) || 1);
+    const existing = roles.find(x => x.role.toLowerCase() === r.toLowerCase());
+    if (existing) {
+      setRoles(roles.map(x => x === existing ? { ...x, count: x.count + c } : x));
+    } else {
+      setRoles([...roles, { role: r, count: c }]);
+    }
+    setNewRole('');
+    setNewRoleCount('1');
+  };
+
+  const removeRole = (idx: number) => setRoles(roles.filter((_, i) => i !== idx));
 
   const validate = (): Record<string, string> => {
     const e: Record<string, string> = {};
@@ -92,6 +137,8 @@ export default function EditServiceScreen() {
       name: name.trim(),
       duration_minutes: Number(duration),
       location_label: location.trim() || null,
+      required_roles: roles,
+      default_asset_id: assetId,
     });
     await generateServiceInstances(tok, templateId, today, addDays(today, 365));
   };
@@ -105,8 +152,19 @@ export default function EditServiceScreen() {
       ends_at: end.toISOString(),
       location_label: location.trim() || null,
       notes: notes.trim(),
+      required_roles: roles,
       version: v,
     });
+  };
+
+  const syncAsset = async (tok: string) => {
+    if (assetId === origAssetId) return;
+    if (origAssetAssignmentId) {
+      await removeServiceAssignment(tok, serviceId!, origAssetAssignmentId);
+    }
+    if (assetId) {
+      await addServiceAssignment(tok, serviceId!, { subject_type: 'asset', subject_id: assetId });
+    }
   };
 
   const save = async () => {
@@ -133,6 +191,7 @@ export default function EditServiceScreen() {
         }
       }
 
+      await syncAsset(tok);
       if (templateId && applyToAll) {
         try { await applyToSeries(tok); } catch { /* best-effort */ }
       }
@@ -211,6 +270,50 @@ export default function EditServiceScreen() {
               placeholderTextColor={t.color.textMuted}
               style={[s.input, { minHeight: 72, textAlignVertical: 'top' }]}
             />
+          </View>
+
+          {assets.length > 0 && (
+            <SelectField
+              label="Asset"
+              value={assetId}
+              onChange={setAssetId}
+              placeholder="None"
+              options={assets.map(a => ({ label: a.name, value: a.id }))}
+            />
+          )}
+
+          <View style={s.field}>
+            <Text variant="label">Required crew</Text>
+            {roles.length > 0 && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.xs }}>
+                {roles.map((r, i) => (
+                  <Pressable key={i} onPress={() => removeRole(i)} style={s.roleChip} accessibilityRole="button">
+                    <Text variant="small">{r.count}x {r.role}</Text>
+                    <Ionicons name="close" size={14} color={t.color.textMuted} />
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            <View style={s.roleInputRow}>
+              <TextInput
+                value={newRole}
+                onChangeText={setNewRole}
+                placeholder="e.g. Skipper"
+                placeholderTextColor={t.color.textMuted}
+                style={s.roleNameInput}
+                onSubmitEditing={addRole}
+              />
+              <TextInput
+                value={newRoleCount}
+                onChangeText={setNewRoleCount}
+                keyboardType="numeric"
+                placeholderTextColor={t.color.textMuted}
+                style={s.roleCountInput}
+              />
+              <Pressable onPress={addRole} accessibilityRole="button" accessibilityLabel="Add role">
+                <Ionicons name="add-circle-outline" size={24} color={t.color.primary} />
+              </Pressable>
+            </View>
           </View>
 
           {templateId && (

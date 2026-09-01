@@ -69,6 +69,7 @@ export default function NewTemplateScreen() {
         timezone: timezone.trim(),
         required_roles: [],
         required_asset_types: [],
+        default_asset_id: null,
         recurrence: useRecurrence
           ? { days: recurrence.days, time: recurrence.time, startDate: recurrence.startDate, endDate: recurrence.endDate }
           : null,

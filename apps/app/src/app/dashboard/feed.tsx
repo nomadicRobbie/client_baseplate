@@ -286,7 +286,11 @@ function ServiceItem({ data, t, s }: { data: FeedServiceData; t: ThemeT; s: Retu
   const gapCount = data.unfilled_roles.reduce((n, r) => n + r.count, 0)
   const when = new Date(data.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const date = formatDMY(data.starts_at.slice(0, 10))
-  const gapLabel = gapCount > 0 ? `${gapCount} role${gapCount !== 1 ? 's' : ''} unfilled` : 'Needs confirmation'
+  // No asset is the gap worth naming first: crew can't be worked out without one,
+  // so an unfilled-roles count would just be a symptom of it.
+  const gapLabel = !data.has_asset ? 'No asset assigned'
+    : gapCount > 0 ? `${gapCount} role${gapCount !== 1 ? 's' : ''} unfilled`
+    : 'Needs confirmation'
   return (
     <Pressable
       onPress={() => router.push({ pathname: '/dashboard/schedule/[serviceId]', params: { serviceId: data.service_id } })}

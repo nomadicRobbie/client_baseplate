@@ -17,6 +17,7 @@ import locationsPlugin from './modules/locations/plugin'
 import compliancePlugin from './modules/compliance'
 import assetPlugin from './modules/asset'
 import schedulePlugin from './modules/schedule'
+import rosterPlugin from './modules/roster'
 import feedPlugin from './modules/feed'
 import { buildUpcoming } from './modules/asset/upcoming'
 import { getPushTokensForModules } from './db/queries/people'
@@ -107,6 +108,9 @@ export async function build(): Promise<typeof server> {
   if (config.features.asset) await server.register(assetPlugin)
   // Schedule register (trip board — services, templates, assignments).
   if (config.features.schedule) await server.register(schedulePlugin)
+  // Roster — crew availability, and later the generated weekly roster. Rostering
+  // without a schedule to roster against is meaningless, so it needs both flags.
+  if (config.features.roster && config.features.schedule) await server.register(rosterPlugin)
   // Feed — always on; item visibility is gated server-side by module membership.
   await server.register(feedPlugin)
 

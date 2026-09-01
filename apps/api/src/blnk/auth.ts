@@ -68,6 +68,16 @@ export async function requireAppAccess(req: FastifyRequest, reply: FastifyReply)
   }
 }
 
+// Resolves the person_id to scope member-facing queries by. Admins/supers get
+// null — no filter, they see everything. Members get their own person id, so a
+// query filtered on it returns only their rows. Shared by schedule and roster:
+// two copies of this would drift the day one of them changed.
+export async function callerPersonId(userId: string, role: string): Promise<string | null> {
+  if (role === 'admin' || role === 'super') return null
+  const person = await getPersonByUserId(userId)
+  return person?.id ?? null
+}
+
 // ── preHandler factory: module access guard ─────────────────────────────────
 // A member may use a module only if they're assigned to it in People (person_module).
 // Admin/super bypass (they run the tenant). This is the SERVER enforcement behind

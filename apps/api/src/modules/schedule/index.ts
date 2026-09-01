@@ -1,7 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { verifyBlnkAuth, requireAppAccess, requireRole } from '../../blnk/auth'
+import { verifyBlnkAuth, requireAppAccess, requireRole, callerPersonId } from '../../blnk/auth'
 import { Errors } from '../../utils/errors'
-import { getPersonByUserId } from '../../db/queries/people'
 import {
   listTemplates, getTemplate, createTemplate, updateTemplate,
   listServices, getService, createService, updateService, cancelService, generateInstances,
@@ -12,14 +11,6 @@ import {
 const schedulePlugin: FastifyPluginAsync = async (fastify) => {
   const member = [verifyBlnkAuth, requireAppAccess]
   const admin  = [verifyBlnkAuth, requireRole('admin', 'super')]
-
-  // Resolves the person_id for member-scoped queries. Admins/supers get null
-  // (no filter — they see everything). Members see only their assigned services.
-  async function callerPersonId(userId: string, role: string): Promise<string | null> {
-    if (role === 'admin' || role === 'super') return null
-    const person = await getPersonByUserId(userId)
-    return person?.id ?? null
-  }
 
   // ── Templates ───────────────────────────────────────────────────────────────
   fastify.get('/service-templates', { preHandler: admin }, async (req) => {
@@ -42,6 +33,7 @@ const schedulePlugin: FastifyPluginAsync = async (fastify) => {
         required_roles:       { type: 'array' },
         required_asset_types: { type: 'array' },
         recurrence:           { type: ['object', 'null'] },
+        default_asset_id:     { type: ['string', 'null'], format: 'uuid' },
         active:               { type: 'boolean' },
       },
     } },
@@ -64,6 +56,7 @@ const schedulePlugin: FastifyPluginAsync = async (fastify) => {
         required_roles:       { type: 'array' },
         required_asset_types: { type: 'array' },
         recurrence:           { type: ['object', 'null'] },
+        default_asset_id:     { type: ['string', 'null'], format: 'uuid' },
         active:               { type: 'boolean' },
       },
     } },
@@ -142,11 +135,18 @@ const schedulePlugin: FastifyPluginAsync = async (fastify) => {
         status:         { type: 'string' },
         external_ref:   { type: ['string', 'null'] },
         notes:          { type: 'string' },
+        asset_id:       { type: ['string', 'null'], format: 'uuid' },
       },
     } },
   }, async (req, reply) => {
     const userId = req.user!.userId
-    const service = await createService(req.body as never, userId)
+    const body = req.body as Record<string, unknown>
+    const assetId = body.asset_id as string | undefined
+    delete body.asset_id
+    const service = await createService(body, userId)
+    if (assetId && service) {
+      await addAssignment({ service_id: service.id, subject_type: 'asset', subject_id: assetId }, userId)
+    }
     await appendEvent({ service_id: service!.id, event_type: 'created', actor_id: userId })
     return reply.status(201).send({ service })
   })
@@ -166,6 +166,7 @@ const schedulePlugin: FastifyPluginAsync = async (fastify) => {
         notes:          { type: 'string' },
         status:         { type: 'string' },
         external_ref:   { type: ['string', 'null'] },
+        required_roles: { type: 'array' },
       },
     } },
   }, async (req, reply) => {
