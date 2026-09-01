@@ -8,6 +8,7 @@ import { getServiceManifest, updateService, updateServiceTemplate, generateServi
 import { useTheme } from '@/theme';
 import { Screen, Text, Button, Toggle } from '@/ui/components';
 import { DateTimeField } from '@/ui/datetime-field';
+import { localDate } from '@/lib/format';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' };
@@ -19,7 +20,7 @@ function toLocalISO(iso: string): string {
 }
 
 function addDays(date: string, n: number): string {
-  return new Date(new Date(date).getTime() + n * 86_400_000).toISOString().slice(0, 10);
+  return localDate(new Date(new Date(date).getTime() + n * 86_400_000));
 }
 
 const makeStyles = (t: ThemeT) => ({
@@ -87,7 +88,7 @@ export default function EditServiceScreen() {
 
   const applyToSeries = async (tok: string) => {
     if (!templateId) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDate();
     await updateServiceTemplate(tok, templateId, {
       name: name.trim(),
       duration_minutes: Number(duration),

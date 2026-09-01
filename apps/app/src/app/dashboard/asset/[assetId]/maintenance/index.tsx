@@ -9,7 +9,7 @@ import { listAssetFaults, listAssetSchedules, createAssetSchedule, getAssetUpcom
 import type { FormSchema } from '@blnk/shared';
 import { readThrough } from '@/lib/mirror';
 import { loadAsset } from '@/lib/asset-sync';
-import { formatDMY } from '@/lib/format';
+import { formatDMY, localDate } from '@/lib/format';
 import { useTheme } from '@/theme';
 import { Screen, Text, GroupedCard, SectionLabel, Button, FieldRow, Badge, Pill, Stepper, Toggle } from '@/ui/components';
 import { DateField } from '@/ui/date-field';
@@ -19,7 +19,7 @@ import { WeekdayRecurrencePicker, type RecurrenceValue } from '@/ui/weekday-recu
 type Msg = { text: string; tone: 'success' | 'error' | 'info' };
 type ThemeT = ReturnType<typeof useTheme>;
 const INTERVALS = ['One-off', 'Day', 'Week', 'Month', 'Year', 'Weekday'];
-const today = () => new Date().toISOString().slice(0, 10);
+const today = localDate;
 const tok = () => getAccessToken()!;
 
 const makeStyles = (t: ThemeT) => ({
@@ -113,7 +113,7 @@ export default function AssetMaintenance() {
     try {
       await createAssetMaintenanceLog(tok(), {
         asset_id: assetId, schedule_id: sc.id, task_name: sc.task_name,
-        completed_date: new Date().toISOString().slice(0, 10),
+        completed_date: localDate(),
       });
       setMsg({ text: `${sc.task_name} marked complete.`, tone: 'success' });
       await load();

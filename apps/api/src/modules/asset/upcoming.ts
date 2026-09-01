@@ -70,17 +70,21 @@ function windowDays(sc: ScheduleDueRow): number {
   return sc.alert_days ?? 0
 }
 
-function levelFor(due: Date, windowInDays: number): UpcomingLevel {
-  const todayStr = new Date().toISOString().slice(0, 10)
+function levelFor(due: Date, windowInDays: number, asOf: string): UpcomingLevel {
+  // due_date from pg is already a plain YYYY-MM-DD string (DATE column, no tz shift).
+  // asOf is the client's local date, also YYYY-MM-DD — compare as strings.
   const dueStr = due.toISOString().slice(0, 10)
-  if (dueStr < todayStr) return 'over'
-  const soon = new Date(); soon.setUTCDate(soon.getUTCDate() + windowInDays)
-  return dueStr <= soon.toISOString().slice(0, 10) ? 'due' : 'ok'
+  if (dueStr < asOf) return 'over'
+  const soonDate = new Date(asOf + 'T00:00:00Z')
+  soonDate.setUTCDate(soonDate.getUTCDate() + windowInDays)
+  return dueStr <= soonDate.toISOString().slice(0, 10) ? 'due' : 'ok'
 }
 
 // Returns upcoming maintenance sorted by due date (undated last). Every active
 // schedule is included so the dashboard can show ok/due/over at a glance.
-export async function buildUpcoming(assetId?: string): Promise<UpcomingItem[]> {
+// asOf: client's local date (YYYY-MM-DD) so urgency is correct in any timezone.
+export async function buildUpcoming(assetId?: string, asOf?: string): Promise<UpcomingItem[]> {
+  const today = asOf ?? new Date().toISOString().slice(0, 10)
   const schedules = await schedulesWithLastCompleted(assetId)
   const items = schedules.map((sc): UpcomingItem => {
     const due = nextDue(sc)
@@ -91,7 +95,7 @@ export async function buildUpcoming(assetId?: string): Promise<UpcomingItem[]> {
       title: sc.task_name,
       subtitle: null,   // client formats due_date (dd/mm/yyyy)
       due_date: due ? due.toISOString().slice(0, 10) : null,
-      level: due ? levelFor(due, windowDays(sc)) : 'ok',
+      level: due ? levelFor(due, windowDays(sc), today) : 'ok',
     }
   })
   // Overdue first, then soonest due; undated last.

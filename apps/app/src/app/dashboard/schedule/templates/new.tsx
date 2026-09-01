@@ -8,11 +8,12 @@ import { createServiceTemplate } from '@/lib/api';
 import { useTheme } from '@/theme';
 import { Screen, Text, Button } from '@/ui/components';
 import { WeekdayRecurrencePicker, type RecurrenceValue } from '@/ui/weekday-recurrence-picker';
+import { localDate } from '@/lib/format';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' };
 
-function today(): string { return new Date().toISOString().slice(0, 10); }
+const today = localDate;
 
 const makeStyles = (t: ThemeT) => ({
   backBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, alignSelf: 'flex-start' as const, marginBottom: -4 },

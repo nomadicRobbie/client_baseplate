@@ -9,6 +9,7 @@ import { useTheme } from '@/theme';
 import { Screen, Text, Button } from '@/ui/components';
 import { DateTimeField } from '@/ui/datetime-field';
 import { WeekdayRecurrencePicker, type RecurrenceValue } from '@/ui/weekday-recurrence-picker';
+import { localDate } from '@/lib/format';
 
 // ponytail: UUIDv4 — sufficient for offline-safe IDs here
 function uuid4(): string {
@@ -25,9 +26,8 @@ function localISOString(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function todayStr(): string { return new Date().toISOString().slice(0, 10); }
 function addDays(date: string, n: number): string {
-  return new Date(new Date(date).getTime() + n * 86_400_000).toISOString().slice(0, 10);
+  return localDate(new Date(new Date(date).getTime() + n * 86_400_000));
 }
 
 type ThemeT = ReturnType<typeof useTheme>;
@@ -56,7 +56,7 @@ export default function AddServiceScreen() {
   const [notes, setNotes] = useState('');
   const [repeats, setRepeats] = useState(false);
   const [recurrence, setRecurrence] = useState<RecurrenceValue>({
-    days: [], time: '09:00', startDate: todayStr(), endDate: null,
+    days: [], time: '09:00', startDate: localDate(), endDate: null,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);

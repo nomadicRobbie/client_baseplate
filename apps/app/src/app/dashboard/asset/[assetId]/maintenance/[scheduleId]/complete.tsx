@@ -10,6 +10,7 @@ import { loadAsset } from '@/lib/asset-sync';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, TextField, Notice, YesNo, Checkbox } from '@/ui/components';
 import { DateField } from '@/ui/date-field';
+import { localDate } from '@/lib/format';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' };
@@ -117,7 +118,7 @@ export default function CompleteTask() {
       await createAssetMaintenanceLog(getAccessToken()!, {
         asset_id: assetId, schedule_id: scheduleId,
         task_name: schedule?.task_name,
-        completed_date: new Date().toISOString().slice(0, 10),
+        completed_date: localDate(),
         form_data: coerced,
         attachments: attachments.length ? attachments : undefined,
       });

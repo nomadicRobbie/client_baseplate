@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useFeedBadge } from '@/lib/feed-badge-context';
 import { getAccessToken } from '@/lib/session';
 import { getFeed, createFeedPost, deleteFeedPost, listPostComments, createPostComment, listPeople } from '@/lib/api';
-import { formatDMY } from '@/lib/format';
+import { formatDMY, isoToLocalDate } from '@/lib/format';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, Badge } from '@/ui/components';
 import { StatusBadge, urgencyLevel } from '@/ui/status';
@@ -70,7 +70,7 @@ function relativeTime(iso: string): string {
   if (diff < 60_000) return 'just now'
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
-  return formatDMY(iso.slice(0, 10))
+  return formatDMY(isoToLocalDate(iso))
 }
 
 // ── Fault item — tappable, shows step count + latest step preview ─────────────
@@ -285,7 +285,7 @@ function ServiceItem({ data, t, s }: { data: FeedServiceData; t: ThemeT; s: Retu
   const router = useRouter()
   const gapCount = data.unfilled_roles.reduce((n, r) => n + r.count, 0)
   const when = new Date(data.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  const date = formatDMY(data.starts_at.slice(0, 10))
+  const date = formatDMY(isoToLocalDate(data.starts_at))
   const gapLabel = gapCount > 0 ? `${gapCount} role${gapCount !== 1 ? 's' : ''} unfilled` : 'Needs confirmation'
   return (
     <Pressable

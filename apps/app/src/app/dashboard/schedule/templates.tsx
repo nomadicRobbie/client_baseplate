@@ -9,6 +9,7 @@ import { listServiceTemplates, generateServiceInstances } from '@/lib/api';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, Button, Badge } from '@/ui/components';
 import { DateField } from '@/ui/date-field';
+import { localDate } from '@/lib/format';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' };
@@ -25,8 +26,8 @@ const makeStyles = (t: ThemeT) => ({
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'fri', 'Sat'];
 
-function today(): string { return new Date().toISOString().slice(0, 10); }
-function inDays(n: number): string { return new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10); }
+const today = localDate;
+function inDays(n: number): string { return localDate(new Date(Date.now() + n * 86_400_000)); }
 
 export default function TemplatesScreen() {
   const { user } = useAuth();

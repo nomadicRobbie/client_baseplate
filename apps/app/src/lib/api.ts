@@ -309,8 +309,15 @@ export const createAssetMaintenanceLog = (token: string, body: { asset_id: strin
   req<{ log: AssetMaintenanceLog; fault_closed: boolean }>('/asset/maintenance-logs', { method: 'POST', body, token });
 
 // Coming-up feed — due/overdue services derived from maintenance schedules.
-export const getAssetUpcoming = (token: string, assetId?: string) =>
-  req<{ items: AssetUpcomingItem[] }>(`/asset/upcoming${assetId ? `?asset_id=${assetId}` : ''}`, { method: 'GET', token });
+export const getAssetUpcoming = (token: string, assetId?: string) => {
+  const params = new URLSearchParams();
+  if (assetId) params.set('asset_id', assetId);
+  // Send local date so server urgency (over/due/ok) is correct in any timezone.
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  params.set('as_of', `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`);
+  return req<{ items: AssetUpcomingItem[] }>(`/asset/upcoming?${params}`, { method: 'GET', token });
+};
 
 export const listAssetSchedules = (token: string, assetId?: string) =>
   req<{ schedules: AssetMaintenanceSchedule[] }>(`/asset/maintenance-schedules${assetId ? `?asset_id=${assetId}` : ''}`, { method: 'GET', token });
