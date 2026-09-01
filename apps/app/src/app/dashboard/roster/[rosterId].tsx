@@ -14,6 +14,7 @@ import {
 } from '@/lib/api';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, GroupedCard, GRow, Button, Badge, Notice } from '@/ui/components';
+import { localDate } from '@/lib/format';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' };
@@ -94,7 +95,7 @@ function weekDays(weekStart: string): string[] {
   return Array.from({ length: 7 }, (_, i) => {
     const dd = new Date(d);
     dd.setDate(d.getDate() + i);
-    return dd.toISOString().slice(0, 10);
+    return localDate(dd);
   });
 }
 
@@ -120,7 +121,7 @@ function WeekGrid({ services, weekStart, t, s }: {
     return map;
   }, [services, days]);
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDate();
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.gridScroll}>
