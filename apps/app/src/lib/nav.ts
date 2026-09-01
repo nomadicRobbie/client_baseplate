@@ -11,7 +11,7 @@ export type FeatureKey = keyof FeatureFlags;
 
 // 'home' = the Library landing. 'module' = a blnk module the user can pin.
 // 'account'/'admin' = settings-side screens reached from Account on mobile.
-export type NavGroup = 'home' | 'module' | 'account' | 'admin';
+export type NavGroup = 'home' | 'operations' | 'module' | 'account' | 'admin';
 
 export type NavHref =
   | '/dashboard' | '/dashboard/feed' | '/dashboard/account' | '/dashboard/billing' | '/dashboard/people'
@@ -23,6 +23,7 @@ export type NavItem = {
   href: NavHref;
   icon: IconName;
   group: NavGroup;
+  description?: string;
   adminOnly?: boolean;
   feature?: FeatureKey;
   // base-access modules skip the myModules gate — all app users can see them.
@@ -32,13 +33,13 @@ export type NavItem = {
 export const NAV: NavItem[] = [
   { label: 'Library', href: '/dashboard', icon: 'library-outline', group: 'home' },
   { label: 'Company Feed', href: '/dashboard/feed', icon: 'newspaper-outline', group: 'home' },
-  { label: 'Store', href: '/dashboard/commerce', icon: 'storefront-outline', group: 'module', adminOnly: true, feature: 'commerce' },
-  { label: 'Analytics', href: '/dashboard/analytics', icon: 'bar-chart-outline', group: 'module', adminOnly: true, feature: 'analytics' },
-  { label: 'Locations', href: '/dashboard/locations', icon: 'location-outline', group: 'module', adminOnly: true, feature: 'locations' },
-  { label: 'Food compliance', href: '/dashboard/compliance', icon: 'clipboard-outline', group: 'module', feature: 'compliance' },
-  { label: 'Asset Manager', href: '/dashboard/asset', icon: 'cube-outline', group: 'module', feature: 'asset' },
-  { label: 'Schedule', href: '/dashboard/schedule', icon: 'calendar-outline', group: 'module', feature: 'schedule', baseAccess: true },
-  { label: 'Roster', href: '/dashboard/roster', icon: 'today-outline', group: 'module', feature: 'roster', baseAccess: true },
+  { label: 'Store', href: '/dashboard/commerce', icon: 'storefront-outline', group: 'module', adminOnly: true, feature: 'commerce', description: 'Products, orders & payments' },
+  { label: 'Analytics', href: '/dashboard/analytics', icon: 'bar-chart-outline', group: 'module', adminOnly: true, feature: 'analytics', description: 'Traffic & performance insights' },
+  { label: 'Website', href: '/dashboard/locations', icon: 'globe-outline', group: 'module', adminOnly: true, feature: 'locations', description: 'Banners & messages' },
+  { label: 'Food compliance', href: '/dashboard/compliance', icon: 'clipboard-outline', group: 'module', feature: 'compliance', description: 'Temp logs & checklists' },
+  { label: 'Asset Manager', href: '/dashboard/asset', icon: 'cube-outline', group: 'module', feature: 'asset', description: 'Track equipment & gear' },
+  { label: 'Schedule', href: '/dashboard/schedule', icon: 'calendar-outline', group: 'operations', feature: 'schedule', baseAccess: true, description: 'Shifts & rosters' },
+  { label: 'Roster', href: '/dashboard/roster', icon: 'today-outline', group: 'operations', feature: 'roster', baseAccess: true, description: 'Plan team coverage' },
   { label: 'Billing', href: '/dashboard/billing', icon: 'card-outline', group: 'admin', adminOnly: true, feature: 'stripe' },
   { label: 'Account', href: '/dashboard/account', icon: 'person-outline', group: 'account' },
   { label: 'People', href: '/dashboard/people', icon: 'people-outline', group: 'account', adminOnly: true },
@@ -52,14 +53,14 @@ export function visibleNav(isAdmin: boolean, features: FeatureFlags | null, myMo
   return NAV.filter((i) => {
     if (i.adminOnly && !isAdmin) return false;
     if (i.feature && !features?.[i.feature]) return false;
-    if (!isAdmin && i.group === 'module' && i.feature && !i.baseAccess && !(myModules ?? []).includes(i.feature)) return false;
+    if (!isAdmin && (i.group === 'module' || i.group === 'operations') && i.feature && !i.baseAccess && !(myModules ?? []).includes(i.feature)) return false;
     return true;
   });
 }
 
 // The pinnable modules, in declaration order (used for the mobile bar + Library).
 export function availableModules(isAdmin: boolean, features: FeatureFlags | null, myModules?: string[] | null): NavItem[] {
-  return visibleNav(isAdmin, features, myModules).filter((i) => i.group === 'module');
+  return visibleNav(isAdmin, features, myModules).filter((i) => i.group === 'module' || i.group === 'operations');
 }
 
 export const HOME_HREF: NavHref = '/dashboard';

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Pressable, ActivityIndicator } from 'react-native';
+import { View, Pressable, ActivityIndicator, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { Roster } from '@blnk/shared';
+import type { Roster, RosterRules } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { listRosters, generateRoster } from '@/lib/api';
+import { listRosters, generateRoster, getRosterRules, updateRosterRules } from '@/lib/api';
 import { formatDMY } from '@/lib/format';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, GroupedCard, GRow, Button, Badge, Notice } from '@/ui/components';
@@ -24,7 +24,9 @@ const makeStyles = (t: ThemeT) => ({
   rowMeta: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm, flexWrap: 'wrap' as const },
   form: { gap: t.space.md },
   empty: { alignItems: 'center' as const, gap: t.space.sm, paddingVertical: t.space.xl },
-  link: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
+  link: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
+  rulesRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
+  rulesInput: { width: 56, backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.sm, color: t.color.text, fontSize: 14, textAlign: 'center' as const },
 });
 
 function mondayOf(iso: string): string {
@@ -65,13 +67,25 @@ export default function RosterScreen() {
   const [generating, setGenerating] = useState(false);
   const [picking, setPicking] = useState(false);
   const [week, setWeek] = useState(nextMonday());
+  const [rules, setRules] = useState<RosterRules | null>(null);
+  const [editRest, setEditRest] = useState('');
+  const [editDays, setEditDays] = useState('');
+  const [savingRules, setSavingRules] = useState(false);
+  const [showRules, setShowRules] = useState(false);
 
   const load = useCallback(async () => {
     if (!isAdmin) { setLoading(false); return; }
     setLoading(true);
     try {
-      const r = await listRosters(getAccessToken()!);
+      const tok = getAccessToken()!;
+      const [r, rulesRes] = await Promise.all([
+        listRosters(tok),
+        getRosterRules(tok),
+      ]);
       setRosters(r.rosters);
+      setRules(rulesRes.rules);
+      setEditRest(String(rulesRes.rules.min_rest_hours));
+      setEditDays(String(rulesRes.rules.max_consecutive_days));
     } catch (e) {
       setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' });
     } finally {
@@ -93,6 +107,26 @@ export default function RosterScreen() {
       setGenerating(false);
     }
   };
+
+  const saveRules = async () => {
+    const rest = parseInt(editRest, 10);
+    const days = parseInt(editDays, 10);
+    if (isNaN(rest) || rest < 0 || rest > 48) { setMsg({ text: 'Rest hours must be 0–48', tone: 'error' }); return; }
+    if (isNaN(days) || days < 1 || days > 14) { setMsg({ text: 'Max days must be 1–14', tone: 'error' }); return; }
+    setSavingRules(true);
+    try {
+      const r = await updateRosterRules(getAccessToken()!, { min_rest_hours: rest, max_consecutive_days: days });
+      setRules(r.rules);
+      setMsg({ text: 'Rules updated.', tone: 'success' });
+      setShowRules(false);
+    } catch (e) {
+      setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' });
+    } finally {
+      setSavingRules(false);
+    }
+  };
+
+  const rulesChanged = rules && (editRest !== String(rules.min_rest_hours) || editDays !== String(rules.max_consecutive_days));
 
   const daysOffLink = (
     <Card>
@@ -134,6 +168,57 @@ export default function RosterScreen() {
       </View>
 
       {daysOffLink}
+
+      {rules && (
+        <Card>
+          <Pressable
+            onPress={() => setShowRules(v => !v)}
+            accessibilityRole="button"
+            style={s.link}
+          >
+            <Ionicons name="shield-checkmark-outline" size={18} color={t.color.primary} />
+            <View style={s.rowBody}>
+              <Text variant="label">Roster rules</Text>
+              <Text variant="small" muted>
+                Min {rules.min_rest_hours}h rest · Max {rules.max_consecutive_days} days in 7
+              </Text>
+            </View>
+            <Ionicons name={showRules ? 'chevron-up-outline' : 'chevron-down-outline'} size={16} color={t.color.textMuted} />
+          </Pressable>
+
+          {showRules && (
+            <View style={{ gap: t.space.md, paddingTop: t.space.md }}>
+              <View style={s.rulesRow}>
+                <Text variant="body">Min rest between shifts</Text>
+                <TextInput
+                  value={editRest}
+                  onChangeText={setEditRest}
+                  keyboardType="numeric"
+                  style={s.rulesInput}
+                />
+                <Text variant="small" muted>hours</Text>
+              </View>
+              <View style={s.rulesRow}>
+                <Text variant="body">Max days in a 7-day window</Text>
+                <TextInput
+                  value={editDays}
+                  onChangeText={setEditDays}
+                  keyboardType="numeric"
+                  style={s.rulesInput}
+                />
+                <Text variant="small" muted>days</Text>
+              </View>
+              {rulesChanged && (
+                <Button label="Save rules" onPress={saveRules} loading={savingRules} />
+              )}
+              <Text variant="small" muted>
+                These rules determine who can be rostered. Admins can still override
+                rules for individual shifts when needed — overrides are flagged on the roster.
+              </Text>
+            </View>
+          )}
+        </Card>
+      )}
 
       {picking && (
         <Card>

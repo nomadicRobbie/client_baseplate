@@ -229,6 +229,118 @@ test('publishing copies shifts to service_assignments and confirm/decline works'
   } finally { await f.cleanup() }
 })
 
+// ── Role matching ────────────────────────────────────────────────────────────
+test('generateRoster fills shifts by required_roles, not just headcount', async (t) => {
+  if (!await dbReachable(DB_URL)) { t.skip('database unreachable'); return }
+  const tag = `ROSTERTEST-${randomUUID().slice(0, 8)}`
+  const monday = nextWeek()
+  const at = (hour: number) => {
+    const d = new Date(`${monday}T00:00:00Z`)
+    d.setUTCHours(hour)
+    return d.toISOString()
+  }
+  const person = async (n: string) =>
+    (await query<{ id: string }>(`INSERT INTO people (name) VALUES ($1) RETURNING id`, [`${tag} ${n}`]))[0].id
+  const asset = async (n: string) =>
+    (await query<{ id: string }>(`INSERT INTO assets (name) VALUES ($1) RETURNING id`, [`${tag} ${n}`]))[0].id
+
+  const skipper = await person('Skipper Sam')
+  const crew1 = await person('Crew Alex')
+  const crew2 = await person('Crew Bella')
+  const boat = await asset('Boat')
+
+  await query(`INSERT INTO asset_assignments (person_id, asset_id, role) VALUES ($1,$2,'Skipper')`, [skipper, boat])
+  await query(`INSERT INTO asset_assignments (person_id, asset_id, role) VALUES ($1,$2,'Crew')`, [crew1, boat])
+  await query(`INSERT INTO asset_assignments (person_id, asset_id, role) VALUES ($1,$2,'Crew')`, [crew2, boat])
+
+  // Service requires 1 Skipper + 1 Crew
+  const [{ id: svcId }] = await query<{ id: string }>(
+    `INSERT INTO scheduled_services (id, name, starts_at, ends_at, timezone, status, required_roles)
+     VALUES (gen_random_uuid(), $1, $2, $3, 'UTC', 'planned', $4) RETURNING id`,
+    [`${tag} Trip`, at(9), at(15), JSON.stringify([{ role: 'Skipper', count: 1 }, { role: 'Crew', count: 1 }])],
+  )
+  await query(`INSERT INTO service_assignments (service_id, subject_type, subject_id) VALUES ($1,'asset',$2)`, [svcId, boat])
+
+  const like = `${tag}%`
+  const cleanup = async () => {
+    await query(`DELETE FROM roster_shifts WHERE service_id IN (SELECT id FROM scheduled_services WHERE name LIKE $1)`, [like])
+    await query(`DELETE FROM service_assignments WHERE service_id IN (SELECT id FROM scheduled_services WHERE name LIKE $1)`, [like])
+    await query(`DELETE FROM service_assignments WHERE roster_id IN (SELECT id FROM rosters WHERE week_start = $1)`, [monday])
+    await query(`DELETE FROM rosters WHERE week_start = $1`, [monday])
+    await query(`DELETE FROM scheduled_services WHERE name LIKE $1`, [like])
+    await query(`DELETE FROM asset_assignments WHERE person_id IN (SELECT id FROM people WHERE name LIKE $1)`, [like])
+    await query(`DELETE FROM assets WHERE name LIKE $1`, [like])
+    await query(`DELETE FROM people WHERE name LIKE $1`, [like])
+  }
+
+  try {
+    const gen = await generateRoster(monday, null)
+    const detail = (await getRosterDetail(gen.roster.id))!
+    const svc = detail.services.find(s => s.service_id === svcId)!
+
+    assert.equal(svc.shifts.length, 2, 'exactly 2 shifts filled (1 skipper + 1 crew)')
+
+    const roles = svc.shifts.map(sh => sh.role).sort()
+    assert.deepEqual(roles, ['Crew', 'Skipper'], 'one Skipper and one Crew, not two of the same')
+
+    const skipperShift = svc.shifts.find(sh => sh.role === 'Skipper')!
+    assert.equal(skipperShift.person_id, skipper, 'the Skipper slot is filled by the person with that role')
+  } finally { await cleanup() }
+})
+
+test('generateRoster with required_roles leaves a gap when no one holds the role', async (t) => {
+  if (!await dbReachable(DB_URL)) { t.skip('database unreachable'); return }
+  const tag = `ROSTERTEST-${randomUUID().slice(0, 8)}`
+  const monday = nextWeek()
+  const at = (hour: number) => {
+    const d = new Date(`${monday}T00:00:00Z`)
+    d.setUTCHours(hour)
+    return d.toISOString()
+  }
+  const person = async (n: string) =>
+    (await query<{ id: string }>(`INSERT INTO people (name) VALUES ($1) RETURNING id`, [`${tag} ${n}`]))[0].id
+  const asset = async (n: string) =>
+    (await query<{ id: string }>(`INSERT INTO assets (name) VALUES ($1) RETURNING id`, [`${tag} ${n}`]))[0].id
+
+  const crew1 = await person('Crew Only')
+  const boat = await asset('Dinghy')
+
+  // Only crew role assigned — no skipper
+  await query(`INSERT INTO asset_assignments (person_id, asset_id, role) VALUES ($1,$2,'Crew')`, [crew1, boat])
+
+  // Service requires 1 Skipper + 1 Crew
+  const [{ id: svcId }] = await query<{ id: string }>(
+    `INSERT INTO scheduled_services (id, name, starts_at, ends_at, timezone, status, required_roles)
+     VALUES (gen_random_uuid(), $1, $2, $3, 'UTC', 'planned', $4) RETURNING id`,
+    [`${tag} No Skip`, at(9), at(13), JSON.stringify([{ role: 'Skipper', count: 1 }, { role: 'Crew', count: 1 }])],
+  )
+  await query(`INSERT INTO service_assignments (service_id, subject_type, subject_id) VALUES ($1,'asset',$2)`, [svcId, boat])
+
+  const like = `${tag}%`
+  const cleanup = async () => {
+    await query(`DELETE FROM roster_shifts WHERE service_id IN (SELECT id FROM scheduled_services WHERE name LIKE $1)`, [like])
+    await query(`DELETE FROM service_assignments WHERE service_id IN (SELECT id FROM scheduled_services WHERE name LIKE $1)`, [like])
+    await query(`DELETE FROM service_assignments WHERE roster_id IN (SELECT id FROM rosters WHERE week_start = $1)`, [monday])
+    await query(`DELETE FROM rosters WHERE week_start = $1`, [monday])
+    await query(`DELETE FROM scheduled_services WHERE name LIKE $1`, [like])
+    await query(`DELETE FROM asset_assignments WHERE person_id IN (SELECT id FROM people WHERE name LIKE $1)`, [like])
+    await query(`DELETE FROM assets WHERE name LIKE $1`, [like])
+    await query(`DELETE FROM people WHERE name LIKE $1`, [like])
+  }
+
+  try {
+    const gen = await generateRoster(monday, null)
+    assert.ok(gen.servicesWithGaps > 0, 'should report a gap when skipper role cannot be filled')
+
+    const detail = (await getRosterDetail(gen.roster.id))!
+    const svc = detail.services.find(s => s.service_id === svcId)!
+
+    assert.equal(svc.shifts.length, 1, 'only the crew slot is filled')
+    assert.equal(svc.shifts[0].role, 'Crew')
+    assert.equal(svc.shortfall, 1, 'shortfall reflects the missing skipper')
+  } finally { await cleanup() }
+})
+
 // ── DATE serialisation ────────────────────────────────────────────────────────
 // node-postgres parses a DATE column into a JS Date at LOCAL midnight, which
 // JSON-serialises to the PREVIOUS day in any positive-offset zone (NZ is +12/13).

@@ -10,6 +10,7 @@ import {
   addRosterShift, deleteRosterShift, eligibleCrew,
   publishRoster, deleteRoster, confirmAssignment, declineAssignment, rosteredPeopleIds,
   autoDeclineForSickDay, listOpenShifts, acceptCover,
+  getRosterRules, updateRosterRules,
 } from '../../db/queries/roster'
 
 // Roster module.
@@ -105,6 +106,23 @@ const rosterPlugin: FastifyPluginAsync = async (fastify) => {
     const removed = await deleteUnavailability(id, own)
     if (!removed) throw Errors.notFound('unavailability')
     return reply.status(204).send()
+  })
+
+  // ── Roster rules ────────────────────────────────────────────────────────────
+  fastify.get('/roster-rules', { preHandler: admin }, async () => ({ rules: await getRosterRules() }))
+
+  fastify.patch('/roster-rules', {
+    preHandler: admin,
+    schema: { body: {
+      type: 'object', additionalProperties: false,
+      properties: {
+        min_rest_hours:       { type: 'integer', minimum: 0, maximum: 48 },
+        max_consecutive_days: { type: 'integer', minimum: 1, maximum: 14 },
+      },
+    } },
+  }, async (req) => {
+    const body = req.body as { min_rest_hours?: number; max_consecutive_days?: number }
+    return { rules: await updateRosterRules(body, req.user!.userId) }
   })
 
   // ── GET /rosters ────────────────────────────────────────────────────────────

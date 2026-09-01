@@ -115,7 +115,7 @@ export default function Locations() {
           </GRow>
         ) : locations.length === 0 ? (
           <GRow last>
-            <Text variant="label" muted style={{ flex: 1 }}>No upcoming locations.</Text>
+            <Text variant="label" muted style={{ flex: 1 }}>No upcoming messages.</Text>
           </GRow>
         ) : (
           locations.map((l, i) => (

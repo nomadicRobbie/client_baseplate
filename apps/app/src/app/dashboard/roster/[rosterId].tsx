@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { RosterDetail, RosterServiceRow, EligibleCrew, RosterShift, OpenShift } from '@blnk/shared';
+import type { RosterDetail, RosterRules, RosterServiceRow, EligibleCrew, RosterShift, OpenShift } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
 import {
@@ -10,6 +10,7 @@ import {
   publishRoster, deleteRoster as apiDeleteRoster, respondToAssignment,
   listOpenShifts, acceptShiftCover,
   generateRoster as apiGenerateRoster,
+  getRosterRules,
 } from '@/lib/api';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, GroupedCard, GRow, Button, Badge, Notice } from '@/ui/components';
@@ -19,11 +20,26 @@ type Msg = { text: string; tone: 'success' | 'error' };
 
 const makeStyles = (t: ThemeT) => ({
   backBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, alignSelf: 'flex-start' as const, marginBottom: -4 },
-  header: { gap: 4 },
+  header: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, justifyContent: 'space-between' as const, gap: t.space.sm },
+  headerLeft: { flex: 1, gap: 4 },
+  headerActions: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.md, paddingTop: 4 },
   metaRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm, alignItems: 'center' as const },
-  svcHead: { paddingHorizontal: 16, paddingVertical: 12, gap: 4 },
-  svcTitleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: t.space.sm },
+  svcHead: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm, paddingHorizontal: 16, paddingVertical: 12 },
+  svcHeadLeft: { flex: 1, gap: 2 },
+  svcTitleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
   svcMeta: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: t.space.sm, alignItems: 'center' as const },
+  avatarRow: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingLeft: 6 },
+  avatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: t.color.primary,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderWidth: 2,
+    borderColor: t.color.surface,
+    marginLeft: -6,
+  },
   shiftBody: { flex: 1, gap: 2 },
   addBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.xs },
   empty: { alignItems: 'center' as const, gap: t.space.sm, paddingVertical: t.space.xl },
@@ -46,20 +62,11 @@ const makeStyles = (t: ThemeT) => ({
     borderRadius: t.radius.sm,
     padding: t.space.sm,
     gap: 2,
-    borderLeftWidth: 3,
-    borderLeftColor: t.color.primary,
   },
-  svcBlockShort: { borderLeftColor: t.color.accent },
-  svcBlockEmpty: { borderLeftColor: t.color.border },
-  crewDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: t.color.primary,
-    marginTop: 3,
-  },
-  crewRow: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 4 },
 });
+
+const initials = (name: string) =>
+  name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
 
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -96,12 +103,11 @@ function serviceDate(sv: RosterServiceRow, tz: string): string {
   return d.toLocaleDateString('en-CA', { timeZone: tz });
 }
 
-function WeekGrid({ services, weekStart, t, s, isPublished }: {
+function WeekGrid({ services, weekStart, t, s }: {
   services: RosterServiceRow[];
   weekStart: string;
   t: ThemeT;
   s: ReturnType<typeof makeStyles>;
-  isPublished: boolean;
 }) {
   const days = useMemo(() => weekDays(weekStart), [weekStart]);
   const byDay = useMemo(() => {
@@ -136,39 +142,22 @@ function WeekGrid({ services, weekStart, t, s, isPublished }: {
               {daySvcs.length === 0 ? (
                 <Text variant="small" muted>–</Text>
               ) : (
-                daySvcs.map(sv => (
-                  <View
-                    key={sv.service_id}
-                    style={[
-                      s.svcBlock,
-                      sv.shifts.length === 0 && s.svcBlockEmpty,
-                      sv.shortfall > 0 && s.svcBlockShort,
-                    ]}
-                  >
-                    <Text variant="small" numberOfLines={1}>{sv.name}</Text>
-                    <Text variant="small" muted numberOfLines={1}>
-                      {fmtTime(sv.starts_at)}–{fmtTime(sv.ends_at)}
-                    </Text>
-                    {sv.shifts.map(sh => (
-                      <View key={sh.id} style={s.crewRow}>
-                        <View style={[
-                          s.crewDot,
-                          isPublished && sh.declined_at
-                            ? { backgroundColor: t.color.accent }
-                            : isPublished && sh.confirmed_at
-                              ? { backgroundColor: t.color.success }
-                              : {},
-                        ]} />
-                        <Text variant="small" muted numberOfLines={1}>
-                          {sh.person_name.split(' ')[0]}
-                        </Text>
-                      </View>
-                    ))}
-                    {sv.shortfall > 0 && (
-                      <Text variant="small" color={t.color.accent}>{sv.shortfall} short</Text>
-                    )}
-                  </View>
-                ))
+                daySvcs.map(sv => {
+                  const status = sv.shifts.length === 0
+                    ? 'No staff'
+                    : sv.shortfall > 0
+                      ? `${sv.shortfall} short`
+                      : 'Staffed';
+                  const statusColor = sv.shifts.length === 0 || sv.shortfall > 0
+                    ? t.color.danger
+                    : t.color.success;
+                  return (
+                    <View key={sv.service_id} style={s.svcBlock}>
+                      <Text variant="small" numberOfLines={1}>{sv.name}</Text>
+                      <Text variant="small" numberOfLines={1} color={statusColor}>{status}</Text>
+                    </View>
+                  );
+                })
               )}
             </View>
           );
@@ -195,10 +184,13 @@ export default function RosterDetailScreen() {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const [expandedSvc, setExpandedSvc] = useState<string | null>(null);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<EligibleCrew[]>([]);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
   const [overrideMode, setOverrideMode] = useState(false);
+
+  const [rules, setRules] = useState<RosterRules | null>(null);
 
   // Cover flow state
   const [openShifts, setOpenShifts] = useState<OpenShift[]>([]);
@@ -207,8 +199,13 @@ export default function RosterDetailScreen() {
     if (!rosterId) return;
     setLoading(true);
     try {
-      const d = await getRoster(getAccessToken()!, rosterId);
+      const tok = getAccessToken()!;
+      const [d, rulesRes] = await Promise.all([
+        getRoster(tok, rosterId),
+        getRosterRules(tok).catch(() => null),
+      ]);
       setDetail(d);
+      if (rulesRes) setRules(rulesRes.rules);
       if (d.roster.status === 'published') {
         const os = await listOpenShifts(getAccessToken()!, rosterId);
         setOpenShifts(os.shifts);
@@ -336,9 +333,6 @@ export default function RosterDetailScreen() {
   const roster = detail?.roster;
   const services = detail?.services ?? [];
   const totalShifts = services.reduce((n, sv) => n + sv.shifts.length, 0);
-  const needsAttention = (sv: RosterServiceRow) =>
-    !sv.has_asset || sv.shortfall > 0 || sv.shifts.length === 0;
-  const attentionCount = services.filter(needsAttention).length;
   const isPublished = roster?.status === 'published';
   const declinedCount = isPublished
     ? services.reduce((n, sv) => n + sv.shifts.filter(sh => sh.declined_at).length, 0)
@@ -358,78 +352,52 @@ export default function RosterDetailScreen() {
       ) : (
         <>
           <View style={s.header}>
-            <Text variant="title">{weekLabel(roster.week_start)}</Text>
-            <View style={s.metaRow}>
-              <Badge
-                label={isPublished ? 'Published' : 'Draft'}
-                tone={isPublished ? 'success' : 'neutral'}
-              />
-              {isAdmin && <Text variant="small" muted>{totalShifts} shift{totalShifts !== 1 ? 's' : ''}</Text>}
-              {isAdmin && isPublished && declinedCount > 0 && (
-                <Badge label={`${declinedCount} need${declinedCount !== 1 ? '' : 's'} cover`} tone="accent" />
-              )}
-            </View>
-          </View>
-
-          {isAdmin && (
-            <Notice
-              tone="info"
-              message={isPublished
-                ? 'Rules: min 10h rest between shifts, max 6 days in 7. Overrides are flagged.'
-                : attentionCount > 0
-                  ? `${attentionCount} service${attentionCount !== 1 ? 's need' : ' needs'} attention. Rules: min 10h rest, max 6 days in 7.`
-                  : 'Every service has crew. Rules: min 10h rest, max 6 days in 7.'}
-            />
-          )}
-
-          {isAdmin && (
-            <View style={{ gap: t.space.sm }}>
-              <View style={{ flexDirection: 'row', gap: t.space.sm }}>
-                <Button
-                  label={isPublished ? 'Regenerate (new draft)' : 'Regenerate'}
-                  variant="ghost"
-                  onPress={doRegenerate}
-                  loading={regenerating}
+            <View style={s.headerLeft}>
+              <Text variant="title">{weekLabel(roster.week_start)}</Text>
+              <View style={s.metaRow}>
+                <Badge
+                  label={isPublished ? 'Published' : 'Draft'}
+                  tone={isPublished ? 'success' : 'neutral'}
                 />
-                {!isPublished && (
-                  <Button
-                    label="Publish roster"
-                    onPress={doPublish}
-                    loading={publishing}
-                  />
+                {isAdmin && <Text variant="small" muted>{totalShifts} shift{totalShifts !== 1 ? 's' : ''}</Text>}
+                {isAdmin && isPublished && declinedCount > 0 && (
+                  <Badge label={`${declinedCount} need${declinedCount !== 1 ? '' : 's'} cover`} tone="accent" />
                 )}
               </View>
-
-              {confirmDelete ? (
-                <View style={{ flexDirection: 'row', gap: t.space.sm, alignItems: 'center' }}>
-                  <Text variant="small" color={t.color.danger}>
-                    {isPublished
-                      ? 'This will remove all assignments. Staff will be notified.'
-                      : 'Delete this draft?'}
-                  </Text>
-                  <Button
-                    label="Confirm delete"
-                    variant="ghost"
-                    onPress={doDelete}
-                    loading={deleting}
-                  />
-                  <Button
-                    label="Cancel"
-                    variant="ghost"
-                    onPress={() => setConfirmDelete(false)}
-                  />
-                </View>
-              ) : (
-                <Pressable
-                  onPress={() => setConfirmDelete(true)}
-                  accessibilityRole="button"
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.xs, alignSelf: 'flex-start' }}
-                >
-                  <Ionicons name="trash-outline" size={16} color={t.color.danger} />
-                  <Text variant="small" color={t.color.danger}>Delete roster</Text>
-                </Pressable>
-              )}
             </View>
+            {isAdmin && (
+              <View style={s.headerActions}>
+                <Pressable onPress={doRegenerate} disabled={regenerating} accessibilityRole="button" accessibilityLabel="Regenerate roster">
+                  {regenerating
+                    ? <ActivityIndicator size="small" color={t.color.primary} />
+                    : <Ionicons name="refresh-outline" size={22} color={t.color.primary} />}
+                </Pressable>
+                {!isPublished && (
+                  <Pressable onPress={doPublish} disabled={publishing} accessibilityRole="button" accessibilityLabel="Publish roster">
+                    {publishing
+                      ? <ActivityIndicator size="small" color={t.color.primary} />
+                      : <Ionicons name="send-outline" size={20} color={t.color.primary} />}
+                  </Pressable>
+                )}
+                <Pressable onPress={() => setConfirmDelete(true)} accessibilityRole="button" accessibilityLabel="Delete roster">
+                  <Ionicons name="trash-outline" size={20} color={t.color.danger} />
+                </Pressable>
+              </View>
+            )}
+          </View>
+
+          {isAdmin && confirmDelete && (
+            <Card>
+              <Text variant="small" color={t.color.danger}>
+                {isPublished
+                  ? 'This will remove all assignments. Staff will be notified.'
+                  : 'Delete this draft?'}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: t.space.sm, marginTop: t.space.sm }}>
+                <Button label="Delete" variant="ghost" onPress={doDelete} loading={deleting} />
+                <Button label="Cancel" variant="ghost" onPress={() => setConfirmDelete(false)} />
+              </View>
+            </Card>
           )}
 
           {isAdmin && services.length > 0 && (
@@ -438,7 +406,6 @@ export default function RosterDetailScreen() {
               weekStart={roster.week_start}
               t={t}
               s={s}
-              isPublished={isPublished}
             />
           )}
 
@@ -478,45 +445,45 @@ export default function RosterDetailScreen() {
               </Text>
             </View>
           ) : (
-            services.map(sv => (
+            services.map(sv => {
+              const isExpanded = expandedSvc === sv.service_id;
+              return (
               <GroupedCard key={sv.service_id}>
-                <View style={s.svcHead}>
-                  <View style={s.svcTitleRow}>
-                    <Text variant="label">{sv.name}</Text>
-                    {isAdmin && !isPublished && sv.has_asset && (
-                      <Pressable
-                        onPress={() => (pickerFor === sv.service_id ? setPickerFor(null) : openPicker(sv.service_id))}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Add crew to ${sv.name}`}
-                        style={s.addBtn}
-                      >
-                        <Ionicons
-                          name={pickerFor === sv.service_id ? 'close-outline' : 'person-add-outline'}
-                          size={18}
-                          color={t.color.primary}
-                        />
-                      </Pressable>
-                    )}
+                <Pressable
+                  onPress={() => setExpandedSvc(isExpanded ? null : sv.service_id)}
+                  accessibilityRole="button"
+                  style={s.svcHead}
+                >
+                  <View style={s.svcHeadLeft}>
+                    <View style={s.svcTitleRow}>
+                      <Text variant="label">{sv.name}</Text>
+                      {!sv.has_asset && <Badge label="No asset" tone="accent" />}
+                      {sv.has_asset && sv.shortfall > 0 && (
+                        <Badge label={`${sv.shortfall} short`} tone="accent" />
+                      )}
+                    </View>
+                    <Text variant="small" muted>
+                      {fmtDay(sv.starts_at)} · {fmtTime(sv.starts_at)}–{fmtTime(sv.ends_at)}
+                      {sv.location_label ? ` · ${sv.location_label}` : ''}
+                    </Text>
                   </View>
-                  <Text variant="small" muted>
-                    {fmtDay(sv.starts_at)} · {fmtTime(sv.starts_at)}–{fmtTime(sv.ends_at)}
-                    {sv.location_label ? ` · ${sv.location_label}` : ''}
-                  </Text>
-                  <View style={s.svcMeta}>
-                    {!sv.has_asset && <Badge label="No asset" tone="accent" />}
-                    {sv.has_asset && sv.shortfall > 0 && (
-                      <Badge label={`${sv.shortfall} short`} tone="accent" />
-                    )}
-                    {sv.required > 0 && (
-                      <Text variant="small" muted>{sv.shifts.length} of {sv.required}</Text>
-                    )}
-                  </View>
-                  {sv.gap_reason && sv.shifts.length > 0 && (
-                    <Text variant="small" muted>{sv.gap_reason}</Text>
+                  {sv.shifts.length > 0 && (
+                    <View style={s.avatarRow}>
+                      {sv.shifts.map(sh => (
+                        <View key={sh.id} style={s.avatar}>
+                          <Text variant="small" color={t.color.primaryText}>{initials(sh.person_name)}</Text>
+                        </View>
+                      ))}
+                    </View>
                   )}
-                </View>
+                  <Ionicons
+                    name={isExpanded ? 'chevron-up-outline' : 'chevron-down-outline'}
+                    size={16}
+                    color={t.color.textMuted}
+                  />
+                </Pressable>
 
-                {!sv.has_asset ? (
+                {isExpanded && !sv.has_asset ? (
                   <GRow last>
                     <View style={s.shiftBody}>
                       <Text variant="small" muted>
@@ -536,7 +503,7 @@ export default function RosterDetailScreen() {
                       </Pressable>
                     )}
                   </GRow>
-                ) : sv.shifts.length === 0 ? (
+                ) : isExpanded && sv.shifts.length === 0 ? (
                   <GRow last>
                     <View style={s.shiftBody}>
                       <Text variant="small" muted>
@@ -556,7 +523,7 @@ export default function RosterDetailScreen() {
                       </Pressable>
                     )}
                   </GRow>
-                ) : (
+                ) : isExpanded ? (
                   sv.shifts.map((sh, i) => {
                     const status = shiftStatus(sh);
                     const isLast = i === sv.shifts.length - 1 && pickerFor !== sv.service_id;
@@ -616,9 +583,29 @@ export default function RosterDetailScreen() {
                       </GRow>
                     );
                   })
+                ) : null}
+
+                {isExpanded && isAdmin && !isPublished && sv.has_asset && (
+                  <GRow>
+                    <Pressable
+                      onPress={() => (pickerFor === sv.service_id ? setPickerFor(null) : openPicker(sv.service_id))}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Add crew to ${sv.name}`}
+                      style={s.addBtn}
+                    >
+                      <Ionicons
+                        name={pickerFor === sv.service_id ? 'close-outline' : 'person-add-outline'}
+                        size={18}
+                        color={t.color.primary}
+                      />
+                      <Text variant="small" color={t.color.primary}>
+                        {pickerFor === sv.service_id ? 'Cancel' : 'Add crew'}
+                      </Text>
+                    </Pressable>
+                  </GRow>
                 )}
 
-                {pickerFor === sv.service_id && (
+                {pickerFor === sv.service_id && isExpanded && (
                   loadingCandidates ? (
                     <GRow last><ActivityIndicator color={t.color.primary} /></GRow>
                   ) : candidates.length === 0 && !overrideMode ? (
@@ -693,7 +680,8 @@ export default function RosterDetailScreen() {
                   )
                 )}
               </GroupedCard>
-            ))
+              );
+            })
           )}
         </>
       )}

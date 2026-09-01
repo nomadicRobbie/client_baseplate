@@ -12,7 +12,7 @@ import { getAccessToken } from '@/lib/session';
 import { registerPushToken } from '@/lib/api';
 import { ProfileProvider, useProfile } from '@/lib/profile-context';
 import { PinsProvider, usePins } from '@/lib/pins-context';
-import { visibleNav, HOME_HREF, ACCOUNT_HREF, type IconName, type NavHref } from '@/lib/nav';
+import { visibleNav, HOME_HREF, ACCOUNT_HREF, type IconName, type NavHref, type NavGroup } from '@/lib/nav';
 import { ThemeProvider, useTheme } from '@/theme';
 import { Text } from '@/ui/components';
 import { Onboarding } from '@/components/onboarding';
@@ -32,7 +32,7 @@ if (Platform.OS !== 'web') {
 type ThemeT = ReturnType<typeof useTheme>;
 const makeStyles = (t: ThemeT) => ({
   spinner: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const },
-  sidebarContainer: { gap: t.space.xs },
+  sidebarContainer: { gap: 0 },
   mobileBar: { flexDirection: 'row' as const, justifyContent: 'space-around' as const },
   mobileTab: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: t.space.sm, minHeight: 52 },
   brand: { gap: 2 },
@@ -41,6 +41,9 @@ const makeStyles = (t: ThemeT) => ({
   sidebarTop: { gap: t.space.lg },
   content: { flex: 1 },
   badgeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: t.color.danger, marginLeft: 4 },
+  sidebarSection: { gap: 0, paddingTop: t.space.xl },
+  sectionHeading: { paddingHorizontal: t.space.md, paddingBottom: t.space.sm, fontSize: t.size.sm, fontWeight: '400' as const },
+  navLabel: { fontSize: t.size.sm, fontWeight: '400' as const },
 });
 
 function greeting(): string {
@@ -60,6 +63,13 @@ function Spinner() {
   );
 }
 
+const SIDEBAR_SECTIONS: { group: NavGroup; label?: string }[] = [
+  { group: 'home' },
+  { group: 'operations', label: 'Planning' },
+  { group: 'module', label: 'Tools' },
+  { group: 'account', label: 'Account' },
+];
+
 // Desktop sidebar — the full set of destinations, stacked vertically.
 function Sidebar({ isAdmin, features, myModules }: { isAdmin: boolean; features: FeatureFlags | null; myModules: string[] }) {
   const t = useTheme();
@@ -70,30 +80,39 @@ function Sidebar({ isAdmin, features, myModules }: { isAdmin: boolean; features:
   const items = visibleNav(isAdmin, features, myModules).filter((i) => i.group !== 'admin');
   return (
     <View style={s.sidebarContainer}>
-      {items.map((item) => {
-        const active = pathname === item.href;
-        const showBadge = item.href === '/dashboard/feed' && hasUnseen && !active;
+      {SIDEBAR_SECTIONS.map(({ group, label }) => {
+        const section = items.filter((i) => i.group === group);
+        if (!section.length) return null;
         return (
-          <Pressable
-            key={item.href}
-            onPress={() => router.replace(item.href)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={item.label}
-            style={(state) => {
-              const { pressed, hovered } = state as { pressed: boolean; hovered?: boolean };
-              return {
-                flexDirection: 'row', alignItems: 'center', gap: t.space.md,
-                paddingVertical: t.space.md, paddingHorizontal: t.space.md,
-                borderRadius: t.radius.md, minHeight: 44,
-                backgroundColor: pressed ? t.color.surfaceAlt : hovered ? t.color.bg : 'transparent',
-              };
-            }}
-          >
-            <Ionicons name={item.icon} size={20} color={active ? t.color.primary : t.color.textMuted} />
-            <Text variant="label" color={active ? t.color.text : t.color.textMuted}>{item.label}</Text>
-            {showBadge && <View style={s.badgeDot} />}
-          </Pressable>
+          <View key={group} style={[s.sidebarSection, !label && { paddingTop: 0 }]}>
+            {label && <Text variant="small" color={t.color.primary} style={s.sectionHeading}>{label}</Text>}
+            {section.map((item) => {
+              const active = pathname === item.href;
+              const showBadge = item.href === '/dashboard/feed' && hasUnseen && !active;
+              return (
+                <Pressable
+                  key={item.href}
+                  onPress={() => router.replace(item.href)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={item.label}
+                  style={(state) => {
+                    const { pressed, hovered } = state as { pressed: boolean; hovered?: boolean };
+                    return {
+                      flexDirection: 'row', alignItems: 'center', gap: t.space.md,
+                      paddingVertical: t.space.sm, paddingHorizontal: t.space.md,
+                      borderRadius: t.radius.md, minHeight: 34,
+                      backgroundColor: pressed ? t.color.surfaceAlt : hovered ? t.color.bg : 'transparent',
+                    };
+                  }}
+                >
+                  <Ionicons name={item.icon} size={18} color={active ? t.color.primary : t.color.textMuted} />
+                  <Text variant="small" color={active ? t.color.text : t.color.textMuted} style={s.navLabel}>{item.label}</Text>
+                  {showBadge && <View style={s.badgeDot} />}
+                </Pressable>
+              );
+            })}
+          </View>
         );
       })}
     </View>

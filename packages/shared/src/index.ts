@@ -831,6 +831,13 @@ export interface PersonUnavailability {
 // status implying it is locked.
 export type RosterStatus = 'draft' | 'published'
 
+export interface RosterRules {
+  min_rest_hours: number
+  max_consecutive_days: number
+  updated_at: string
+  updated_by: string | null
+}
+
 export interface Roster {
   id: string
   week_start: string       // YYYY-MM-DD, always a Monday

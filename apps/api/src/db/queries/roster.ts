@@ -1,7 +1,7 @@
 import { query, getPool } from '../pool'
 import type {
   PersonUnavailability, Roster, RosterShift, RosterDetail, RosterServiceRow,
-  EligibleCrew, RequiredRole, ServiceStatus,
+  EligibleCrew, RequiredRole, ServiceStatus, RosterRules,
 } from '@blnk/shared'
 
 const one = async <T>(sql: string, params: unknown[]): Promise<T | null> =>
@@ -75,9 +75,31 @@ export const deleteUnavailability = async (id: string, personId: string | null):
 //
 // A person qualifies when they crew an asset that is assigned to the service, are
 // not off that day, and are not already committed to something that overlaps it.
-// ponytail: hardcoded roster rules — move to org_settings when configurable
-const MAX_CONSECUTIVE_DAYS = 6
-const MIN_REST_HOURS = 10
+// Defaults if the roster_rules row is missing (shouldn't happen after migration).
+const DEFAULT_MIN_REST_HOURS = 10
+const DEFAULT_MAX_CONSECUTIVE_DAYS = 6
+
+export async function getRosterRules(): Promise<RosterRules> {
+  const [row] = await query<RosterRules>('SELECT min_rest_hours, max_consecutive_days, updated_at, updated_by FROM roster_rules WHERE id = true')
+  return row ?? { min_rest_hours: DEFAULT_MIN_REST_HOURS, max_consecutive_days: DEFAULT_MAX_CONSECUTIVE_DAYS, updated_at: new Date().toISOString(), updated_by: null }
+}
+
+export async function updateRosterRules(
+  body: { min_rest_hours?: number; max_consecutive_days?: number },
+  updatedBy: string | null,
+): Promise<RosterRules> {
+  const [row] = await query<RosterRules>(
+    `UPDATE roster_rules SET
+       min_rest_hours = COALESCE($1, min_rest_hours),
+       max_consecutive_days = COALESCE($2, max_consecutive_days),
+       updated_at = now(),
+       updated_by = $3
+     WHERE id = true
+     RETURNING min_rest_hours, max_consecutive_days, updated_at, updated_by`,
+    [body.min_rest_hours ?? null, body.max_consecutive_days ?? null, updatedBy],
+  )
+  return row!
+}
 
 // Params: $1=serviceId, $2=rosterId, $3=excludeIds[], $4=minRestHours, $5=maxDays
 const ELIGIBLE_SQL = `WITH svc AS (
@@ -161,6 +183,8 @@ export async function eligibleCrew(
   serviceId: string,
   opts: { rosterId?: string; exclude?: string[]; skipRules?: boolean } = {},
 ): Promise<EligibleCrew[]> {
+  const rules = await getRosterRules()
+  const { min_rest_hours, max_consecutive_days } = rules
   const params = [
     serviceId,
     opts.rosterId ?? null,
@@ -168,7 +192,7 @@ export async function eligibleCrew(
   ]
 
   if (!opts.skipRules) {
-    const rows = await query<EligibleCrew>(ELIGIBLE_SQL, [...params, MIN_REST_HOURS, MAX_CONSECUTIVE_DAYS])
+    const rows = await query<EligibleCrew>(ELIGIBLE_SQL, [...params, min_rest_hours, max_consecutive_days])
     return rows.map(r => ({ ...r, blocked_reason: null }))
   }
 
@@ -176,7 +200,7 @@ export async function eligibleCrew(
   // who would normally be blocked.
   const [permissive, strict] = await Promise.all([
     query<EligibleCrew>(ELIGIBLE_SQL, [...params, 0, 999]),
-    query<EligibleCrew>(ELIGIBLE_SQL, [...params, MIN_REST_HOURS, MAX_CONSECUTIVE_DAYS]),
+    query<EligibleCrew>(ELIGIBLE_SQL, [...params, min_rest_hours, max_consecutive_days]),
   ])
 
   const strictIds = new Set(strict.map(r => r.person_id))
@@ -185,7 +209,7 @@ export async function eligibleCrew(
     ...r,
     blocked_reason: strictIds.has(r.person_id)
       ? null
-      : `Exceeds rules: min ${MIN_REST_HOURS}h rest between shifts, max ${MAX_CONSECUTIVE_DAYS} days in 7`,
+      : `Exceeds rules: min ${min_rest_hours}h rest between shifts, max ${max_consecutive_days} days in 7`,
   }))
 }
 
@@ -611,22 +635,33 @@ export async function generateRoster(
   let servicesWithGaps = 0
 
   for (const svc of services) {
-    // Passing rosterId makes each pass see the shifts the previous ones inserted,
-    // so nobody gets double-booked across the week.
     const eligible = await eligibleCrew(svc.id, { rosterId: roster.id })
-    const required = (svc.required_roles ?? []).reduce((n, r) => n + r.count, 0)
-
-    // ponytail: fill by count, not by matching role names — required_roles is
-    // free text and a near-miss ('Skipper' vs 'skipper') would silently roster
-    // nobody. With no required_roles set, everyone who crews the asset is the
-    // crew, which is what asset_assignments already means. Match roles here when
-    // required_roles becomes a controlled vocabulary.
-    const take = required > 0 ? Math.min(required, eligible.length) : eligible.length
-
-    const picked = [...eligible]
+    const roles = svc.required_roles ?? []
+    const sorted = [...eligible]
       .sort((a, b) => (load.get(a.person_id) ?? 0) - (load.get(b.person_id) ?? 0)
         || a.name.localeCompare(b.name))
-      .slice(0, take)
+
+    const picked: typeof eligible = []
+    const usedIds = new Set<string>()
+
+    if (roles.length > 0) {
+      // Fill each role slot with someone whose asset_assignments role matches.
+      for (const { role, count } of roles) {
+        const rLower = role.toLowerCase()
+        let filled = 0
+        for (const c of sorted) {
+          if (filled >= count) break
+          if (usedIds.has(c.person_id)) continue
+          if ((c.role ?? '').toLowerCase() !== rLower) continue
+          picked.push(c)
+          usedIds.add(c.person_id)
+          filled++
+        }
+      }
+    } else {
+      // No required_roles — take everyone eligible.
+      for (const c of sorted) picked.push(c)
+    }
 
     for (const c of picked) {
       await addRosterShift({
@@ -640,6 +675,7 @@ export async function generateRoster(
       shifts++
     }
 
+    const required = roles.reduce((n, r) => n + r.count, 0)
     if (required > 0 ? picked.length < required : picked.length === 0) servicesWithGaps++
   }
 

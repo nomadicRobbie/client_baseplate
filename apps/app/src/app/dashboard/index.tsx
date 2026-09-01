@@ -26,44 +26,48 @@ export default function Library() {
       ) : (
         <View style={{ gap: 8 }}>
           <SectionLabel>Modules</SectionLabel>
-          <GroupedCard>
-            {modules.map((m, i) => {
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.md }}>
+            {modules.map((m) => {
               const pinned = isPinned(m.href);
-              const last = i === modules.length - 1 && mobileAdminLinks.length === 0;
-              // Split nav tap and pin tap into siblings — nested Pressables are invalid HTML on web.
               return (
-                <View key={m.href} style={{ flexDirection: 'row', alignItems: 'center', borderBottomWidth: last ? 0 : 1, borderColor: t.color.border }}>
-                  <Pressable
-                    onPress={() => router.push(m.href)}
-                    accessibilityRole="button"
-                    style={(state) => {
-                      const { pressed, hovered } = state as { pressed: boolean; hovered?: boolean };
-                      return {
-                        flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12,
-                        minHeight: 56, paddingLeft: 16, paddingVertical: 10,
-                        backgroundColor: pressed || hovered ? t.color.surfaceAlt : 'transparent',
-                      };
-                    }}
-                  >
+                <Pressable
+                  key={m.href}
+                  onPress={() => router.push(m.href)}
+                  accessibilityRole="button"
+                  style={(state) => {
+                    const { pressed, hovered } = state as { pressed: boolean; hovered?: boolean };
+                    return {
+                      width: wide ? 180 : '48%' as unknown as number,
+                      padding: t.space.lg,
+                      borderRadius: t.radius.md,
+                      borderWidth: 1,
+                      borderColor: t.color.border,
+                      backgroundColor: pressed ? t.color.surfaceAlt : hovered ? t.color.surface : t.color.surface,
+                      gap: t.space.sm,
+                    };
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                     <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
-                      <Ionicons name={m.icon} size={18} color={t.color.text} />
+                      <Ionicons name={m.icon} size={18} color={t.color.primary} />
                     </View>
-                    <Text variant="label" style={{ flex: 1 }}>{m.label}</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => toggle(m.href)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: pinned }}
-                    accessibilityLabel={pinned ? `Remove ${m.label} from bottom bar` : `Pin ${m.label} to bottom bar`}
-                    hitSlop={8}
-                    style={{ paddingHorizontal: 16, paddingVertical: 18 }}
-                  >
-                    <Ionicons name={pinned ? 'star' : 'star-outline'} size={20} color={pinned ? t.color.primary : t.color.textMuted} />
-                  </Pressable>
-                </View>
+                    {!wide && (
+                      <View
+                        onStartShouldSetResponder={() => true}
+                        onResponderRelease={(e) => { e.stopPropagation(); toggle(m.href); }}
+                        accessibilityLabel={pinned ? `Unpin ${m.label}` : `Pin ${m.label}`}
+                        hitSlop={8}
+                      >
+                        <Ionicons name={pinned ? 'star' : 'star-outline'} size={16} color={pinned ? t.color.primary : t.color.textMuted} />
+                      </View>
+                    )}
+                  </View>
+                  <Text variant="label">{m.label}</Text>
+                  {!!m.description && <Text variant="small" muted>{m.description}</Text>}
+                </Pressable>
               );
             })}
-          </GroupedCard>
+          </View>
         </View>
       )}
 

@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { View, Pressable, TextInput, ActivityIndicator } from 'react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { Asset, RequiredRole } from '@blnk/shared';
+import type { Asset, AssetType, RequiredRole } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { getServiceManifest, updateService, updateServiceTemplate, generateServiceInstances, listAssets, addServiceAssignment, removeServiceAssignment } from '@/lib/api';
+import { getServiceManifest, updateService, updateServiceTemplate, generateServiceInstances, listAssets, listAssetTypes, addServiceAssignment, removeServiceAssignment } from '@/lib/api';
 import { useTheme } from '@/theme';
 import { Screen, Text, Button, Toggle } from '@/ui/components';
 import { DateTimeField } from '@/ui/datetime-field';
@@ -35,8 +35,8 @@ const makeStyles = (t: ThemeT) => ({
     paddingHorizontal: t.space.md, paddingVertical: t.space.xs,
   },
   roleInputRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
-  roleNameInput: { flex: 1, backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.sm, color: t.color.text, fontSize: 14 },
   roleCountInput: { width: 48, backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.sm, color: t.color.text, fontSize: 14, textAlign: 'center' as const },
+  flex1: { flex: 1 },
 });
 
 export default function EditServiceScreen() {
@@ -59,8 +59,9 @@ export default function EditServiceScreen() {
   const [origAssetId, setOrigAssetId] = useState<string | null>(null);
   const [origAssetAssignmentId, setOrigAssetAssignmentId] = useState<string | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [assetTypes, setAssetTypes] = useState<AssetType[]>([]);
   const [roles, setRoles] = useState<RequiredRole[]>([]);
-  const [newRole, setNewRole] = useState('');
+  const [newRole, setNewRole] = useState<string | null>(null);
   const [newRoleCount, setNewRoleCount] = useState('1');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [applyToAll, setApplyToAll] = useState(false);
@@ -72,9 +73,10 @@ export default function EditServiceScreen() {
     void (async () => {
       try {
         const tok = getAccessToken()!;
-        const [r, assetRes] = await Promise.all([
+        const [r, assetRes, atRes] = await Promise.all([
           getServiceManifest(tok, serviceId),
           listAssets(tok),
+          listAssetTypes(tok),
         ]);
         const svc = r.manifest.service;
         const durationMin = Math.round((new Date(svc.ends_at).getTime() - new Date(svc.starts_at).getTime()) / 60_000);
@@ -87,6 +89,7 @@ export default function EditServiceScreen() {
         setVersion(svc.version);
         setRoles((svc.required_roles as RequiredRole[]) ?? []);
         setAssets(assetRes.assets);
+        setAssetTypes(atRes.asset_types);
         const currentAsset = r.manifest.assets[0];
         if (currentAsset) {
           setAssetId(currentAsset.asset_id);
@@ -106,18 +109,22 @@ export default function EditServiceScreen() {
   const clearErr = (...keys: string[]) =>
     setErrors(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => !keys.includes(k))));
 
+  const selectedAsset = assets.find(a => a.id === assetId);
+  const selectedType = assetTypes.find(at => at.id === selectedAsset?.asset_type_id);
+  const availableRoles = selectedType?.roles ?? [];
+
   const addRole = () => {
-    const r = newRole.trim();
-    if (!r) return;
+    if (!newRole) return;
     const c = Math.max(1, parseInt(newRoleCount, 10) || 1);
-    const existing = roles.find(x => x.role.toLowerCase() === r.toLowerCase());
+    const existing = roles.find(x => x.role === newRole);
     if (existing) {
       setRoles(roles.map(x => x === existing ? { ...x, count: x.count + c } : x));
     } else {
-      setRoles([...roles, { role: r, count: c }]);
+      setRoles([...roles, { role: newRole, count: c }]);
     }
-    setNewRole('');
+    setNewRole(null);
     setNewRoleCount('1');
+    clearErr('roles');
   };
 
   const removeRole = (idx: number) => setRoles(roles.filter((_, i) => i !== idx));
@@ -127,6 +134,7 @@ export default function EditServiceScreen() {
     if (!name.trim()) e.name = 'Name is required';
     if (!startsAt) e.startsAt = 'Start time is required';
     if (!duration || isNaN(Number(duration)) || Number(duration) < 1) e.duration = 'Must be a positive number';
+    if (roles.length === 0) e.roles = 'Add at least one required role';
     return e;
   };
 
@@ -276,7 +284,7 @@ export default function EditServiceScreen() {
             <SelectField
               label="Asset"
               value={assetId}
-              onChange={setAssetId}
+              onChange={v => { setAssetId(v); setRoles([]); setNewRole(null); }}
               placeholder="None"
               options={assets.map(a => ({ label: a.name, value: a.id }))}
             />
@@ -294,26 +302,32 @@ export default function EditServiceScreen() {
                 ))}
               </View>
             )}
-            <View style={s.roleInputRow}>
-              <TextInput
-                value={newRole}
-                onChangeText={setNewRole}
-                placeholder="e.g. Skipper"
-                placeholderTextColor={t.color.textMuted}
-                style={s.roleNameInput}
-                onSubmitEditing={addRole}
-              />
-              <TextInput
-                value={newRoleCount}
-                onChangeText={setNewRoleCount}
-                keyboardType="numeric"
-                placeholderTextColor={t.color.textMuted}
-                style={s.roleCountInput}
-              />
-              <Pressable onPress={addRole} accessibilityRole="button" accessibilityLabel="Add role">
-                <Ionicons name="add-circle-outline" size={24} color={t.color.primary} />
-              </Pressable>
-            </View>
+            {availableRoles.length > 0 ? (
+              <View style={s.roleInputRow}>
+                <View style={s.flex1}>
+                  <SelectField
+                    label=""
+                    value={newRole}
+                    onChange={setNewRole}
+                    placeholder="Select role"
+                    options={availableRoles.map(r => ({ label: r, value: r }))}
+                  />
+                </View>
+                <TextInput
+                  value={newRoleCount}
+                  onChangeText={setNewRoleCount}
+                  keyboardType="numeric"
+                  placeholderTextColor={t.color.textMuted}
+                  style={s.roleCountInput}
+                />
+                <Pressable onPress={addRole} accessibilityRole="button" accessibilityLabel="Add role">
+                  <Ionicons name="add-circle-outline" size={24} color={t.color.primary} />
+                </Pressable>
+              </View>
+            ) : (
+              <Text variant="small" muted>Select an asset to see available roles</Text>
+            )}
+            {errors.roles ? <Text variant="small" color={t.color.danger}>{errors.roles}</Text> : null}
           </View>
 
           {templateId && (

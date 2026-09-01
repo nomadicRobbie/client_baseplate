@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, FoodControlPlan, Product, ProductVariant, Asset, AssetType, AssetFieldDef, AssetFault, AssetFaultStep, AssetMaintenanceLog, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert, AssetComponent, AssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData, ServiceTemplate, ScheduledService, ServiceAssignment, ServiceManifest, AvailabilitySlot, PersonUnavailability, UnavailabilityKind, Roster, RosterDetail, RosterShift, EligibleCrew, OpenShift } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, FoodControlPlan, Product, ProductVariant, Asset, AssetType, AssetFieldDef, AssetFault, AssetFaultStep, AssetMaintenanceLog, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert, AssetComponent, AssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData, ServiceTemplate, ScheduledService, ServiceAssignment, ServiceManifest, AvailabilitySlot, PersonUnavailability, UnavailabilityKind, Roster, RosterDetail, RosterRules, RosterShift, EligibleCrew, OpenShift } from '@blnk/shared';
 import { getAccessToken, getRefreshToken, setTokens, clearSession } from './session';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
@@ -609,6 +609,12 @@ export const addUnavailability = (token: string, body: { date: string; kind?: Un
 
 export const removeUnavailability = (token: string, id: string) =>
   req<void>(`/unavailability/${id}`, { method: 'DELETE', token });
+
+export const getRosterRules = (token: string) =>
+  req<{ rules: RosterRules }>('/roster-rules', { method: 'GET', token });
+
+export const updateRosterRules = (token: string, body: { min_rest_hours?: number; max_consecutive_days?: number }) =>
+  req<{ rules: RosterRules }>('/roster-rules', { method: 'PATCH', token, body });
 
 export const listRosters = (token: string) =>
   req<{ rosters: Roster[] }>('/rosters', { method: 'GET', token });
