@@ -20,28 +20,30 @@ const one = async <T>(sql: string, params: unknown[]): Promise<T | null> =>
   (await query<T & object>(sql, params))[0] as T ?? null
 
 // ── Templates ─────────────────────────────────────────────────────────────────
+const TMPL_SELECT = `SELECT t.*, fa.name AS facility_name FROM service_templates t LEFT JOIN assets fa ON fa.id = t.facility_id`
+
 export const listTemplates = (active?: boolean) =>
   query<ServiceTemplate>(
-    `SELECT * FROM service_templates WHERE ($1::boolean IS NULL OR active = $1) ORDER BY name`,
+    `${TMPL_SELECT} WHERE ($1::boolean IS NULL OR t.active = $1) ORDER BY t.name`,
     [active ?? null],
   )
 
 export const getTemplate = (id: string) =>
-  one<ServiceTemplate>(`SELECT * FROM service_templates WHERE id = $1`, [id])
+  one<ServiceTemplate>(`${TMPL_SELECT} WHERE t.id = $1`, [id])
 
 export const createTemplate = (d: Record<string, unknown>, createdBy: string | null) =>
   one<ServiceTemplate>(
     `INSERT INTO service_templates
-       (name, duration_minutes, default_capacity, location_label, timezone,
+       (name, duration_minutes, default_capacity, facility_id, timezone,
         required_roles, required_asset_types, recurrence, default_asset_id, active, created_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,true),$11) RETURNING *`,
-    [d.name, d.duration_minutes, d.default_capacity ?? 0, d.location_label ?? null,
+    [d.name, d.duration_minutes, d.default_capacity ?? 0, d.facility_id ?? null,
      d.timezone, JSON.stringify(d.required_roles ?? []), JSON.stringify(d.required_asset_types ?? []),
      d.recurrence ? JSON.stringify(d.recurrence) : null, d.default_asset_id ?? null,
      d.active ?? null, createdBy],
   )
 
-const TEMPLATE_COLS = ['name', 'duration_minutes', 'default_capacity', 'location_label', 'timezone', 'required_roles', 'required_asset_types', 'recurrence', 'default_asset_id', 'active'] as const
+const TEMPLATE_COLS = ['name', 'duration_minutes', 'default_capacity', 'facility_id', 'timezone', 'required_roles', 'required_asset_types', 'recurrence', 'default_asset_id', 'active'] as const
 export const updateTemplate = (id: string, body: object) =>
   patch<ServiceTemplate>('service_templates', id, TEMPLATE_COLS, body as never)
 
@@ -52,43 +54,45 @@ export interface ServiceFilters {
   person_id?: string
 }
 
+const SVC_SELECT = `SELECT s.*, fa.name AS facility_name FROM scheduled_services s LEFT JOIN assets fa ON fa.id = s.facility_id`
+
 export const listServices = (f: ServiceFilters) =>
   query<ScheduledService>(
-    `SELECT * FROM scheduled_services s
-     WHERE starts_at >= $1 AND starts_at < $2
-       AND ($3::text[] IS NULL OR status = ANY($3::service_status_enum[]))
-       AND ($4::uuid IS NULL OR template_id = $4)
+    `${SVC_SELECT}
+     WHERE s.starts_at >= $1 AND s.starts_at < $2
+       AND ($3::text[] IS NULL OR s.status = ANY($3::service_status_enum[]))
+       AND ($4::uuid IS NULL OR s.template_id = $4)
        AND ($5::uuid IS NULL OR EXISTS (
          SELECT 1 FROM service_assignments sa
          WHERE sa.service_id = s.id AND sa.subject_id = $5
            AND sa.subject_type = 'person' AND sa.removed_at IS NULL
        ))
-     ORDER BY starts_at`,
+     ORDER BY s.starts_at`,
     [f.from, f.to, f.status?.length ? f.status : null, f.template_id ?? null, f.person_id ?? null],
   )
 
 export const getService = (id: string) =>
-  one<ScheduledService>(`SELECT * FROM scheduled_services WHERE id = $1`, [id])
+  one<ScheduledService>(`${SVC_SELECT} WHERE s.id = $1`, [id])
 
 export const createService = (d: Record<string, unknown>, createdBy: string | null) =>
   one<ScheduledService>(
     `INSERT INTO scheduled_services
-       (id, template_id, name, starts_at, ends_at, timezone, location_label,
+       (id, template_id, name, starts_at, ends_at, timezone, facility_id,
         capacity, required_roles, status, external_ref, notes, created_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,'draft')::service_status_enum,$11,COALESCE($12,''),$13) RETURNING *`,
     [d.id, d.template_id ?? null, d.name, d.starts_at, d.ends_at, d.timezone,
-     d.location_label ?? null, d.capacity ?? 0, JSON.stringify(d.required_roles ?? []),
+     d.facility_id ?? null, d.capacity ?? 0, JSON.stringify(d.required_roles ?? []),
      d.status ?? null, d.external_ref ?? null, d.notes ?? null, createdBy],
   )
 
 // Version-guarded update — WHERE includes version so a stale version returns null (caller 409s).
 export async function updateService(
   id: string,
-  body: Partial<Pick<ScheduledService, 'name' | 'starts_at' | 'ends_at' | 'timezone' | 'location_label' | 'capacity' | 'notes' | 'status' | 'external_ref' | 'required_roles'>>,
+  body: Partial<Pick<ScheduledService, 'name' | 'starts_at' | 'ends_at' | 'timezone' | 'facility_id' | 'capacity' | 'notes' | 'status' | 'external_ref' | 'required_roles'>>,
   currentVersion: number,
   updatedBy: string | null,
 ): Promise<ScheduledService | null> {
-  const allowed = ['name', 'starts_at', 'ends_at', 'timezone', 'location_label', 'capacity', 'notes', 'status', 'external_ref', 'required_roles'] as const
+  const allowed = ['name', 'starts_at', 'ends_at', 'timezone', 'facility_id', 'capacity', 'notes', 'status', 'external_ref', 'required_roles'] as const
   const cols: string[] = []; const vals: unknown[] = []; let i = 1
   for (const k of allowed) {
     const v = (body as Record<string, unknown>)[k]
@@ -106,13 +110,34 @@ export async function updateService(
   return r[0] ?? null
 }
 
-export const cancelService = (id: string, reason: string, updatedBy: string | null) =>
-  one<ScheduledService>(
-    `UPDATE scheduled_services
-     SET status = 'cancelled', cancellation_reason = $2, updated_by = $3, updated_at = now(), version = version + 1
-     WHERE id = $1 AND status <> 'cancelled' RETURNING *`,
-    [id, reason, updatedBy],
-  )
+export async function cancelService(id: string, reason: string, updatedBy: string | null): Promise<ScheduledService | null> {
+  const client = await getPool().connect()
+  try {
+    await client.query('BEGIN')
+    const { rows } = await client.query<ScheduledService>(
+      `UPDATE scheduled_services
+       SET status = 'cancelled', cancellation_reason = $2, updated_by = $3, updated_at = now(), version = version + 1
+       WHERE id = $1 AND status <> 'cancelled' RETURNING *`,
+      [id, reason, updatedBy],
+    )
+    if (rows.length === 0) { await client.query('ROLLBACK'); return null }
+    // Remove draft roster staging and live roster person-assignments so crew
+    // don't see themselves still assigned after the service is gone.
+    await client.query(`DELETE FROM roster_shifts WHERE service_id = $1`, [id])
+    await client.query(
+      `UPDATE service_assignments SET removed_at = now()
+        WHERE service_id = $1 AND subject_type = 'person' AND removed_at IS NULL`,
+      [id],
+    )
+    await client.query('COMMIT')
+    return rows[0]
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+}
 
 // ── Generate instances (idempotent) ──────────────────────────────────────────
 // Expands a template's recurrence pattern between from/to (YYYY-MM-DD), inserting
@@ -151,7 +176,7 @@ export async function generateInstances(
       // the clocks move.
       const res = await client.query(
         `INSERT INTO scheduled_services
-           (id, template_id, name, starts_at, ends_at, timezone, location_label,
+           (id, template_id, name, starts_at, ends_at, timezone, facility_id,
             capacity, required_roles, status)
          VALUES (
            gen_random_uuid(), $1, $2,
@@ -162,7 +187,7 @@ export async function generateInstances(
          ON CONFLICT (template_id, starts_at) WHERE template_id IS NOT NULL DO NOTHING
          RETURNING id`,
         [template.id, template.name, date, time, template.timezone,
-         template.duration_minutes.toString(), template.location_label ?? null,
+         template.duration_minutes.toString(), template.facility_id ?? null,
          template.default_capacity, JSON.stringify(template.required_roles)],
       )
       if (res.rowCount && res.rowCount > 0) {
@@ -253,14 +278,14 @@ export async function getManifest(id: string): Promise<ServiceManifest | null> {
 // ── Sync ──────────────────────────────────────────────────────────────────────
 export const syncServices = (since: string, from: string, to: string, personId?: string) =>
   query<ScheduledService>(
-    `SELECT * FROM scheduled_services s
-     WHERE updated_at > $1 AND starts_at >= $2 AND starts_at < $3
+    `${SVC_SELECT}
+     WHERE s.updated_at > $1 AND s.starts_at >= $2 AND s.starts_at < $3
        AND ($4::uuid IS NULL OR EXISTS (
          SELECT 1 FROM service_assignments sa
          WHERE sa.service_id = s.id AND sa.subject_id = $4
            AND sa.subject_type = 'person' AND sa.removed_at IS NULL
        ))
-     ORDER BY starts_at`,
+     ORDER BY s.starts_at`,
     [since, from, to, personId ?? null],
   )
 
@@ -295,13 +320,14 @@ export async function buildTodayServices(): Promise<FeedItem[]> {
   const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 
   const services = await query<ScheduledService & { assigned_count: string; asset_count: string }>(
-    `SELECT s.*,
+    `SELECT s.*, fa.name AS facility_name, s.starts_at::text AS starts_at,
        COUNT(sa.id) FILTER (WHERE sa.removed_at IS NULL AND sa.subject_type = 'person') AS assigned_count,
        COUNT(sa.id) FILTER (WHERE sa.removed_at IS NULL AND sa.subject_type = 'asset')  AS asset_count
      FROM scheduled_services s
+     LEFT JOIN assets fa ON fa.id = s.facility_id
      LEFT JOIN service_assignments sa ON sa.service_id = s.id
      WHERE s.starts_at >= $1 AND s.starts_at < $2 AND s.status IN ('draft','planned','confirmed')
-     GROUP BY s.id
+     GROUP BY s.id, fa.name
      ORDER BY s.starts_at`,
     [now.toISOString(), in24h.toISOString()],
   )
@@ -327,7 +353,8 @@ export async function buildTodayServices(): Promise<FeedItem[]> {
         name: s.name,
         starts_at: s.starts_at,
         timezone: s.timezone,
-        location_label: s.location_label ?? null,
+        facility_id: s.facility_id ?? null,
+        facility_name: s.facility_name ?? null,
         status: s.status,
         capacity: s.capacity,
         assigned_count: assignedCount,

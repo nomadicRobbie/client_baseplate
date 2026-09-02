@@ -581,7 +581,7 @@ export const listServices = (token: string, from: string, to: string, opts?: { s
 export const getService = (token: string, id: string) =>
   req<{ service: ScheduledService; assignments: ServiceAssignment[] }>(`/services/${id}`, { method: 'GET', token });
 
-export const createService = (token: string, body: { id: string; name: string; starts_at: string; ends_at: string; timezone: string; template_id?: string | null; location_label?: string | null; capacity?: number; required_roles?: unknown[]; status?: string; notes?: string; asset_id?: string | null }) =>
+export const createService = (token: string, body: { id: string; name: string; starts_at: string; ends_at: string; timezone: string; template_id?: string | null; facility_id?: string | null; capacity?: number; required_roles?: unknown[]; status?: string; notes?: string; asset_id?: string | null }) =>
   req<{ service: ScheduledService }>('/services', { method: 'POST', body, token });
 
 export const updateService = (token: string, id: string, body: Record<string, unknown> & { version: number }) =>

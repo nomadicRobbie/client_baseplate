@@ -56,6 +56,7 @@ const makeStyles = (t: ThemeT) => ({
   typePickerIcon: (sel: boolean) => ({ width: 36, height: 36, borderRadius: 10, backgroundColor: sel ? t.color.primary : t.color.surfaceAlt, alignItems: 'center' as const, justifyContent: 'center' as const }),
   typePickerSectionHeader: { flexDirection: 'row' as const, alignItems: 'baseline' as const, justifyContent: 'space-between' as const, paddingHorizontal: t.space.xs },
   totalRow: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, paddingHorizontal: t.space.md, paddingVertical: t.space.sm },
+  roleInput: { flex: 1, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, paddingHorizontal: t.space.md, paddingVertical: t.space.sm, fontSize: 14, color: t.color.text, backgroundColor: t.color.surface },
 });
 
 function NameRow({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -109,6 +110,8 @@ export default function AssetManager() {
   // Add-type form
   const [showAddType, setShowAddType] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
+  const [draftRoles, setDraftRoles] = useState<string[]>([]);
+  const [newRoleInput, setNewRoleInput] = useState('');
   const [draftFields, setDraftFields] = useState<AssetFieldDef[]>([]);
   const [fieldLabel, setFieldLabel] = useState('');
   const [fieldType, setFieldType] = useState<AssetFieldDef['type']>('text');
@@ -188,15 +191,23 @@ export default function AssetManager() {
   };
 
   const resetAddType = () => {
-    setShowAddType(false); setNewTypeName(''); setDraftFields([]);
+    setShowAddType(false); setNewTypeName(''); setDraftRoles([]); setNewRoleInput('');
+    setDraftFields([]);
     setFieldLabel(''); setFieldUnit(''); setFieldOptions(''); setFieldType('text');
+  };
+
+  const addDraftRole = () => {
+    const r = newRoleInput.trim();
+    if (!r || draftRoles.includes(r)) return;
+    setDraftRoles([...draftRoles, r]);
+    setNewRoleInput('');
   };
 
   const addType = async () => {
     if (!newTypeName.trim()) return;
     setAddBusy(true); setAddMsg(null);
     try {
-      const { asset_type } = await createAssetType(tok(), { name: newTypeName.trim(), fields: draftFields });
+      const { asset_type } = await createAssetType(tok(), { name: newTypeName.trim(), roles: draftRoles, fields: draftFields });
       resetAddType(); selectType(asset_type.id); void load();
       setAddMsg({ text: `Type "${asset_type.name}" added.`, tone: 'success' });
     } catch (e) { setAddMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' }); } finally { setAddBusy(false); }
@@ -506,6 +517,33 @@ export default function AssetManager() {
         {showAddType ? (
           <View style={s.addTypeSection}>
             <TextField label="Type name" value={newTypeName} onChangeText={setNewTypeName} placeholder="Type name" autoCapitalize="sentences" />
+            <View style={{ gap: t.space.sm }}>
+              <Text variant="label" muted>Required roles</Text>
+              {draftRoles.length > 0 && (
+                <View style={s.typeRow}>
+                  {draftRoles.map((r) => (
+                    <Pressable key={r} onPress={() => setDraftRoles(draftRoles.filter((x) => x !== r))} accessibilityRole="button"
+                      style={s.typeChip(false)}>
+                      <Text variant="label">{r}</Text>
+                      <Ionicons name="close" size={14} color={t.color.textMuted} />
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+              <View style={{ flexDirection: 'row', gap: t.space.sm, alignItems: 'center' }}>
+                <TextInput
+                  value={newRoleInput}
+                  onChangeText={setNewRoleInput}
+                  placeholder="e.g. Driver, Skipper"
+                  placeholderTextColor={t.color.textMuted}
+                  autoCapitalize="words"
+                  onSubmitEditing={addDraftRole}
+                  returnKeyType="done"
+                  style={s.roleInput}
+                />
+                <Button label="Add" variant="secondary" onPress={addDraftRole} />
+              </View>
+            </View>
             {draftFields.map((f, i) => (
               <View key={f.key} style={s.typeListRow}>
                 <View style={s.flex1}>

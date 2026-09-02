@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Pressable, TextInput } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import type { Asset, AssetType } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { createServiceTemplate } from '@/lib/api';
+import { createServiceTemplate, listAssets, listAssetTypes } from '@/lib/api';
 import { useTheme } from '@/theme';
 import { Screen, Text, Button } from '@/ui/components';
+import { SelectField } from '@/ui/select-field';
 import { WeekdayRecurrencePicker, type RecurrenceValue } from '@/ui/weekday-recurrence-picker';
 import { localDate } from '@/lib/format';
 
@@ -34,13 +36,25 @@ export default function NewTemplateScreen() {
   const [name, setName] = useState('');
   const [duration, setDuration] = useState('240');
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
-  const [location, setLocation] = useState('');
+  const [facilityId, setFacilityId] = useState<string | null>(null);
   const [capacity, setCapacity] = useState('0');
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assetTypes, setAssetTypes] = useState<AssetType[]>([]);
   const [useRecurrence, setUseRecurrence] = useState(false);
   const [recurrence, setRecurrence] = useState<RecurrenceValue>({ days: [], time: '09:00', startDate: today(), endDate: null });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<Msg | null>(null);
+
+  useEffect(() => {
+    const tok = getAccessToken()!;
+    Promise.all([listAssets(tok), listAssetTypes(tok)])
+      .then(([a, at]) => { setAssets(a.assets); setAssetTypes(at.asset_types); })
+      .catch(() => {});
+  }, []);
+
+  const facilitiesTypeId = assetTypes.find(at => at.name === 'Facilities')?.id;
+  const facilities = assets.filter(a => a.asset_type_id === facilitiesTypeId);
 
   if (!isAdmin) return <Redirect href="/dashboard/schedule" />;
 
@@ -66,7 +80,7 @@ export default function NewTemplateScreen() {
         name: name.trim(),
         duration_minutes: Number(duration),
         default_capacity: Number(capacity) || 0,
-        location_label: location.trim() || null,
+        facility_id: facilityId,
         timezone: timezone.trim(),
         required_roles: [],
         required_asset_types: [],
@@ -142,16 +156,15 @@ export default function NewTemplateScreen() {
         {errors.timezone ? <Text variant="small" color={t.color.danger}>{errors.timezone}</Text> : null}
       </View>
 
-      <View style={s.field}>
-        <Text variant="label">Location (optional)</Text>
-        <TextInput
-          value={location}
-          onChangeText={setLocation}
-          placeholder="e.g. Pier 4, Westhaven"
-          placeholderTextColor={t.color.textMuted}
-          style={s.input}
+      {facilities.length > 0 && (
+        <SelectField
+          label="Facility"
+          value={facilityId}
+          onChange={setFacilityId}
+          placeholder="None"
+          options={facilities.map(f => ({ label: f.name, value: f.id }))}
         />
-      </View>
+      )}
 
       <View style={s.divider} />
 

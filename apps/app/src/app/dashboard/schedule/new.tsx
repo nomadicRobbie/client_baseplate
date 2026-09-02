@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Pressable, TextInput } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import type { Asset, AssetType } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { createService } from '@/lib/api';
+import { createService, listAssets, listAssetTypes } from '@/lib/api';
 import { useTheme } from '@/theme';
 import { Screen, Text, Button } from '@/ui/components';
 import { DateTimeField } from '@/ui/datetime-field';
+import { SelectField } from '@/ui/select-field';
 
 // ponytail: UUIDv4 — sufficient for offline-safe IDs here; UUIDv7 adds no value without a batch sync layer
 function uuid4(): string {
@@ -52,11 +54,23 @@ export default function NewServiceScreen() {
   const [name, setName] = useState('');
   const [startsAt, setStartsAt] = useState(localISOString());
   const [endsAt, setEndsAt] = useState(addHours(localISOString(), 4));
-  const [location, setLocation] = useState('');
+  const [facilityId, setFacilityId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assetTypes, setAssetTypes] = useState<AssetType[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<Msg | null>(null);
+
+  useEffect(() => {
+    const tok = getAccessToken()!;
+    Promise.all([listAssets(tok), listAssetTypes(tok)])
+      .then(([a, at]) => { setAssets(a.assets); setAssetTypes(at.asset_types); })
+      .catch(() => {});
+  }, []);
+
+  const facilitiesTypeId = assetTypes.find(t => t.name === 'Facilities')?.id;
+  const facilities = assets.filter(a => a.asset_type_id === facilitiesTypeId);
 
   if (!isAdmin) return <Redirect href="/dashboard/schedule" />;
 
@@ -82,7 +96,7 @@ export default function NewServiceScreen() {
         starts_at: new Date(startsAt).toISOString(),
         ends_at: new Date(endsAt).toISOString(),
         timezone: tz,
-        location_label: location.trim() || null,
+        facility_id: facilityId,
         notes: notes.trim(),
         status: 'planned',
       });
@@ -134,16 +148,15 @@ export default function NewServiceScreen() {
         </View>
       </View>
 
-      <View style={s.field}>
-        <Text variant="label">Location (optional)</Text>
-        <TextInput
-          value={location}
-          onChangeText={setLocation}
-          placeholder="e.g. Pier 4, Westhaven"
-          placeholderTextColor={t.color.textMuted}
-          style={s.input}
+      {facilities.length > 0 && (
+        <SelectField
+          label="Facility"
+          value={facilityId}
+          onChange={setFacilityId}
+          placeholder="None"
+          options={facilities.map(f => ({ label: f.name, value: f.id }))}
         />
-      </View>
+      )}
 
       <View style={s.field}>
         <Text variant="label">Notes (optional)</Text>

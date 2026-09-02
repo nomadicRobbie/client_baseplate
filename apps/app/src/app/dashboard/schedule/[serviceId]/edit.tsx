@@ -52,7 +52,7 @@ export default function EditServiceScreen() {
   const [name, setName] = useState('');
   const [startsAt, setStartsAt] = useState('');
   const [duration, setDuration] = useState('');
-  const [location, setLocation] = useState('');
+  const [facilityId, setFacilityId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
@@ -84,7 +84,7 @@ export default function EditServiceScreen() {
         setName(svc.name);
         setStartsAt(toLocalISO(svc.starts_at));
         setDuration(String(durationMin));
-        setLocation(svc.location_label ?? '');
+        setFacilityId(svc.facility_id ?? null);
         setNotes(svc.notes ?? '');
         setTemplateId(svc.template_id);
         setVersion(svc.version);
@@ -110,6 +110,8 @@ export default function EditServiceScreen() {
   const clearErr = (...keys: string[]) =>
     setErrors(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => !keys.includes(k))));
 
+  const facilitiesTypeId = assetTypes.find(at => at.name === 'Facilities')?.id;
+  const facilities = assets.filter(a => a.asset_type_id === facilitiesTypeId);
   const selectedAsset = assets.find(a => a.id === assetId);
   const selectedType = assetTypes.find(at => at.id === selectedAsset?.asset_type_id);
   const availableRoles = selectedType?.roles ?? [];
@@ -145,7 +147,7 @@ export default function EditServiceScreen() {
     await updateServiceTemplate(tok, templateId, {
       name: name.trim(),
       duration_minutes: Number(duration),
-      location_label: location.trim() || null,
+      facility_id: facilityId,
       required_roles: roles,
       default_asset_id: assetId,
     });
@@ -159,7 +161,7 @@ export default function EditServiceScreen() {
       name: name.trim(),
       starts_at: start.toISOString(),
       ends_at: end.toISOString(),
-      location_label: location.trim() || null,
+      facility_id: facilityId,
       notes: notes.trim(),
       required_roles: roles,
       version: v,
@@ -260,15 +262,15 @@ export default function EditServiceScreen() {
             {errors.duration ? <Text variant="small" color={t.color.danger}>{errors.duration}</Text> : null}
           </View>
 
-          <View style={s.field}>
-            <Text variant="label">Location (optional)</Text>
-            <TextInput
-              value={location}
-              onChangeText={setLocation}
-              placeholderTextColor={t.color.textMuted}
-              style={s.input}
+          {facilities.length > 0 && (
+            <SelectField
+              label="Facility"
+              value={facilityId}
+              onChange={setFacilityId}
+              placeholder="None"
+              options={facilities.map(f => ({ label: f.name, value: f.id }))}
             />
-          </View>
+          )}
 
           <View style={s.field}>
             <Text variant="label">Notes (optional)</Text>

@@ -73,7 +73,7 @@ function ServiceCard({ svc, router, s, t }: { svc: ScheduledService; router: Ret
             <Text variant="label">{svc.name}</Text>
             <Text variant="body">
               {formatTime(svc.starts_at)}
-              {svc.location_label ? ` · ${svc.location_label}` : ''}
+              {svc.facility_name ? ` · ${svc.facility_name}` : ''}
             </Text>
             <View style={s.meta}>
               <Badge label={svc.status} tone={STATUS_COLOR[svc.status] as never ?? 'neutral'} />

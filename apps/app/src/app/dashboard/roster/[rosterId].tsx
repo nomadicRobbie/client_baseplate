@@ -104,9 +104,11 @@ function serviceDate(sv: RosterServiceRow, tz: string): string {
   return d.toLocaleDateString('en-CA', { timeZone: tz });
 }
 
-function WeekGrid({ services, weekStart, t, s }: {
+
+function WeekGrid({ services, weekStart, isAdmin, t, s }: {
   services: RosterServiceRow[];
   weekStart: string;
+  isAdmin: boolean;
   t: ThemeT;
   s: ReturnType<typeof makeStyles>;
 }) {
@@ -144,18 +146,30 @@ function WeekGrid({ services, weekStart, t, s }: {
                 <Text variant="small" muted>–</Text>
               ) : (
                 daySvcs.map(sv => {
-                  const status = sv.shifts.length === 0
-                    ? 'No staff'
-                    : sv.shortfall > 0
-                      ? `${sv.shortfall} short`
-                      : 'Staffed';
-                  const statusColor = sv.shifts.length === 0 || sv.shortfall > 0
-                    ? t.color.danger
-                    : t.color.success;
+                  if (isAdmin) {
+                    const status = sv.shifts.length === 0
+                      ? 'No staff'
+                      : sv.shortfall > 0
+                        ? `${sv.shortfall} short`
+                        : 'Staffed';
+                    const statusColor = sv.shifts.length === 0 || sv.shortfall > 0
+                      ? t.color.danger
+                      : t.color.success;
+                    return (
+                      <View key={sv.service_id} style={s.svcBlock}>
+                        <Text variant="small" numberOfLines={1}>{sv.name}</Text>
+                        <Text variant="small" numberOfLines={1} color={statusColor}>{status}</Text>
+                      </View>
+                    );
+                  }
+                  const sh = sv.shifts[0];
                   return (
                     <View key={sv.service_id} style={s.svcBlock}>
                       <Text variant="small" numberOfLines={1}>{sv.name}</Text>
-                      <Text variant="small" numberOfLines={1} color={statusColor}>{status}</Text>
+                      <Text variant="small" numberOfLines={1} color={t.color.primary}>{fmtTime(sv.starts_at)}–{fmtTime(sv.ends_at)}</Text>
+                      {sh?.role ? <Text variant="small" numberOfLines={1} color={t.color.primary}>{sh.role}</Text> : null}
+                      {sh?.asset_name ? <Text variant="small" numberOfLines={1} color={t.color.primary}>{sh.asset_name}</Text> : null}
+                      <Text variant="small" numberOfLines={1} color={t.color.primary}>{sv.facility_name ?? 'No start location'}</Text>
                     </View>
                   );
                 })
@@ -203,7 +217,7 @@ export default function RosterDetailScreen() {
       const tok = getAccessToken()!;
       const [d, rulesRes] = await Promise.all([
         getRoster(tok, rosterId),
-        getRosterRules(tok).catch(() => null),
+        isAdmin ? getRosterRules(tok).catch(() => null) : Promise.resolve(null),
       ]);
       setDetail(d);
       if (rulesRes) setRules(rulesRes.rules);
@@ -401,10 +415,11 @@ export default function RosterDetailScreen() {
             </Card>
           )}
 
-          {isAdmin && services.length > 0 && (
+          {services.length > 0 && (
             <WeekGrid
               services={services}
               weekStart={roster.week_start}
+              isAdmin={isAdmin}
               t={t}
               s={s}
             />
@@ -421,7 +436,7 @@ export default function RosterDetailScreen() {
                       <Text variant="body">{os.service_name}</Text>
                       <Text variant="small" muted>
                         {fmtDay(os.starts_at)} · {fmtTime(os.starts_at)}–{fmtTime(os.ends_at)}
-                        {os.location_label ? ` · ${os.location_label}` : ''}
+                        {os.facility_name ? ` · ${os.facility_name}` : ''}
                       </Text>
                       <Text variant="small" muted>
                         Covering for {os.declined_person_name} · {os.role ?? 'Crew'}
@@ -448,6 +463,8 @@ export default function RosterDetailScreen() {
           ) : (
             services.map(sv => {
               const isExpanded = expandedSvc === sv.service_id;
+              const myShift = !isAdmin ? sv.shifts[0] : undefined;
+              const myStatus = myShift ? shiftStatus(myShift) : undefined;
               return (
               <GroupedCard key={sv.service_id}>
                 <Pressable
@@ -458,23 +475,48 @@ export default function RosterDetailScreen() {
                   <View style={s.svcHeadLeft}>
                     <View style={s.svcTitleRow}>
                       <Text variant="label">{sv.name}</Text>
-                      {!sv.has_asset && <Badge label="No asset" tone="accent" />}
-                      {sv.has_asset && sv.shortfall > 0 && (
+                      {isAdmin && !sv.has_asset && <Badge label="No asset" tone="accent" />}
+                      {isAdmin && sv.has_asset && sv.shortfall > 0 && (
                         <Badge label={`${sv.shortfall} short`} tone="accent" />
                       )}
                     </View>
                     <Text variant="small" muted>
                       {fmtDay(sv.starts_at)} · {fmtTime(sv.starts_at)}–{fmtTime(sv.ends_at)}
-                      {sv.location_label ? ` · ${sv.location_label}` : ''}
+                      {sv.facility_name ? ` · ${sv.facility_name}` : ''}
                     </Text>
+                    {!isAdmin && myStatus && (
+                      <Text variant="small" color={
+                        myStatus === 'confirmed' ? t.color.success
+                        : myStatus === 'declined' ? t.color.danger
+                        : t.color.warning
+                      }>
+                        {myStatus === 'confirmed' ? 'Confirmed' : myStatus === 'declined' ? 'Declined' : 'Pending confirmation'}
+                      </Text>
+                    )}
                   </View>
-                  {sv.shifts.length > 0 && (
+                  {isAdmin && sv.shifts.length > 0 && (
                     <View style={s.avatarRow}>
                       {sv.shifts.map(sh => (
                         <View key={sh.id} style={s.avatar}>
                           <Text variant="small" color={t.color.primaryText}>{initials(sh.person_name)}</Text>
                         </View>
                       ))}
+                    </View>
+                  )}
+                  {/* Member pending: confirm/decline inline on the card */}
+                  {!isAdmin && isPublished && myStatus === 'pending' && myShift && (
+                    <View style={s.respondRow}>
+                      <Button
+                        label="Confirm"
+                        onPress={() => respond(myShift.id, 'confirm')}
+                        loading={busy === myShift.id}
+                      />
+                      <Button
+                        variant="ghost"
+                        label="Decline"
+                        onPress={() => respond(myShift.id, 'decline')}
+                        loading={busy === myShift.id}
+                      />
                     </View>
                   )}
                   <Ionicons
@@ -525,9 +567,25 @@ export default function RosterDetailScreen() {
                     )}
                   </GRow>
                 ) : isExpanded ? (
-                  sv.shifts.map((sh, i) => {
-                    const status = shiftStatus(sh);
+                  <>
+                  {!isAdmin && (() => {
+                    const crewmates = sv.shifts.slice(1);
+                    return (
+                      <GRow last={pickerFor !== sv.service_id}>
+                        <View style={s.shiftBody}>
+                          <Text variant="small" muted>
+                            {crewmates.length === 0
+                              ? 'No other crew on this shift'
+                              : `Working with ${crewmates.map(c => c.person_name).join(', ')}`}
+                          </Text>
+                        </View>
+                      </GRow>
+                    );
+                  })()}
+                  {sv.shifts.map((sh, i) => {
                     const isLast = i === sv.shifts.length - 1 && pickerFor !== sv.service_id;
+                    if (!isAdmin) return null;
+                    const status = shiftStatus(sh);
                     return (
                       <GRow key={sh.id} last={isLast}>
                         <View style={s.shiftBody}>
@@ -541,31 +599,7 @@ export default function RosterDetailScreen() {
                               : ' · Pending'
                             )}
                           </Text>
-                          {sh.rule_override && (
-                            <Badge label="Override" tone="accent" />
-                          )}
-
-                          {!isAdmin && isPublished && status === 'pending' && (
-                            <View style={s.respondRow}>
-                              <Button
-                                label="Confirm"
-                                onPress={() => respond(sh.id, 'confirm')}
-                                loading={busy === sh.id}
-                              />
-                              <Button
-                                variant="ghost"
-                                label="Decline"
-                                onPress={() => respond(sh.id, 'decline')}
-                                loading={busy === sh.id}
-                              />
-                            </View>
-                          )}
-                          {!isAdmin && isPublished && status === 'confirmed' && (
-                            <Badge label="Confirmed" tone="success" />
-                          )}
-                          {!isAdmin && isPublished && status === 'declined' && (
-                            <Badge label="Declined" tone="accent" />
-                          )}
+                          {sh.rule_override && <Badge label="Override" tone="accent" />}
                         </View>
                         {isAdmin && !isPublished && (
                           <Pressable
@@ -583,7 +617,8 @@ export default function RosterDetailScreen() {
                         )}
                       </GRow>
                     );
-                  })
+                  })}
+                  </>
                 ) : null}
 
                 {isExpanded && isAdmin && !isPublished && sv.has_asset && (

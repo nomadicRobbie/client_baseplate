@@ -40,7 +40,7 @@ const profilePlugin: FastifyPluginAsync = async (fastify) => {
 
     const isAdmin = u.role === 'admin' || u.role === 'super';
     const orgComplete = !!org?.org_name;
-    const personalComplete = !!authMe.name && !!userProfile?.preferred_contact;
+    const personalComplete = !!authMe.name;
 
     return {
       org: org ?? null,

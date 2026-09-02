@@ -225,8 +225,11 @@ export const getRosterByWeek = (anyDateInWeek: string) =>
 export const getRoster = (id: string) =>
   one<Roster>(`${SELECT_ROSTER} WHERE id = $1 AND deleted_at IS NULL`, [id])
 
-export const listRosters = (limit = 26) =>
-  query<Roster>(`${SELECT_ROSTER} WHERE deleted_at IS NULL ORDER BY week_start DESC LIMIT $1`, [limit])
+export const listRosters = (limit = 26, publishedOnly = false) =>
+  query<Roster>(
+    `${SELECT_ROSTER} WHERE deleted_at IS NULL${publishedOnly ? " AND status = 'published'" : ''} ORDER BY week_start DESC LIMIT $1`,
+    [limit],
+  )
 
 export const createRoster = (anyDateInWeek: string, createdBy: string | null) =>
   one<Roster>(
@@ -252,18 +255,21 @@ export async function getRosterDetail(rosterId: string): Promise<RosterDetail | 
 
   const services = await query<{
     id: string; name: string; starts_at: string; ends_at: string; timezone: string
-    location_label: string | null; status: ServiceStatus; required_roles: RequiredRole[]
+    facility_id: string | null; facility_name: string | null
+    status: ServiceStatus; required_roles: RequiredRole[]
     has_asset: boolean
   }>(
-    `SELECT s.id, s.name, s.starts_at, s.ends_at, s.timezone, s.location_label,
+    `SELECT s.id, s.name, s.starts_at, s.ends_at, s.timezone,
+            s.facility_id, fa.name AS facility_name,
             s.status, s.required_roles,
             EXISTS (
               SELECT 1 FROM service_assignments sa
                WHERE sa.service_id = s.id AND sa.subject_type = 'asset' AND sa.removed_at IS NULL
             ) AS has_asset
        FROM scheduled_services s
-      WHERE s.starts_at >= $1::date
-        AND s.starts_at <  $1::date + INTERVAL '7 days'
+       LEFT JOIN assets fa ON fa.id = s.facility_id
+      WHERE (s.starts_at AT TIME ZONE s.timezone)::date >= $1::date
+        AND (s.starts_at AT TIME ZONE s.timezone)::date <  $1::date + INTERVAL '7 days'
         AND s.status NOT IN ('cancelled', 'completed')
       ORDER BY s.starts_at`,
     [roster.week_start],
@@ -276,10 +282,14 @@ export async function getRosterDetail(rosterId: string): Promise<RosterDetail | 
         `SELECT sa.id, $1::uuid AS roster_id, sa.service_id, sa.subject_id AS person_id,
                 p.name AS person_name, sa.role,
                 sa.confirmed_at, sa.declined_at,
-                NULL::uuid AS asset_id, NULL::text AS asset_name,
+                rs.asset_id, a.name AS asset_name,
                 sa.assigned_at AS created_at
            FROM service_assignments sa
            JOIN people p ON p.id = sa.subject_id
+           LEFT JOIN roster_shifts rs ON rs.service_id = sa.service_id
+             AND rs.person_id = sa.subject_id
+             AND rs.roster_id = $1
+           LEFT JOIN assets a ON a.id = rs.asset_id
           WHERE sa.roster_id = $1 AND sa.subject_type = 'person' AND sa.removed_at IS NULL
           ORDER BY p.name`,
         [rosterId],
@@ -319,7 +329,8 @@ export async function getRosterDetail(rosterId: string): Promise<RosterDetail | 
       starts_at: s.starts_at,
       ends_at: s.ends_at,
       timezone: s.timezone,
-      location_label: s.location_label,
+      facility_id: s.facility_id,
+      facility_name: s.facility_name,
       status: s.status,
       has_asset: s.has_asset,
       required,
@@ -403,7 +414,8 @@ export async function publishRoster(rosterId: string, publishedBy: string | null
          SELECT $1, 'person'::service_subject_type_enum, $2, $3, $4, $5, $6
          WHERE NOT EXISTS (
            SELECT 1 FROM service_assignments
-            WHERE service_id = $1 AND subject_id = $2 AND subject_type = 'person' AND removed_at IS NULL
+            WHERE service_id = $1 AND subject_id = $2 AND subject_type = 'person'
+              AND removed_at IS NULL AND roster_id = $5
          )`,
         [sh.service_id, sh.person_id, sh.role, publishedBy, rosterId, sh.rule_override],
       )
@@ -517,7 +529,8 @@ export interface OpenShift {
   starts_at: string
   ends_at: string
   timezone: string
-  location_label: string | null
+  facility_id: string | null
+  facility_name: string | null
   declined_person_name: string
   role: string | null
 }
@@ -525,10 +538,12 @@ export interface OpenShift {
 export const listOpenShifts = (rosterId: string) =>
   query<OpenShift>(
     `SELECT sa.id AS assignment_id, sa.service_id,
-            s.name AS service_name, s.starts_at, s.ends_at, s.timezone, s.location_label,
+            s.name AS service_name, s.starts_at, s.ends_at, s.timezone,
+            s.facility_id, fa.name AS facility_name,
             p.name AS declined_person_name, sa.role
        FROM service_assignments sa
        JOIN scheduled_services s ON s.id = sa.service_id
+       LEFT JOIN assets fa ON fa.id = s.facility_id
        JOIN people p ON p.id = sa.subject_id
       WHERE sa.roster_id = $1
         AND sa.subject_type = 'person'
@@ -621,8 +636,8 @@ export async function generateRoster(
 
   const services = await query<{ id: string; required_roles: RequiredRole[] }>(
     `SELECT id, required_roles FROM scheduled_services
-      WHERE starts_at >= $1::date
-        AND starts_at <  $1::date + INTERVAL '7 days'
+      WHERE (starts_at AT TIME ZONE timezone)::date >= $1::date
+        AND (starts_at AT TIME ZONE timezone)::date <  $1::date + INTERVAL '7 days'
         AND status NOT IN ('cancelled', 'completed')
       ORDER BY starts_at`,
     [roster.week_start],

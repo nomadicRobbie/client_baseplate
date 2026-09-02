@@ -6,7 +6,7 @@ import { getPersonByUserId, getPushTokensForPeople, getPushTokensForModules } fr
 import { sendPush } from '../../utils/push'
 import {
   listUnavailability, upsertUnavailability, deleteUnavailability,
-  listRosters, getRoster, getRosterByWeek, getRosterDetail, generateRoster,
+  listRosters, getRoster, getRosterDetail, generateRoster,
   addRosterShift, deleteRosterShift, eligibleCrew,
   publishRoster, deleteRoster, confirmAssignment, declineAssignment, rosteredPeopleIds,
   autoDeclineForSickDay, listOpenShifts, acceptCover,
@@ -126,7 +126,11 @@ const rosterPlugin: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── GET /rosters ────────────────────────────────────────────────────────────
-  fastify.get('/rosters', { preHandler: admin }, async () => ({ rosters: await listRosters() }))
+  // Admins see all rosters (draft + published). Members see published only so
+  // they can navigate to their week and accept open shifts.
+  fastify.get('/rosters', { preHandler: member }, async (req) => ({
+    rosters: await listRosters(26, !isAdmin(req)),
+  }))
 
   // ── POST /rosters/generate ──────────────────────────────────────────────────
   // Takes any date in the target week. Regenerating replaces any existing roster
@@ -159,7 +163,11 @@ const rosterPlugin: FastifyPluginAsync = async (fastify) => {
       roster: detail.roster,
       services: detail.services
         .filter(s => s.shifts.some(sh => sh.person_id === own))
-        .map(s => ({ ...s, shifts: s.shifts.filter(sh => sh.person_id === own) })),
+        .map(s => {
+          const mine = s.shifts.filter(sh => sh.person_id === own);
+          const others = s.shifts.filter(sh => sh.person_id !== own);
+          return { ...s, shifts: [...mine, ...others] };
+        }),
     }
   })
 

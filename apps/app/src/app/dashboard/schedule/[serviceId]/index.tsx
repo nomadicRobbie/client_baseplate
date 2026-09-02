@@ -220,7 +220,7 @@ export default function ServiceDetailScreen() {
               <Text variant="title">{svc.name}</Text>
               <View style={s.metaRow}>
                 <Badge label={STATUS_LABEL[svc.status] ?? svc.status} tone={svc.status === 'confirmed' ? 'success' : 'neutral'} />
-                {svc.location_label && <Badge label={svc.location_label} tone="neutral" />}
+                {svc.facility_name && <Badge label={svc.facility_name} tone="neutral" />}
               </View>
             </View>
             {isAdmin && svc.status !== 'cancelled' && svc.status !== 'completed' && (

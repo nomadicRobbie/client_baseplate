@@ -301,7 +301,7 @@ function ServiceItem({ data, t, s }: { data: FeedServiceData; t: ThemeT; s: Retu
         <Ionicons name="calendar-outline" size={18} color={t.color.primary} style={s.itemIcon} />
         <View style={s.itemBody}>
           <Text variant="label">{data.name}</Text>
-          <Text variant="body">{date} · {when}{data.location_label ? ` · ${data.location_label}` : ''}</Text>
+          <Text variant="body">{date} · {when}{data.facility_name ? ` · ${data.facility_name}` : ''}</Text>
           <View style={s.itemMeta}>
             <StatusBadge level="due" label={gapLabel} />
             <Badge label="Schedule" tone="neutral" />

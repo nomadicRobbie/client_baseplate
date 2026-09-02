@@ -108,7 +108,7 @@ export default function TemplatesScreen() {
                   </Text>
                   <View style={s.meta}>
                     <Badge label={tmpl.active ? 'Active' : 'Inactive'} tone={tmpl.active ? 'success' : 'neutral'} />
-                    {tmpl.location_label ? <Badge label={tmpl.location_label} tone="neutral" /> : null}
+                    {tmpl.facility_name ? <Badge label={tmpl.facility_name} tone="neutral" /> : null}
                   </View>
 
                   {/* Generate controls — only for templates with recurrence */}

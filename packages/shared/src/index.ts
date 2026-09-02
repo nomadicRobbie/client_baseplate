@@ -686,7 +686,8 @@ export interface FeedServiceData {
   name: string
   starts_at: string
   timezone: string
-  location_label: string | null
+  facility_id: string | null
+  facility_name: string | null
   status: string
   capacity: number
   assigned_count: number
@@ -726,7 +727,8 @@ export interface ServiceTemplate {
   name: string
   duration_minutes: number
   default_capacity: number
-  location_label: string | null
+  facility_id: string | null
+  facility_name: string | null
   timezone: string
   required_roles: RequiredRole[]
   required_asset_types: RequiredAssetType[]
@@ -745,7 +747,8 @@ export interface ScheduledService {
   starts_at: string
   ends_at: string
   timezone: string
-  location_label: string | null
+  facility_id: string | null
+  facility_name: string | null
   capacity: number
   required_roles: RequiredRole[]
   status: ServiceStatus
@@ -872,7 +875,8 @@ export interface RosterServiceRow {
   starts_at: string
   ends_at: string
   timezone: string
-  location_label: string | null
+  facility_id: string | null
+  facility_name: string | null
   status: ServiceStatus
   has_asset: boolean
   required: number
@@ -894,7 +898,8 @@ export interface OpenShift {
   starts_at: string
   ends_at: string
   timezone: string
-  location_label: string | null
+  facility_id: string | null
+  facility_name: string | null
   declined_person_name: string
   role: string | null
 }

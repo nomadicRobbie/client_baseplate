@@ -62,12 +62,12 @@ export default function AddServiceScreen() {
   const [name, setName] = useState('');
   const [startsAt, setStartsAt] = useState(localISOString());
   const [duration, setDuration] = useState('240');
-  const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
   const [repeats, setRepeats] = useState(false);
   const [recurrence, setRecurrence] = useState<RecurrenceValue>({
     days: [], time: '09:00', startDate: localDate(), endDate: null,
   });
+  const [facilityId, setFacilityId] = useState<string | null>(null);
   const [assetId, setAssetId] = useState<string | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetTypes, setAssetTypes] = useState<AssetType[]>([]);
@@ -85,6 +85,8 @@ export default function AddServiceScreen() {
       .catch(() => {});
   }, []);
 
+  const facilitiesTypeId = assetTypes.find(at => at.name === 'Facilities')?.id;
+  const facilities = assets.filter(a => a.asset_type_id === facilitiesTypeId);
   const selectedAsset = assets.find(a => a.id === assetId);
   const selectedType = assetTypes.find(at => at.id === selectedAsset?.asset_type_id);
   const availableRoles = selectedType?.roles ?? [];
@@ -143,7 +145,7 @@ export default function AddServiceScreen() {
           starts_at: start.toISOString(),
           ends_at: end.toISOString(),
           timezone: tz,
-          location_label: location.trim() || null,
+          facility_id: facilityId,
           notes: notes.trim(),
           status: 'planned',
           asset_id: assetId,
@@ -155,7 +157,7 @@ export default function AddServiceScreen() {
           name: name.trim(),
           duration_minutes: durationMin,
           default_capacity: 0,
-          location_label: location.trim() || null,
+          facility_id: facilityId,
           timezone: tz,
           required_roles: roles,
           required_asset_types: [],
@@ -225,17 +227,15 @@ export default function AddServiceScreen() {
         {errors.duration ? <Text variant="small" color={t.color.danger}>{errors.duration}</Text> : null}
       </View>
 
-      {/* Location */}
-      <View style={s.field}>
-        <Text variant="label">Location (optional)</Text>
-        <TextInput
-          value={location}
-          onChangeText={setLocation}
-          placeholder="e.g. Pier 4, Westhaven"
-          placeholderTextColor={t.color.textMuted}
-          style={s.input}
+      {facilities.length > 0 && (
+        <SelectField
+          label="Facility"
+          value={facilityId}
+          onChange={setFacilityId}
+          placeholder="None"
+          options={facilities.map(f => ({ label: f.name, value: f.id }))}
         />
-      </View>
+      )}
 
       {/* Notes */}
       <View style={s.field}>

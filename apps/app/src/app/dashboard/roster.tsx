@@ -74,18 +74,19 @@ export default function RosterScreen() {
   const [showRules, setShowRules] = useState(false);
 
   const load = useCallback(async () => {
-    if (!isAdmin) { setLoading(false); return; }
     setLoading(true);
     try {
       const tok = getAccessToken()!;
-      const [r, rulesRes] = await Promise.all([
-        listRosters(tok),
-        getRosterRules(tok),
-      ]);
-      setRosters(r.rosters);
-      setRules(rulesRes.rules);
-      setEditRest(String(rulesRes.rules.min_rest_hours));
-      setEditDays(String(rulesRes.rules.max_consecutive_days));
+      if (isAdmin) {
+        const [r, rulesRes] = await Promise.all([listRosters(tok), getRosterRules(tok)]);
+        setRosters(r.rosters);
+        setRules(rulesRes.rules);
+        setEditRest(String(rulesRes.rules.min_rest_hours));
+        setEditDays(String(rulesRes.rules.max_consecutive_days));
+      } else {
+        const r = await listRosters(tok);
+        setRosters(r.rosters);
+      }
     } catch (e) {
       setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' });
     } finally {
@@ -145,17 +146,39 @@ export default function RosterScreen() {
     </Card>
   );
 
-  // Crew don't generate rosters — they reach their shifts from the week list an
-  // admin published, so this screen is just their way in.
+  // Crew reach their shifts from the published roster list — same list, filtered
+  // to published-only by the API.
   if (!isAdmin) {
     return (
       <Screen toast={msg} onDismissToast={() => setMsg(null)}>
         <Text variant="title">Roster</Text>
         {daysOffLink}
-        <Notice
-          tone="info"
-          message="Your shifts appear here once an admin publishes the roster for that week."
-        />
+        {loading ? (
+          <ActivityIndicator color={t.color.primary} />
+        ) : rosters.length === 0 ? (
+          <Notice
+            tone="info"
+            message="Your shifts will appear here once an admin publishes the roster for your week."
+          />
+        ) : (
+          <GroupedCard>
+            {rosters.map((r, i) => (
+              <GRow key={r.id} last={i === rosters.length - 1}>
+                <Pressable
+                  onPress={() => router.push({ pathname: '/dashboard/roster/[rosterId]', params: { rosterId: r.id } })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Roster for week of ${formatDMY(r.week_start)}`}
+                  style={s.link}
+                >
+                  <View style={s.rowBody}>
+                    <Text variant="label">{weekLabel(r.week_start)}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward-outline" size={16} color={t.color.textMuted} />
+                </Pressable>
+              </GRow>
+            ))}
+          </GroupedCard>
+        )}
       </Screen>
     );
   }
