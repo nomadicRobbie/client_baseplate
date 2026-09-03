@@ -43,7 +43,52 @@ Before provisioning a new client, you need:
 
 ---
 
-## 1 — Create the client repo
+## 1 — Run provision:client
+
+Run this once on your local machine from the `blnk_api` directory. It creates the tenant in blnk_api, sets up the Stripe billing product, configures blnk_auth, and emits both `.env` files ready to paste.
+
+```bash
+cd ~/git/blnk/blnk_api
+
+npm run provision:client -- \
+  --name "Acme Co" \
+  --slug acme-co \
+  --admin admin@acme.co \
+  --domain acme.blnk.nz \
+  --app-scheme acmeco \
+  --bundle-id nz.acmeco.app \
+  --plan starter \
+  --billing-amount 4900 \
+  --billing-interval month \
+  --currency nzd \
+  --features commerce,compliance,asset
+```
+
+**Args:**
+
+| Arg | Example | Notes |
+|---|---|---|
+| `--name` | `"Acme Co"` | Display name |
+| `--slug` | `acme-co` | Lowercase, hyphenated. Used everywhere. |
+| `--admin` | `admin@acme.co` | Comma-separate for multiple admins |
+| `--domain` | `acme.blnk.nz` | App domain (no protocol) |
+| `--app-scheme` | `acmeco` | URL scheme for deep links (no spaces/hyphens) |
+| `--bundle-id` | `nz.acmeco.app` | iOS bundle ID / Android package |
+| `--plan` | `starter` | Plan label (informational) |
+| `--billing-amount` | `4900` | Cents per interval. Omit to skip Stripe product. |
+| `--billing-interval` | `month` | `day`, `week`, `month`, or `year` |
+| `--currency` | `nzd` | Lowercase ISO code |
+| `--features` | `commerce,compliance,asset` | Any of: `commerce`, `compliance`, `asset`, `schedule`, `roster`, `analytics`, `locations`, `subscriptions`, `one_off` |
+
+The script prints two ready-to-paste blocks when it finishes:
+- `client_api .env` → paste into `apps/api/.env`
+- `apps/app .env` → paste into `apps/app/.env`
+
+> **The `BLNK_API_KEY` is shown once.** It's already in the `.env` output — copy both blocks before closing the terminal.
+
+---
+
+## 3 — Create the client repo
 
 On your local machine:
 
@@ -64,34 +109,7 @@ git push -u origin main
 
 ---
 
-## 2 — Configure blnk_auth
-
-The client's tenant must exist in blnk_auth before the API will accept logins.
-SSH into the blnk server and run:
-
-```bash
-ssh robbie@blnk
-docker exec -it blnk_postgres psql -U blnk -d blnk_auth
-```
-
-```sql
--- Insert tenant auth config
-INSERT INTO tenant_auth_config (slug, rp_id, allowed_origins, signup_mode)
-VALUES (
-  'acme-co',
-  'acme.blnk.nz',
-  '{https://acme.blnk.nz}',
-  'invite'         -- 'invite' = admin-only signups; 'open' = self-serve
-);
-```
-
-> **`rp_id`** is the passkey relying-party domain — must match where the app is served.
-> **`allowed_origins`** is the full origin (with protocol). No trailing slash.
-> Update these later if the domain changes — see [`db-operations.md`](./db-operations.md).
-
----
-
-## 3 — Provision the database
+## 4 — Provision the database
 
 On the blnk server, create the client database inside the existing `blnk_postgres` container:
 
@@ -108,66 +126,26 @@ docker exec -it blnk_postgres psql -U blnk -d postgres -c "
 
 ---
 
-## 4 — Configure environment variables
+## 5 — Configure environment variables
 
-### `apps/api/.env`
-
-Copy `.env.example` and fill in client values:
+`provision:client` (step 1) emits both `.env` blocks ready to paste. On the blnk server, in the client repo:
 
 ```bash
-# on the blnk server, in the client repo directory
-cp apps/api/.env.example apps/api/.env
-nano apps/api/.env
+nano apps/api/.env   # paste the client_api block from provision output
+nano apps/app/.env   # paste the apps/app block from provision output
 ```
 
-Key values to set for a new client:
+Then fill in the blanks:
 
-| Variable | Value |
-|---|---|
-| `NODE_ENV` | `production` |
-| `PORT` | pick a free port (increment from last client — see §8) |
-| `TENANT_SLUG` | `acme-co` |
-| `DATABASE_URL` | `postgres://acme-co:your-password@localhost:5432/acme-co` |
-| `BLNK_AUTH_URL` | `http://localhost:3100` |
-| `BLNK_API_URL` | `http://localhost:8000` |
-| `BLNK_API_KEY` | blnk_api ApiKey for this tenant (get from blnk_api admin) |
-| `ALLOWED_ORIGINS` | `https://acme.blnk.nz` |
-| `FEATURE_COMPLIANCE` | `true` / `false` per agreed modules |
-| `FEATURE_ASSET` | `true` / `false` |
-| `FEATURE_COMMERCE` | `true` / `false` |
-| `FEATURE_ROSTER` | `true` / `false` |
-| `FEATURE_SCHEDULE` | `true` if roster is enabled |
-| `APPLE_APP_IDS` | `TEAMID.nz.acmeco.app` (if native app exists) |
-| `ANDROID_PACKAGE` | `nz.acmeco.app` (if native app exists) |
-
-Leave `FEATURE_STRIPE`, `FEATURE_ONE_OFF`, `FEATURE_SUBSCRIPTIONS` as `false` unless the client uses their own Stripe account for end-user payments.
-
-### `apps/app/.env`
-
-```bash
-cp apps/app/.env.example apps/app/.env
-nano apps/app/.env
-```
-
-Key values:
-
-| Variable | Value |
-|---|---|
-| `EXPO_PUBLIC_API_URL` | `https://acme-api.blnk.nz` |
-| `EXPO_PUBLIC_TENANT_SLUG` | `acme-co` |
-| `EXPO_PUBLIC_ENV` | `production` |
-| `EXPO_PUBLIC_CURRENCY` | `NZD` (or client's currency) |
-| `EXPO_PUBLIC_APP_NAME` | `Acme Co` |
-| `EXPO_PUBLIC_APP_SLUG` | `acme-co` |
-| `EXPO_PUBLIC_APP_SCHEME` | `acmeco` |
-| `EXPO_PUBLIC_BUNDLE_ID` | `nz.acmeco.app` |
-| `EXPO_PUBLIC_APP_DOMAIN` | `acme.blnk.nz` |
-| `EXPO_PUBLIC_EAS_PROJECT_ID` | from Expo dashboard |
-| `EXPO_PUBLIC_SPLASH_COLOR` | client brand colour (hex) |
+- `PORT` — pick a free port (increment from last client — see §11 port registry)
+- `DATABASE_URL` — update password to the one set in step 4
+- `EXPO_PUBLIC_EAS_PROJECT_ID` — from Expo dashboard (if native app)
+- `APPLE_APP_IDS` / `ANDROID_PACKAGE` — `TEAMID.nz.acmeco.app` / `nz.acmeco.app` (if native app)
+- `STRIPE_API_KEY` / `STRIPE_WEBHOOK_SECRET` — client's own Stripe keys (only if `FEATURE_STRIPE=true`)
 
 ---
 
-## 5 — First deploy
+## 6 — First deploy
 
 On the blnk server, in the client repo directory:
 
@@ -196,7 +174,7 @@ curl https://acme-api.blnk.nz/health
 
 ---
 
-## 6 — Configure nginx
+## 7 — Configure nginx
 
 Each client needs two nginx server blocks: one for the API (reverse proxy to PM2) and one for the frontend (static files).
 
@@ -248,7 +226,7 @@ certbot --nginx -d acme.blnk.nz -d acme-api.blnk.nz
 
 ---
 
-## 7 — Set up automated daily updates
+## 8 — Set up automated daily updates
 
 On the blnk server, in the client's user crontab:
 
@@ -272,7 +250,7 @@ mkdir -p ~/blnk/logs
 
 ---
 
-## 8 — Set up daily DB backup
+## 9 — Set up daily DB backup
 
 Add a second cron entry for the backup script (runs at 2am, one hour before the 3am deploy):
 
@@ -295,7 +273,7 @@ pm2 start client-api
 
 ---
 
-## 9 — Set up uptime monitoring
+## 10 — Set up uptime monitoring
 
 Use [UptimeRobot](https://uptimerobot.com) (free tier is fine — 5-minute intervals).
 
@@ -311,7 +289,7 @@ The `/health` endpoint returns:
 
 ---
 
-## 10 — Port registry
+## 11 — Port registry
 
 Track which port each client API uses to avoid conflicts. Update this table when adding a client.
 
