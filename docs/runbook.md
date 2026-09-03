@@ -333,17 +333,11 @@ cd ~/blnk/blnk_clients/client-acme-co
 bash deploy.sh
 ```
 
-### Run migrations after a client-baseplate update
+### Migrations
 
-Migrations don't run automatically in `deploy.sh` — run them manually when a release includes new migration files:
+`deploy.sh` runs `pnpm migrate` automatically on every deploy. Migrations are idempotent — already-applied files are skipped. No manual step needed.
 
-```bash
-ssh robbie@blnk
-cd ~/blnk/blnk_clients/client-acme-co/apps/api
-pnpm migrate
-```
-
-Check the release notes for client-baseplate — migration files are in `apps/api/src/db/migrations/` and named sequentially (`052_*.sql`, etc.).
+If a migration fails mid-deploy, the deploy aborts (API keeps running on the old build). Check the log, fix the migration, then re-run `deploy.sh`.
 
 ### Enable or disable a module
 

@@ -15,6 +15,9 @@ git merge upstream/main --no-edit
 echo "→ installing dependencies"
 pnpm install --frozen-lockfile
 
+echo "→ running migrations"
+(cd apps/api && pnpm migrate)
+
 echo "→ building"
 pnpm build --filter=@blnk/shared
 (cd apps/app && npx expo export -p web)
