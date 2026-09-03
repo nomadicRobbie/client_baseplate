@@ -272,7 +272,46 @@ mkdir -p ~/blnk/logs
 
 ---
 
-## 8 — Port registry
+## 8 — Set up daily DB backup
+
+Add a second cron entry for the backup script (runs at 2am, one hour before the 3am deploy):
+
+```
+0 2 * * * cd /home/deploy/blnk/blnk_clients/client-acme-co && bash backup.sh >> /home/deploy/blnk/logs/acme-co-backup.log 2>&1
+```
+
+Backups land in `~/blnk/backups/<slug>/` as `pg_dump` custom-format files. The last 7 days are kept; older files are deleted automatically.
+
+**To restore from a backup:**
+```bash
+# Stop the API first so nothing writes during restore
+pm2 stop client-api
+
+# Restore (replace DB_NAME and path as needed)
+pg_restore --dbname="$DATABASE_URL" --clean --if-exists /path/to/backup.dump
+
+pm2 start client-api
+```
+
+---
+
+## 9 — Set up uptime monitoring
+
+Use [UptimeRobot](https://uptimerobot.com) (free tier is fine — 5-minute intervals).
+
+1. Add a new monitor: **HTTP(s)**, type **Keyword**
+2. URL: `https://acme-api.blnk.nz/health`
+3. Keyword to find: `"status":"ok"`
+4. Alert contact: your email or phone
+
+The `/health` endpoint returns:
+```json
+{ "status": "ok", "service": "client_api", "tenant": "acme-co", "uptime": 123.4, "timestamp": "..." }
+```
+
+---
+
+## 10 — Port registry
 
 Track which port each client API uses to avoid conflicts. Update this table when adding a client.
 
