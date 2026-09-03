@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import {
   View, Pressable, Image, useWindowDimensions, Platform,
-  TextInput, LayoutAnimation, UIManager,
+  TextInput, LayoutAnimation, UIManager, Linking,
 } from 'react-native';
 
 if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true);
@@ -253,6 +253,21 @@ export default function Account() {
             </View>
             {canEnrolPasskey && <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />}
           </Pressable>
+        </GroupedCard>
+      </View>
+
+      {/* ── Legal ────────────────────────────────────── */}
+      <View style={{ gap: 8 }}>
+        <SectionLabel>Legal</SectionLabel>
+        <GroupedCard>
+          <GRow onPress={() => Linking.openURL('https://blnk.nz/terms')}>
+            <Text variant="label" style={{ flex: 1 }}>Terms of Service</Text>
+            <Ionicons name="open-outline" size={16} color={t.color.textMuted} />
+          </GRow>
+          <GRow last onPress={() => Linking.openURL('https://blnk.nz/privacy')}>
+            <Text variant="label" style={{ flex: 1 }}>Privacy Policy</Text>
+            <Ionicons name="open-outline" size={16} color={t.color.textMuted} />
+          </GRow>
         </GroupedCard>
       </View>
 

@@ -568,6 +568,11 @@ export function SectionLabel({ children, right, style }: {
   );
 }
 
+export function LinkText({ onPress, children }: { onPress: () => void; children: ReactNode }) {
+  const t = useTheme();
+  return <RNText onPress={onPress} style={{ color: t.color.primary }}>{children}</RNText>;
+}
+
 // ── FieldRow — 56px grouped row, taps to expand inline editor ─────────────────
 export function FieldRow({ label, displayValue, last, children }: {
   label: string;

@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { otpSend, otpVerify, passkeyLoginBegin, passkeyLoginComplete, TENANT } from '@/lib/api';
 import { setTokens } from '@/lib/session';
 import { doAuthenticate, passkeySupported } from '@/lib/passkey';
 import { useTheme } from '@/theme';
 import { getItem, setItem } from '@/lib/storage';
-import { Screen, Text, GroupedCard, Button, TextField } from '@/ui/components';
+import { Screen, Text, GroupedCard, Button, TextField, LinkText } from '@/ui/components';
 
 type Msg = { text: string; tone: 'info' | 'success' | 'error' };
 type ThemeT = ReturnType<typeof useTheme>;
@@ -92,6 +92,13 @@ export default function Login() {
           {passkeySupported && (
             <Button label="Sign in with passkey" variant="secondary" onPress={loginPasskey} loading={busy} />
           )}
+
+          <Text variant="small" muted style={{ textAlign: 'center' as const }}>
+            By signing in you agree to our{' '}
+            <LinkText onPress={() => Linking.openURL('https://blnk.nz/terms')}>Terms of Service</LinkText>
+            {' '}and{' '}
+            <LinkText onPress={() => Linking.openURL('https://blnk.nz/privacy')}>Privacy Policy</LinkText>.
+          </Text>
 
         </View>
       </View>
