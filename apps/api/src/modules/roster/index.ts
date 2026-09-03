@@ -118,10 +118,11 @@ const rosterPlugin: FastifyPluginAsync = async (fastify) => {
       properties: {
         min_rest_hours:       { type: 'integer', minimum: 0, maximum: 48 },
         max_consecutive_days: { type: 'integer', minimum: 1, maximum: 14 },
+        max_daily_hours:      { type: 'integer', minimum: 1, maximum: 24 },
       },
     } },
   }, async (req) => {
-    const body = req.body as { min_rest_hours?: number; max_consecutive_days?: number }
+    const body = req.body as { min_rest_hours?: number; max_consecutive_days?: number; max_daily_hours?: number }
     return { rules: await updateRosterRules(body, req.user!.userId) }
   })
 

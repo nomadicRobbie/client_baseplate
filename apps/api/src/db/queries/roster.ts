@@ -77,33 +77,42 @@ export const deleteUnavailability = async (id: string, personId: string | null):
 // not off that day, and are not already committed to something that overlaps it.
 // Defaults if the roster_rules row is missing (shouldn't happen after migration).
 const DEFAULT_MIN_REST_HOURS = 10
-const DEFAULT_MAX_CONSECUTIVE_DAYS = 6
+const DEFAULT_MAX_CONSECUTIVE_DAYS = 5
+const DEFAULT_MAX_DAILY_HOURS = 8
 
 export async function getRosterRules(): Promise<RosterRules> {
-  const [row] = await query<RosterRules>('SELECT min_rest_hours, max_consecutive_days, updated_at, updated_by FROM roster_rules WHERE id = true')
-  return row ?? { min_rest_hours: DEFAULT_MIN_REST_HOURS, max_consecutive_days: DEFAULT_MAX_CONSECUTIVE_DAYS, updated_at: new Date().toISOString(), updated_by: null }
+  const [row] = await query<RosterRules>('SELECT min_rest_hours, max_consecutive_days, max_daily_hours, updated_at, updated_by FROM roster_rules WHERE id = true')
+  return row ?? { min_rest_hours: DEFAULT_MIN_REST_HOURS, max_consecutive_days: DEFAULT_MAX_CONSECUTIVE_DAYS, max_daily_hours: DEFAULT_MAX_DAILY_HOURS, updated_at: new Date().toISOString(), updated_by: null }
 }
 
 export async function updateRosterRules(
-  body: { min_rest_hours?: number; max_consecutive_days?: number },
+  body: { min_rest_hours?: number; max_consecutive_days?: number; max_daily_hours?: number },
   updatedBy: string | null,
 ): Promise<RosterRules> {
   const [row] = await query<RosterRules>(
     `UPDATE roster_rules SET
        min_rest_hours = COALESCE($1, min_rest_hours),
        max_consecutive_days = COALESCE($2, max_consecutive_days),
+       max_daily_hours = COALESCE($3, max_daily_hours),
        updated_at = now(),
-       updated_by = $3
+       updated_by = $4
      WHERE id = true
-     RETURNING min_rest_hours, max_consecutive_days, updated_at, updated_by`,
-    [body.min_rest_hours ?? null, body.max_consecutive_days ?? null, updatedBy],
+     RETURNING min_rest_hours, max_consecutive_days, max_daily_hours, updated_at, updated_by`,
+    [body.min_rest_hours ?? null, body.max_consecutive_days ?? null, body.max_daily_hours ?? null, updatedBy],
   )
   return row!
 }
 
-// Params: $1=serviceId, $2=rosterId, $3=excludeIds[], $4=minRestHours, $5=maxDays
+// Params: $1=serviceId, $2=rosterId, $3=excludeIds[], $4=minRestHours, $5=maxDailyHours, $6=maxDays
+//
+// Rest rule is between-day only: same-day services are not blocked by min_rest_hours.
+// Daily hours cap: sum of all same-day service durations (published + draft roster)
+// must stay under max_daily_hours after adding this service.
 const ELIGIBLE_SQL = `WITH svc AS (
-       SELECT id, starts_at, ends_at, timezone FROM scheduled_services WHERE id = $1
+       SELECT id, starts_at, ends_at, timezone,
+              (starts_at AT TIME ZONE timezone)::date AS local_date,
+              EXTRACT(EPOCH FROM (ends_at - starts_at)) / 3600.0 AS duration_hours
+         FROM scheduled_services WHERE id = $1
      ),
      candidates AS (
        SELECT DISTINCT ON (p.id)
@@ -115,11 +124,12 @@ const ELIGIBLE_SQL = `WITH svc AS (
          JOIN asset_assignments aa ON aa.asset_id = a.id
          JOIN people p            ON p.id = aa.person_id AND p.active
         WHERE
+          -- Not marked unavailable on this day.
           NOT EXISTS (
             SELECT 1 FROM person_unavailability u
-             WHERE u.person_id = p.id
-               AND u.date = (s.starts_at AT TIME ZONE s.timezone)::date
+             WHERE u.person_id = p.id AND u.date = s.local_date
           )
+          -- No overlapping published assignment (different service, not cancelled/completed).
           AND NOT EXISTS (
             SELECT 1 FROM service_assignments sa2
               JOIN scheduled_services s2 ON s2.id = sa2.service_id
@@ -129,6 +139,7 @@ const ELIGIBLE_SQL = `WITH svc AS (
                AND s2.status NOT IN ('cancelled', 'completed')
                AND s2.starts_at < s.ends_at AND s2.ends_at > s.starts_at
           )
+          -- No overlapping draft-roster shift.
           AND ($2::uuid IS NULL OR NOT EXISTS (
             SELECT 1 FROM roster_shifts rs
               JOIN scheduled_services s3 ON s3.id = rs.service_id
@@ -137,6 +148,9 @@ const ELIGIBLE_SQL = `WITH svc AS (
                AND s3.starts_at < s.ends_at AND s3.ends_at > s.starts_at
           ))
           AND ($3::uuid[] IS NULL OR p.id <> ALL($3))
+          -- Between-day rest: skip if the prior shift ended on the same local date.
+          -- Only block when the ending shift was on a DIFFERENT (earlier) day and
+          -- the gap to this service's start is less than min_rest_hours.
           AND NOT EXISTS (
             SELECT 1 FROM service_assignments sa3
               JOIN scheduled_services s4 ON s4.id = sa3.service_id
@@ -145,6 +159,8 @@ const ELIGIBLE_SQL = `WITH svc AS (
                AND s4.id <> s.id
                AND s4.ends_at > s.starts_at - ($4 || ' hours')::interval
                AND s4.ends_at <= s.starts_at
+               -- same-day transitions are fine; rest only applies across day boundaries
+               AND (s4.ends_at AT TIME ZONE s.timezone)::date < s.local_date
           )
           AND ($2::uuid IS NULL OR NOT EXISTS (
             SELECT 1 FROM roster_shifts rs2
@@ -153,28 +169,48 @@ const ELIGIBLE_SQL = `WITH svc AS (
                AND s5.id <> s.id
                AND s5.ends_at > s.starts_at - ($4 || ' hours')::interval
                AND s5.ends_at <= s.starts_at
+               AND (s5.ends_at AT TIME ZONE s.timezone)::date < s.local_date
           ))
+          -- Daily hours cap: published + draft hours on the same local date + this
+          -- service must not exceed max_daily_hours.
           AND (
-            SELECT count(DISTINCT d) FROM (
-              SELECT (s6.starts_at AT TIME ZONE s.timezone)::date AS d
+            s.duration_hours + COALESCE((
+              SELECT SUM(EXTRACT(EPOCH FROM (s6.ends_at - s6.starts_at)) / 3600.0)
                 FROM service_assignments sa4
                 JOIN scheduled_services s6 ON s6.id = sa4.service_id
                WHERE sa4.subject_id = p.id AND sa4.subject_type = 'person'
                  AND sa4.removed_at IS NULL
-                 AND (s6.starts_at AT TIME ZONE s.timezone)::date
-                     BETWEEN (s.starts_at AT TIME ZONE s.timezone)::date - 6
-                         AND (s.starts_at AT TIME ZONE s.timezone)::date - 1
-              UNION ALL
-              SELECT (s7.starts_at AT TIME ZONE s.timezone)::date AS d
+                 AND s6.id <> s.id
+                 AND s6.status NOT IN ('cancelled', 'completed')
+                 AND (s6.starts_at AT TIME ZONE s.timezone)::date = s.local_date
+            ), 0) + COALESCE((
+              SELECT SUM(EXTRACT(EPOCH FROM (s7.ends_at - s7.starts_at)) / 3600.0)
                 FROM roster_shifts rs3
                 JOIN scheduled_services s7 ON s7.id = rs3.service_id
                WHERE rs3.person_id = p.id
-                 AND ($2::uuid IS NULL OR rs3.roster_id = $2)
-                 AND (s7.starts_at AT TIME ZONE s.timezone)::date
-                     BETWEEN (s.starts_at AT TIME ZONE s.timezone)::date - 6
-                         AND (s.starts_at AT TIME ZONE s.timezone)::date - 1
+                 AND s7.id <> s.id
+                 AND (s7.starts_at AT TIME ZONE s.timezone)::date = s.local_date
+            ), 0)
+          ) <= $5
+          -- Max consecutive days in a 7-day window.
+          AND (
+            SELECT count(DISTINCT d) FROM (
+              SELECT (s8.starts_at AT TIME ZONE s.timezone)::date AS d
+                FROM service_assignments sa5
+                JOIN scheduled_services s8 ON s8.id = sa5.service_id
+               WHERE sa5.subject_id = p.id AND sa5.subject_type = 'person'
+                 AND sa5.removed_at IS NULL
+                 AND (s8.starts_at AT TIME ZONE s.timezone)::date
+                     BETWEEN s.local_date - 6 AND s.local_date - 1
+              UNION ALL
+              SELECT (s9.starts_at AT TIME ZONE s.timezone)::date AS d
+                FROM roster_shifts rs4
+                JOIN scheduled_services s9 ON s9.id = rs4.service_id
+               WHERE rs4.person_id = p.id
+                 AND (s9.starts_at AT TIME ZONE s.timezone)::date
+                     BETWEEN s.local_date - 6 AND s.local_date - 1
             ) worked
-          ) < $5
+          ) < $6
         ORDER BY p.id, aa.created_at
      )
      SELECT * FROM candidates ORDER BY name`
@@ -184,7 +220,7 @@ export async function eligibleCrew(
   opts: { rosterId?: string; exclude?: string[]; skipRules?: boolean } = {},
 ): Promise<EligibleCrew[]> {
   const rules = await getRosterRules()
-  const { min_rest_hours, max_consecutive_days } = rules
+  const { min_rest_hours, max_daily_hours, max_consecutive_days } = rules
   const params = [
     serviceId,
     opts.rosterId ?? null,
@@ -192,15 +228,15 @@ export async function eligibleCrew(
   ]
 
   if (!opts.skipRules) {
-    const rows = await query<EligibleCrew>(ELIGIBLE_SQL, [...params, min_rest_hours, max_consecutive_days])
+    const rows = await query<EligibleCrew>(ELIGIBLE_SQL, [...params, min_rest_hours, max_daily_hours, max_consecutive_days])
     return rows.map(r => ({ ...r, blocked_reason: null }))
   }
 
   // Override mode: run permissive (rules disabled) then strict to annotate
   // who would normally be blocked.
   const [permissive, strict] = await Promise.all([
-    query<EligibleCrew>(ELIGIBLE_SQL, [...params, 0, 999]),
-    query<EligibleCrew>(ELIGIBLE_SQL, [...params, min_rest_hours, max_consecutive_days]),
+    query<EligibleCrew>(ELIGIBLE_SQL, [...params, 0, 999, 999]),
+    query<EligibleCrew>(ELIGIBLE_SQL, [...params, min_rest_hours, max_daily_hours, max_consecutive_days]),
   ])
 
   const strictIds = new Set(strict.map(r => r.person_id))
@@ -209,7 +245,7 @@ export async function eligibleCrew(
     ...r,
     blocked_reason: strictIds.has(r.person_id)
       ? null
-      : `Exceeds rules: min ${min_rest_hours}h rest between shifts, max ${max_consecutive_days} days in 7`,
+      : `Exceeds rules: min ${min_rest_hours}h rest between days, max ${max_daily_hours}h per day, max ${max_consecutive_days} days in 7`,
   }))
 }
 
