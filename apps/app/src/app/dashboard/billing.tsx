@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { View, Platform, Pressable } from 'react-native';
-import { useLocalSearchParams, useRouter, Redirect } from 'expo-router';
+import { useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
-import type { ClientSubscription } from '@blnk/shared';
+import type { BlnkBillingStatus } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
-import { listMySubscriptions, subscribeCheckout, cancelSubscription } from '@/lib/api';
+import { getBlnkBilling, blnkBillingCheckout, blnkBillingPortal } from '@/lib/api';
 import { Screen, Text, GroupedCard, GRow, SectionLabel } from '@/ui/components';
 import { useTheme } from '@/theme';
 import { formatDMY } from '@/lib/format';
@@ -23,13 +23,11 @@ const makeStyles = (t: ThemeT) => ({
   statusPill: (ok: boolean) => ({ paddingVertical: 4, paddingHorizontal: 10, borderRadius: t.radius.pill, borderWidth: 1, borderColor: ok ? t.color.primary : t.color.border, backgroundColor: ok ? t.color.primary + '18' : 'transparent' }),
 });
 
-const PRICE_ID = process.env.EXPO_PUBLIC_SUBSCRIPTION_PRICE_ID ?? '';
-
 function origin(): string {
   return Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : 'https://example.com';
 }
 
-async function goToCheckout(url: string) {
+async function openUrl(url: string) {
   if (Platform.OS === 'web' && typeof window !== 'undefined') window.location.href = url;
   else await WebBrowser.openBrowserAsync(url);
 }
@@ -50,54 +48,45 @@ export default function Billing() {
   const t = useTheme();
   const s = makeStyles(t);
   const router = useRouter();
-  const { features, user } = useAuth();
+  const { user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'super';
-  const params = useLocalSearchParams<{ billing?: string }>();
-  const [subs, setSubs] = useState<ClientSubscription[]>([]);
+  const [billing, setBilling] = useState<BlnkBillingStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; tone: 'success' | 'error' | 'info' } | null>(null);
 
   const load = async () => {
     setLoading(true);
-    try { setSubs((await listMySubscriptions(getAccessToken()!)).subscriptions); }
+    try { setBilling(await getBlnkBilling(getAccessToken()!)); }
     catch (e) { setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' }); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    if (params.billing === 'success') setMsg({ text: 'Payment complete — thank you!', tone: 'success' });
-    else if (params.billing === 'cancel') setMsg({ text: 'Checkout cancelled.', tone: 'info' });
-    void load();
-  }, [params.billing]);
+  useEffect(() => { void load(); }, []);
 
-  if (features && !features.stripe) return <Redirect href="/dashboard" />;
   if (!isAdmin) return <Redirect href="/dashboard" />;
 
-  const active = subs.find((s) => ['active', 'trialing', 'past_due'].includes(s.status));
+  const active = billing && billing.status !== 'none' && ['active', 'trialing', 'past_due'].includes(billing.status);
 
   const urls = () => ({
-    success_url: `${origin()}/dashboard/billing?billing=success`,
-    cancel_url: `${origin()}/dashboard/billing?billing=cancel`,
+    success_url: `${origin()}/dashboard/billing`,
+    cancel_url: `${origin()}/dashboard/billing`,
   });
 
   const subscribe = async () => {
-    if (!PRICE_ID) { setMsg({ text: 'No plan configured.', tone: 'error' }); return; }
     setBusy(true); setMsg(null);
     try {
-      const { url } = await subscribeCheckout(getAccessToken()!, { price_id: PRICE_ID, ...urls() });
-      await goToCheckout(url);
+      const { url } = await blnkBillingCheckout(getAccessToken()!, urls());
+      await openUrl(url);
     } catch (e) { setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' }); }
     finally { setBusy(false); }
   };
 
-  const cancel = async () => {
-    if (!active) return;
+  const openPortal = async () => {
     setBusy(true); setMsg(null);
     try {
-      await cancelSubscription(getAccessToken()!, active.stripe_subscription_id);
-      setMsg({ text: 'Subscription will cancel at period end.', tone: 'info' });
-      await load();
+      const { url } = await blnkBillingPortal(getAccessToken()!, { return_url: `${origin()}/dashboard/billing` });
+      await openUrl(url);
     } catch (e) { setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' }); }
     finally { setBusy(false); }
   };
@@ -109,66 +98,65 @@ export default function Billing() {
         <Text variant="label" color={t.color.primary}>Account</Text>
       </Pressable>
 
-      {loading ? null : active ? (
+      {loading ? null : active && billing ? (
         <>
           <View style={s.section}>
             <SectionLabel>Subscription</SectionLabel>
             <GroupedCard>
-              <GRow>
-                <Text variant="label" style={s.flex1}>Plan</Text>
-                <Text variant="body" muted>{active.stripe_price_id ? 'Operator' : '—'}</Text>
-              </GRow>
-              <GRow>
-                <Text variant="label" style={s.flex1}>Status</Text>
-                <StatusPill status={active.status} />
-              </GRow>
-              {!!active.current_period_end && (
+              {!!billing.plan_name && (
                 <GRow>
-                  <Text variant="label" style={s.flex1}>{active.cancel_at_period_end ? 'Cancels' : 'Renews'}</Text>
-                  <Text variant="body" muted>{formatDMY(active.current_period_end)}</Text>
+                  <Text variant="label" style={s.flex1}>Plan</Text>
+                  <Text variant="body" muted>{billing.plan_name}</Text>
                 </GRow>
               )}
-              <GRow last>
-                <Text variant="label" style={s.flex1}>Monthly total</Text>
-                <Text variant="body" style={s.bold}>—</Text>
+              <GRow>
+                <Text variant="label" style={s.flex1}>Status</Text>
+                <StatusPill status={billing.status} />
               </GRow>
+              {!!billing.current_period_end && (
+                <GRow>
+                  <Text variant="label" style={s.flex1}>{billing.cancel_at_period_end ? 'Cancels' : 'Renews'}</Text>
+                  <Text variant="body" muted>{formatDMY(billing.current_period_end)}</Text>
+                </GRow>
+              )}
+              {billing.next_invoice_cents != null && !!billing.currency && (
+                <GRow>
+                  <Text variant="label" style={s.flex1}>Monthly total</Text>
+                  <Text variant="body" style={s.bold}>
+                    {new Intl.NumberFormat('en', { style: 'currency', currency: billing.currency.toUpperCase() }).format(billing.next_invoice_cents / 100)}
+                  </Text>
+                </GRow>
+              )}
+              {!!billing.card_last4 && (
+                <GRow last>
+                  <Text variant="label" style={s.flex1}>Card</Text>
+                  <Text variant="body" muted>•••• {billing.card_last4}</Text>
+                </GRow>
+              )}
             </GroupedCard>
           </View>
 
           <View style={s.section}>
             <SectionLabel>Manage</SectionLabel>
             <GroupedCard>
-              <GRow onPress={subscribe}>
-                <View style={s.iconBox}>
-                  <Ionicons name="swap-horizontal-outline" size={18} color={t.color.text} />
-                </View>
-                <Text variant="label" style={s.flex1}>Change plan</Text>
-                <Ionicons name="chevron-forward" size={16} color={t.color.textMuted} />
-              </GRow>
-              <GRow>
+              <GRow onPress={openPortal}>
                 <View style={s.iconBox}>
                   <Ionicons name="card-outline" size={18} color={t.color.text} />
                 </View>
-                <Text variant="label" style={s.flex1}>Payment method</Text>
+                <Text variant="label" style={s.flex1}>Payment method &amp; invoices</Text>
                 <Ionicons name="chevron-forward" size={16} color={t.color.textMuted} />
               </GRow>
-              <GRow last>
-                <View style={s.iconBox}>
-                  <Ionicons name="receipt-outline" size={18} color={t.color.text} />
-                </View>
-                <Text variant="label" style={s.flex1}>Invoices</Text>
-                <Ionicons name="chevron-forward" size={16} color={t.color.textMuted} />
-              </GRow>
+              {!billing.cancel_at_period_end && (
+                <GRow last onPress={openPortal}>
+                  <View style={s.iconBox}>
+                    <Ionicons name="close-circle-outline" size={18} color={t.color.danger} />
+                  </View>
+                  <Text variant="label" style={s.flex1} color={t.color.danger}>Cancel subscription</Text>
+                  <Ionicons name="chevron-forward" size={16} color={t.color.textMuted} />
+                </GRow>
+              )}
             </GroupedCard>
           </View>
-
-          {!active.cancel_at_period_end && (
-            <GroupedCard>
-              <Pressable onPress={cancel} disabled={busy} accessibilityRole="button" style={s.cancelRow}>
-                <Text variant="label" color={t.color.danger}>{busy ? 'Cancelling…' : 'Cancel subscription'}</Text>
-              </Pressable>
-            </GroupedCard>
-          )}
         </>
       ) : (
         <>

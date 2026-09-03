@@ -38,7 +38,7 @@ function ProductCard({ product, onPress, onToggleActive }: {
         <View style={[s.cardInfo, { padding: t.space.md }]}>
           <Text variant="label">{product.title}</Text>
           <View style={s.cardFooter}>
-            <Text variant="small" muted>${fmt(product.price_cents)}</Text>
+            <Text variant="small" muted>{product.currency} {fmt(product.price_cents)}</Text>
             <Text variant="small" muted>{product.stock_quantity} in stock</Text>
           </View>
         </View>

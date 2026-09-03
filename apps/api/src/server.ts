@@ -1,4 +1,5 @@
 import Fastify, { type FastifyError } from 'fastify'
+import { MODULE_MANIFEST } from '@blnk/shared'
 import helmet from '@fastify/helmet'
 import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
@@ -9,6 +10,8 @@ import authProxyPlugin from './routes/auth-proxy'
 import wellKnownPlugin from './routes/well-known'
 import profilePlugin from './routes/profile'
 import teamPlugin from './routes/team'
+import exportPlugin from './routes/export'
+import billingPlugin from './routes/billing'
 import peoplePlugin from './modules/people'
 import paymentsPlugin from './modules/payments'
 import commercePlugin from './modules/commerce'
@@ -39,7 +42,24 @@ const server = Fastify({
   trustProxy: config.env === 'production',
 })
 
+// Validate that all enabled modules have their required dependencies enabled too.
+// Throws at startup so a misconfigured .env fails loudly rather than producing
+// silent broken behaviour at runtime.
+function checkModuleDependencies(): void {
+  for (const mod of MODULE_MANIFEST) {
+    if (!config.features[mod.key]) continue
+    for (const dep of mod.requires) {
+      if (!config.features[dep]) {
+        throw new Error(
+          `Module '${mod.key}' requires '${dep}' but FEATURE_${dep.toUpperCase()} is not enabled`
+        )
+      }
+    }
+  }
+}
+
 export async function build(): Promise<typeof server> {
+  checkModuleDependencies()
   await server.register(helmet, { contentSecurityPolicy: config.env === 'production' })
 
   // Strip fingerprint headers (same hardening as blnk_auth).
@@ -89,6 +109,12 @@ export async function build(): Promise<typeof server> {
 
   // ── Team management (admin adds users) ──────────────────────────────────
   await server.register(teamPlugin)
+
+  // ── blnk platform billing (proxy to blnk_api — admin only) ─────────────────
+  await server.register(billingPlugin)
+
+  // ── Data export (admin-only CSV downloads — "your data leaves whenever you do") ─
+  await server.register(exportPlugin)
 
   // ── People core (canonical human directory — always on, shared by modules) ─
   await server.register(peoplePlugin)

@@ -6,6 +6,7 @@ import { sendPush } from '../../utils/push'
 import { config } from '../../config'
 import { createFeedPost, deleteFeedPost, listFeedItems, getVisiblePost, listPostComments, createPostComment } from '../../db/queries/feed'
 import { Errors } from '../../utils/errors'
+import { MODULE_MANIFEST } from '@blnk/shared'
 
 function bearer(req: { headers: { authorization?: string } }): string {
   return (req.headers.authorization ?? '').slice(7)
@@ -36,8 +37,9 @@ const feedPlugin: FastifyPluginAsync = async (fastify) => {
     const isAdmin = u.role === 'admin' || u.role === 'super'
     const modules = await myModules(u.userId, isAdmin)
     const items = await listFeedItems({ isAdmin, myModules: modules })
-    // Modules a post can be scoped to — module-gated only (schedule is base access, not scopeable).
-    const available_modules = (['asset', 'compliance'] as const).filter(m => config.features[m])
+    const available_modules = MODULE_MANIFEST
+      .filter(m => m.scopeable && config.features[m.key])
+      .map(m => m.key)
     return { items, my_modules: modules, available_modules }
   })
 

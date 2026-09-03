@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { TokenPair, ProfileResponse, TeamUser, Person, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, FoodControlPlan, Product, ProductVariant, Asset, AssetType, AssetFieldDef, AssetFault, AssetFaultStep, AssetMaintenanceLog, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert, AssetComponent, AssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData, ServiceTemplate, ScheduledService, ServiceAssignment, ServiceManifest, AvailabilitySlot, PersonUnavailability, UnavailabilityKind, Roster, RosterDetail, RosterRules, RosterShift, EligibleCrew, OpenShift } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser, Person, BlnkBillingStatus, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, FoodControlPlan, Product, ProductVariant, Asset, AssetType, AssetFieldDef, AssetFault, AssetFaultStep, AssetMaintenanceLog, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert, AssetComponent, AssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData, ServiceTemplate, ScheduledService, ServiceAssignment, ServiceManifest, AvailabilitySlot, PersonUnavailability, UnavailabilityKind, Roster, RosterDetail, RosterRules, RosterShift, EligibleCrew, OpenShift } from '@blnk/shared';
 import { getAccessToken, getRefreshToken, setTokens, clearSession } from './session';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
@@ -350,6 +350,16 @@ export const upsertAssetAssignment = (token: string, body: { person_id: string; 
   req<{ assignment: AssetAssignment }>('/asset/assignments', { method: 'PUT', body, token });
 export const deleteAssetAssignment = (token: string, id: string) =>
   req<void>(`/asset/assignments/${id}`, { method: 'DELETE', token });
+
+// ── blnk platform billing (tenant's subscription with blnk) ──────────────────
+export const getBlnkBilling = (token: string) =>
+  req<BlnkBillingStatus>('/billing/me', { method: 'GET', token });
+
+export const blnkBillingCheckout = (token: string, data: { success_url: string; cancel_url: string }) =>
+  req<{ url: string }>('/billing/checkout', { method: 'POST', body: data, token });
+
+export const blnkBillingPortal = (token: string, data: { return_url: string }) =>
+  req<{ url: string }>('/billing/portal', { method: 'POST', body: data, token });
 
 // ── Payments (client charges end users via Stripe Checkout) ──────────────────
 export const subscribeCheckout = (token: string, data: { price_id: string; success_url: string; cancel_url: string }) =>

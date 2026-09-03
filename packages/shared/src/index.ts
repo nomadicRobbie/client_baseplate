@@ -60,6 +60,32 @@ export interface FeatureFlags {
   roster: boolean
 }
 
+// ── Module manifest — single source of truth for blnk's sellable modules ────
+// `requires` declares hard dependencies: enabling a module without its
+// dependencies will produce broken behaviour. Validated at API boot.
+// `sellable`  — can be added as a line item on a blnk subscription.
+// `scopeable` — users can scope feed posts to members of this module.
+// `baseAccess`— all app users see this module without a person_module row.
+export interface ModuleDefinition {
+  key:        keyof FeatureFlags
+  label:      string
+  requires:   ReadonlyArray<keyof FeatureFlags>
+  sellable:   boolean
+  scopeable:  boolean
+  baseAccess: boolean
+}
+
+export const MODULE_MANIFEST: ReadonlyArray<ModuleDefinition> = [
+  { key: 'asset',      label: 'Asset Manager',    requires: [],                      sellable: true,  scopeable: true,  baseAccess: false },
+  { key: 'compliance', label: 'Food Compliance',   requires: [],                      sellable: true,  scopeable: true,  baseAccess: false },
+  { key: 'commerce',   label: 'Commerce',          requires: [],                      sellable: true,  scopeable: true,  baseAccess: false },
+  { key: 'schedule',   label: 'Schedule',          requires: ['asset'],               sellable: true,  scopeable: false, baseAccess: true  },
+  { key: 'roster',     label: 'Roster',            requires: ['schedule', 'asset'],   sellable: true,  scopeable: true,  baseAccess: true  },
+  // Non-sellable capabilities (platform-level, not billed per module)
+  { key: 'analytics',  label: 'Analytics',         requires: [],                      sellable: false, scopeable: false, baseAccess: false },
+  { key: 'locations',  label: 'Locations',         requires: [],                      sellable: false, scopeable: false, baseAccess: false },
+] as const
+
 // ── Compliance (food safety records — requires FEATURE_COMPLIANCE) ───────────
 export interface ComplianceFieldSpec {
   key: string
@@ -511,6 +537,17 @@ export interface OnboardingState {
   needs_personal: boolean    // any user, when their profile is incomplete
 }
 
+// blnk platform billing — what the tenant owes blnk (sourced from blnk_api)
+export interface BlnkBillingStatus {
+  status: string
+  plan_name: string | null
+  current_period_end: string | null
+  next_invoice_cents: number | null
+  currency: string | null
+  card_last4: string | null
+  cancel_at_period_end: boolean
+}
+
 export interface ClientSubscription {
   id: string
   stripe_subscription_id: string
@@ -728,7 +765,7 @@ export interface ServiceTemplate {
   duration_minutes: number
   default_capacity: number
   facility_id: string | null
-  facility_name: string | null
+  facility_name?: string | null  // joined from assets on read; not sent by client on write
   timezone: string
   required_roles: RequiredRole[]
   required_asset_types: RequiredAssetType[]

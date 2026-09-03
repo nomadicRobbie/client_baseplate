@@ -129,11 +129,42 @@ export async function setTenantUserActive(
   return json.user!
 }
 
-// ── Billing status (blnk's subscription with THIS client) ───────────────────
-// Surfaces the client's own blnk billing state to their admin dashboard.
-// Stub for Phase 3a — wired to blnk_api's tenant-scoped billing endpoints later.
-export async function getBlnkBillingStatus(_accessToken: string): Promise<unknown> {
-  // Placeholder: in a later phase this calls blnk_api /payments/* with the
-  // client's credentials and returns subscription + invoice summaries.
-  return { status: 'not_wired', note: 'blnk billing status integration lands with Phase 4' }
+// ── blnk platform billing ────────────────────────────────────────────────────
+// blnk_api is the authority — it holds the Stripe subscription on blnk's account.
+// Auth is ApiKey (server-to-server); tenant resolved from the key, no slug needed.
+
+export interface BlnkBillingStatus {
+  status: string
+  plan_name: string | null
+  current_period_end: string | null
+  next_invoice_cents: number | null
+  currency: string | null
+  card_last4: string | null
+  cancel_at_period_end: boolean
+}
+
+export async function getBlnkBillingStatus(): Promise<BlnkBillingStatus> {
+  const res = await blnkApiFetch('/billing/me', { method: 'GET' })
+  if (!res.ok) throw Errors.badGateway(`blnk_api billing status failed: ${res.status}`)
+  return res.json() as Promise<BlnkBillingStatus>
+}
+
+export async function createBlnkCheckout(successUrl: string, cancelUrl: string): Promise<string> {
+  const res = await blnkApiFetch('/billing/checkout', {
+    method: 'POST',
+    body: JSON.stringify({ success_url: successUrl, cancel_url: cancelUrl }),
+  })
+  if (!res.ok) throw Errors.badGateway(`blnk_api billing checkout failed: ${res.status}`)
+  const json = await res.json() as { url: string }
+  return json.url
+}
+
+export async function createBlnkPortal(returnUrl: string): Promise<string> {
+  const res = await blnkApiFetch('/billing/portal', {
+    method: 'POST',
+    body: JSON.stringify({ return_url: returnUrl }),
+  })
+  if (!res.ok) throw Errors.badGateway(`blnk_api billing portal failed: ${res.status}`)
+  const json = await res.json() as { url: string }
+  return json.url
 }

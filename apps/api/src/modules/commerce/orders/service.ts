@@ -93,5 +93,6 @@ async function sendOrderConfirmation(order: Order): Promise<void> {
 }
 
 function formatCents(cents: number): string {
-  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(cents / 100)
+  const currency = config.stripe.currency.toUpperCase()
+  return new Intl.NumberFormat('en', { style: 'currency', currency }).format(cents / 100)
 }
