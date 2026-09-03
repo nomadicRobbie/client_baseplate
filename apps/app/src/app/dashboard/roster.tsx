@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Pressable, ActivityIndicator, TextInput } from 'react-native';
+import { View, Pressable, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { Roster, RosterRules } from '@blnk/shared';
@@ -10,6 +10,7 @@ import { formatDMY } from '@/lib/format';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, GroupedCard, GRow, Button, Badge, Notice } from '@/ui/components';
 import { DateField } from '@/ui/date-field';
+import { NumberStepper } from '@/ui/number-stepper';
 
 // Roster index. Admins see every week and generate new ones; crew reach their own
 // shifts through the week they belong to. Nothing here is live until published —
@@ -25,8 +26,7 @@ const makeStyles = (t: ThemeT) => ({
   form: { gap: t.space.md },
   empty: { alignItems: 'center' as const, gap: t.space.sm, paddingVertical: t.space.xl },
   link: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
-  rulesRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: t.space.sm },
-  rulesInput: { width: 56, backgroundColor: t.color.surface, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, padding: t.space.sm, color: t.color.text, fontSize: 14, textAlign: 'center' as const },
+
 });
 
 function mondayOf(iso: string): string {
@@ -68,8 +68,9 @@ export default function RosterScreen() {
   const [picking, setPicking] = useState(false);
   const [week, setWeek] = useState(nextMonday());
   const [rules, setRules] = useState<RosterRules | null>(null);
-  const [editRest, setEditRest] = useState('');
-  const [editDays, setEditDays] = useState('');
+  const [editRest, setEditRest] = useState(0);
+  const [editDays, setEditDays] = useState(0);
+  const [editDailyHours, setEditDailyHours] = useState(0);
   const [savingRules, setSavingRules] = useState(false);
   const [showRules, setShowRules] = useState(false);
 
@@ -81,8 +82,9 @@ export default function RosterScreen() {
         const [r, rulesRes] = await Promise.all([listRosters(tok), getRosterRules(tok)]);
         setRosters(r.rosters);
         setRules(rulesRes.rules);
-        setEditRest(String(rulesRes.rules.min_rest_hours));
-        setEditDays(String(rulesRes.rules.max_consecutive_days));
+        setEditRest(rulesRes.rules.min_rest_hours);
+        setEditDays(rulesRes.rules.max_consecutive_days);
+        setEditDailyHours(rulesRes.rules.max_daily_hours);
       } else {
         const r = await listRosters(tok);
         setRosters(r.rosters);
@@ -110,13 +112,9 @@ export default function RosterScreen() {
   };
 
   const saveRules = async () => {
-    const rest = parseInt(editRest, 10);
-    const days = parseInt(editDays, 10);
-    if (isNaN(rest) || rest < 0 || rest > 48) { setMsg({ text: 'Rest hours must be 0–48', tone: 'error' }); return; }
-    if (isNaN(days) || days < 1 || days > 14) { setMsg({ text: 'Max days must be 1–14', tone: 'error' }); return; }
     setSavingRules(true);
     try {
-      const r = await updateRosterRules(getAccessToken()!, { min_rest_hours: rest, max_consecutive_days: days });
+      const r = await updateRosterRules(getAccessToken()!, { min_rest_hours: editRest, max_consecutive_days: editDays, max_daily_hours: editDailyHours });
       setRules(r.rules);
       setMsg({ text: 'Rules updated.', tone: 'success' });
       setShowRules(false);
@@ -127,7 +125,11 @@ export default function RosterScreen() {
     }
   };
 
-  const rulesChanged = rules && (editRest !== String(rules.min_rest_hours) || editDays !== String(rules.max_consecutive_days));
+  const rulesChanged = rules && (
+    editRest !== rules.min_rest_hours ||
+    editDays !== rules.max_consecutive_days ||
+    editDailyHours !== rules.max_daily_hours
+  );
 
   const daysOffLink = (
     <Card>
@@ -187,7 +189,7 @@ export default function RosterScreen() {
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
       <View style={s.header}>
         <Text variant="title">Roster</Text>
-        {!picking && <Button label="Generate week" onPress={() => setPicking(true)} />}
+        {!picking && <Button label="Generate roster" onPress={() => setPicking(true)} />}
       </View>
 
       {daysOffLink}
@@ -203,7 +205,7 @@ export default function RosterScreen() {
             <View style={s.rowBody}>
               <Text variant="label">Roster rules</Text>
               <Text variant="small" muted>
-                Min {rules.min_rest_hours}h rest · Max {rules.max_consecutive_days} days in 7
+                Max {rules.max_daily_hours}h/day · {rules.min_rest_hours}h rest · Max {rules.max_consecutive_days} days in 7
               </Text>
             </View>
             <Ionicons name={showRules ? 'chevron-up-outline' : 'chevron-down-outline'} size={16} color={t.color.textMuted} />
@@ -211,32 +213,17 @@ export default function RosterScreen() {
 
           {showRules && (
             <View style={{ gap: t.space.md, paddingTop: t.space.md }}>
-              <View style={s.rulesRow}>
-                <Text variant="body">Min rest between shifts</Text>
-                <TextInput
-                  value={editRest}
-                  onChangeText={setEditRest}
-                  keyboardType="numeric"
-                  style={s.rulesInput}
-                />
-                <Text variant="small" muted>hours</Text>
-              </View>
-              <View style={s.rulesRow}>
-                <Text variant="body">Max days in a 7-day window</Text>
-                <TextInput
-                  value={editDays}
-                  onChangeText={setEditDays}
-                  keyboardType="numeric"
-                  style={s.rulesInput}
-                />
-                <Text variant="small" muted>days</Text>
-              </View>
+              <NumberStepper label="Max hours per day" value={editDailyHours} onChange={setEditDailyHours} min={1} max={24} unit="hrs" />
+              <NumberStepper label="Min rest between days" value={editRest} onChange={setEditRest} min={0} max={48} unit="hrs" />
+              <NumberStepper label="Max consecutive days" value={editDays} onChange={setEditDays} min={1} max={7} unit="days" />
               {rulesChanged && (
                 <Button label="Save rules" onPress={saveRules} loading={savingRules} />
               )}
               <Text variant="small" muted>
-                These rules determine who can be rostered. Admins can still override
-                rules for individual shifts when needed — overrides are flagged on the roster.
+                A member can work multiple services in one day (bus in the morning, boat in the afternoon)
+                as long as the total stays under the daily hours cap. The rest rule only applies
+                between days — not between same-day services.
+                Admins can still override rules for individual shifts when needed.
               </Text>
             </View>
           )}
@@ -253,7 +240,13 @@ export default function RosterScreen() {
             </Text>
             <DateField label="Any day in the week" value={week} onChange={v => setWeek(mondayOf(v))} />
             <Text variant="small" muted>Week of {weekLabel(week)}</Text>
-            <Button label="Generate" onPress={generate} loading={generating} />
+            {(existing => existing && (
+              <Notice
+                tone="error"
+                message={`A ${existing.status} roster already exists for this week. Choose a different week or open the existing roster to make changes.`}
+              />
+            ))(rosters.find(r => r.week_start === week))}
+            <Button label="Generate" onPress={() => void generate()} loading={generating} disabled={rosters.some(r => r.week_start === week)} />
             <Button variant="ghost" label="Cancel" onPress={() => setPicking(false)} />
           </View>
         </Card>

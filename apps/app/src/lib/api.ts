@@ -620,7 +620,7 @@ export const removeUnavailability = (token: string, id: string) =>
 export const getRosterRules = (token: string) =>
   req<{ rules: RosterRules }>('/roster-rules', { method: 'GET', token });
 
-export const updateRosterRules = (token: string, body: { min_rest_hours?: number; max_consecutive_days?: number }) =>
+export const updateRosterRules = (token: string, body: { min_rest_hours?: number; max_consecutive_days?: number; max_daily_hours?: number }) =>
   req<{ rules: RosterRules }>('/roster-rules', { method: 'PATCH', token, body });
 
 export const listRosters = (token: string) =>

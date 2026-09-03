@@ -837,6 +837,7 @@ export type RosterStatus = 'draft' | 'published'
 export interface RosterRules {
   min_rest_hours: number
   max_consecutive_days: number
+  max_daily_hours: number
   updated_at: string
   updated_by: string | null
 }
