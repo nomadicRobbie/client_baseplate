@@ -13,6 +13,11 @@ if [ ! -f apps/app/.env ]; then
   exit 1
 fi
 
+echo ""
+echo "Note: if you have changed apps/app/.env since the last deploy, run a cache-busted build instead:"
+echo "  cd apps/app && npx expo export -p web --clear"
+echo ""
+
 echo "→ pulling latest code"
 git pull origin main
 
@@ -36,7 +41,3 @@ fi
 
 pm2 save
 echo "✓ done"
-echo ""
-echo "Note: if apps/app/.env has changed since the last deploy, bust Metro's"
-echo "cache to bake the new values into the frontend bundle:"
-echo "  cd apps/app && npx expo export -p web --clear"
