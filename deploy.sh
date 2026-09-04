@@ -2,15 +2,14 @@
 # Deploy frontend (nginx static) + API (PM2).
 # Run from repo root on the VM: bash deploy.sh
 #
-# Requires an 'upstream' remote pointing at client-baseplate:
+# For CLIENT instances (forks of client-baseplate), also add an upstream remote
+# to pull in baseplate updates:
 #   git remote add upstream git@github.com:blnk/client-baseplate.git
+#   git fetch upstream && git merge upstream/main --no-edit
 set -euo pipefail
 
-echo "→ fetching upstream (client-baseplate)"
-git fetch upstream
-
-echo "→ merging client-baseplate updates"
-git merge upstream/main --no-edit
+echo "→ pulling latest code"
+git pull origin main
 
 echo "→ installing dependencies"
 pnpm install --frozen-lockfile

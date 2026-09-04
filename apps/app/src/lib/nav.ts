@@ -28,18 +28,22 @@ export type NavItem = {
   feature?: FeatureKey;
   // base-access modules skip the myModules gate — all app users can see them.
   baseAccess?: boolean;
+  // moduleGated items are hidden unless the tenant has an active entitlement.
+  // entitlement overrides feature as the key checked against tenantModules.
+  moduleGated?: boolean;
+  entitlement?: string;
 };
 
 export const NAV: NavItem[] = [
   { label: 'Library', href: '/dashboard', icon: 'library-outline', group: 'home' },
   { label: 'Company Feed', href: '/dashboard/feed', icon: 'newspaper-outline', group: 'home' },
-  { label: 'Store', href: '/dashboard/commerce', icon: 'storefront-outline', group: 'module', adminOnly: true, feature: 'commerce', description: 'Products, orders & payments' },
-  { label: 'Analytics', href: '/dashboard/analytics', icon: 'bar-chart-outline', group: 'module', adminOnly: true, feature: 'analytics', description: 'Traffic & performance insights' },
-  { label: 'Website', href: '/dashboard/locations', icon: 'globe-outline', group: 'module', adminOnly: true, feature: 'locations', description: 'Banners & messages' },
-  { label: 'Food compliance', href: '/dashboard/compliance', icon: 'clipboard-outline', group: 'module', feature: 'compliance', description: 'Temp logs & checklists' },
-  { label: 'Asset Manager', href: '/dashboard/asset', icon: 'cube-outline', group: 'module', feature: 'asset', description: 'Track equipment & gear' },
-  { label: 'Schedule', href: '/dashboard/schedule', icon: 'calendar-outline', group: 'operations', feature: 'schedule', baseAccess: true, description: 'Shifts & rosters' },
-  { label: 'Roster', href: '/dashboard/roster', icon: 'today-outline', group: 'operations', feature: 'roster', baseAccess: true, description: 'Plan team coverage' },
+  { label: 'Store', href: '/dashboard/commerce', icon: 'storefront-outline', group: 'module', adminOnly: true, feature: 'commerce', moduleGated: true, description: 'Products, orders & payments' },
+  { label: 'Analytics', href: '/dashboard/analytics', icon: 'bar-chart-outline', group: 'module', adminOnly: true, feature: 'analytics', moduleGated: true, entitlement: 'commerce', description: 'Traffic & performance insights' },
+  { label: 'Website', href: '/dashboard/locations', icon: 'globe-outline', group: 'module', adminOnly: true, feature: 'locations', moduleGated: true, entitlement: 'commerce', description: 'Banners & messages' },
+  { label: 'Food compliance', href: '/dashboard/compliance', icon: 'clipboard-outline', group: 'module', feature: 'compliance', moduleGated: true, description: 'Temp logs & checklists' },
+  { label: 'Asset Manager', href: '/dashboard/asset', icon: 'cube-outline', group: 'module', feature: 'asset', moduleGated: true, description: 'Track equipment & gear' },
+  { label: 'Schedule', href: '/dashboard/schedule', icon: 'calendar-outline', group: 'operations', feature: 'schedule', moduleGated: true, description: 'Shifts & rosters' },
+  { label: 'Roster', href: '/dashboard/roster', icon: 'today-outline', group: 'operations', feature: 'roster', moduleGated: true, description: 'Plan team coverage' },
   { label: 'Billing', href: '/dashboard/billing', icon: 'card-outline', group: 'admin', adminOnly: true, feature: 'stripe' },
   { label: 'Account', href: '/dashboard/account', icon: 'person-outline', group: 'account' },
   { label: 'People', href: '/dashboard/people', icon: 'people-outline', group: 'account', adminOnly: true },
@@ -49,18 +53,21 @@ export const NAV: NavItem[] = [
 // Items this user is allowed to see (role + enabled feature flags + module access).
 // `myModules` = the module keys this person is assigned to in People. Admins bypass
 // module gating (they run the tenant); members reach a module only if assigned.
-export function visibleNav(isAdmin: boolean, features: FeatureFlags | null, myModules?: string[] | null): NavItem[] {
+export function visibleNav(isAdmin: boolean, features: FeatureFlags | null, myModules?: string[] | null, tenantModules?: string[] | null): NavItem[] {
   return NAV.filter((i) => {
     if (i.adminOnly && !isAdmin) return false;
     if (i.feature && !features?.[i.feature]) return false;
+    // Tenant entitlement gate: null = not fetched yet (fail open); [] = subscribed but zero modules.
+    const entKey = i.entitlement ?? i.feature;
+    if (i.moduleGated && entKey && tenantModules !== null && tenantModules !== undefined && !tenantModules.includes(entKey)) return false;
     if (!isAdmin && (i.group === 'module' || i.group === 'operations') && i.feature && !i.baseAccess && !(myModules ?? []).includes(i.feature)) return false;
     return true;
   });
 }
 
 // The pinnable modules, in declaration order (used for the mobile bar + Library).
-export function availableModules(isAdmin: boolean, features: FeatureFlags | null, myModules?: string[] | null): NavItem[] {
-  return visibleNav(isAdmin, features, myModules).filter((i) => i.group === 'module' || i.group === 'operations');
+export function availableModules(isAdmin: boolean, features: FeatureFlags | null, myModules?: string[] | null, tenantModules?: string[] | null): NavItem[] {
+  return visibleNav(isAdmin, features, myModules, tenantModules).filter((i) => i.group === 'module' || i.group === 'operations');
 }
 
 export const HOME_HREF: NavHref = '/dashboard';

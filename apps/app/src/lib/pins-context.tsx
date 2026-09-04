@@ -38,9 +38,9 @@ const PinsContext = createContext<PinsState | null>(null);
 
 export function PinsProvider({ children }: { children: ReactNode }) {
   const { tenantSlug, features, user } = useAuth();
-  const { myModules } = useProfile();
+  const { myModules, tenantModules } = useProfile();
   const isAdmin = user?.role === 'admin' || user?.role === 'super';
-  const modules = useMemo(() => availableModules(isAdmin, features, myModules), [isAdmin, features, myModules]);
+  const modules = useMemo(() => availableModules(isAdmin, features, myModules, tenantModules), [isAdmin, features, myModules, tenantModules]);
 
   const [stored, setStored] = useState<string[]>(() => load(tenantSlug));
 

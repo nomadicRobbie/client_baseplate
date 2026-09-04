@@ -139,14 +139,18 @@ export interface BlnkBillingStatus {
   current_period_end: string | null
   next_invoice_cents: number | null
   currency: string | null
+  interval: 'month' | 'year' | null
   card_last4: string | null
   cancel_at_period_end: boolean
+  modules: string[]
 }
 
 export async function getBlnkBillingStatus(): Promise<BlnkBillingStatus> {
   const res = await blnkApiFetch('/billing/me', { method: 'GET' })
   if (!res.ok) throw Errors.badGateway(`blnk_api billing status failed: ${res.status}`)
-  return res.json() as Promise<BlnkBillingStatus>
+  const data = await res.json() as BlnkBillingStatus
+  // Normalise lookup keys to shared manifest keys before returning
+  return { ...data, modules: (data.modules ?? []).map(fromApiKey) }
 }
 
 export async function createBlnkCheckout(successUrl: string, cancelUrl: string): Promise<string> {
@@ -157,6 +161,32 @@ export async function createBlnkCheckout(successUrl: string, cancelUrl: string):
   if (!res.ok) throw Errors.badGateway(`blnk_api billing checkout failed: ${res.status}`)
   const json = await res.json() as { url: string }
   return json.url
+}
+
+// ponytail: 'asset' (shared manifest key) ↔ 'assets' (blnk_api/Stripe lookup key)
+const TO_API: Record<string, string> = { asset: 'assets' }
+const FROM_API: Record<string, string> = { assets: 'asset' }
+const toApiKey = (k: string) => TO_API[k] ?? k
+const fromApiKey = (k: string) => FROM_API[k] ?? k
+
+export async function createModuleCheckout(
+  modules: string[], interval: 'month' | 'year', successUrl: string, cancelUrl: string
+): Promise<string> {
+  const res = await blnkApiFetch('/billing/modules/checkout', {
+    method: 'POST',
+    body: JSON.stringify({ modules: modules.map(toApiKey), interval, success_url: successUrl, cancel_url: cancelUrl }),
+  })
+  if (!res.ok) throw Errors.badGateway(`blnk_api module checkout failed: ${res.status}`)
+  const json = await res.json() as { url: string }
+  return json.url
+}
+
+export async function updateModulePlan(modules: string[], interval: 'month' | 'year'): Promise<void> {
+  const res = await blnkApiFetch('/billing/modules/plan', {
+    method: 'PATCH',
+    body: JSON.stringify({ modules: modules.map(toApiKey), interval }),
+  })
+  if (!res.ok) throw Errors.badGateway(`blnk_api update module plan failed: ${res.status}`)
 }
 
 export async function createBlnkPortal(returnUrl: string): Promise<string> {

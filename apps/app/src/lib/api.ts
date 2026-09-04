@@ -358,6 +358,12 @@ export const getBlnkBilling = (token: string) =>
 export const blnkBillingCheckout = (token: string, data: { success_url: string; cancel_url: string }) =>
   req<{ url: string }>('/billing/checkout', { method: 'POST', body: data, token });
 
+export const blnkModuleCheckout = (token: string, data: { modules: string[]; interval: 'month' | 'year'; success_url: string; cancel_url: string }) =>
+  req<{ url: string }>('/billing/modules/checkout', { method: 'POST', body: data, token });
+
+export const blnkUpdateModulePlan = (token: string, data: { modules: string[]; interval: 'month' | 'year' }) =>
+  req<{ ok: boolean }>('/billing/modules/plan', { method: 'PATCH', body: data, token });
+
 export const blnkBillingPortal = (token: string, data: { return_url: string }) =>
   req<{ url: string }>('/billing/portal', { method: 'POST', body: data, token });
 

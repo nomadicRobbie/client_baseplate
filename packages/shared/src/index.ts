@@ -544,8 +544,10 @@ export interface BlnkBillingStatus {
   current_period_end: string | null
   next_invoice_cents: number | null
   currency: string | null
+  interval: 'month' | 'year' | null
   card_last4: string | null
   cancel_at_period_end: boolean
+  modules: string[]  // entitlement lookup keys (shared manifest keys, e.g. 'asset' not 'assets')
 }
 
 export interface ClientSubscription {

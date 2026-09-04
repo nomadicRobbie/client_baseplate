@@ -71,13 +71,13 @@ const SIDEBAR_SECTIONS: { group: NavGroup; label?: string }[] = [
 ];
 
 // Desktop sidebar — the full set of destinations, stacked vertically.
-function Sidebar({ isAdmin, features, myModules }: { isAdmin: boolean; features: FeatureFlags | null; myModules: string[] }) {
+function Sidebar({ isAdmin, features, myModules, tenantModules }: { isAdmin: boolean; features: FeatureFlags | null; myModules: string[]; tenantModules: string[] | null }) {
   const t = useTheme();
   const s = makeStyles(t);
   const router = useRouter();
   const pathname = usePathname();
   const { hasUnseen } = useFeedBadge();
-  const items = visibleNav(isAdmin, features, myModules).filter((i) => i.group !== 'admin');
+  const items = visibleNav(isAdmin, features, myModules, tenantModules).filter((i) => i.group !== 'admin');
   return (
     <View style={s.sidebarContainer}>
       {SIDEBAR_SECTIONS.map(({ group, label }) => {
@@ -167,7 +167,7 @@ function Shell() {
   const s = makeStyles(t);
   const { width } = useWindowDimensions();
   const { tenantSlug, signOut, features, user } = useAuth();
-  const { data, myModules } = useProfile();
+  const { data, myModules, tenantModules } = useProfile();
   const wide = width >= 900;
 
   const orgName = data?.org?.org_name ?? tenantSlug ?? 'dashboard';
@@ -217,7 +217,7 @@ function Shell() {
         <View style={[s.sidebar, { backgroundColor: t.color.surface }]}>
           <View style={s.sidebarTop}>
             {Brand}
-            <Sidebar isAdmin={isAdmin} features={features} myModules={myModules} />
+            <Sidebar isAdmin={isAdmin} features={features} myModules={myModules} tenantModules={tenantModules} />
           </View>
           <Pressable onPress={signOut} accessibilityRole="button" accessibilityLabel="Log out">
             <Text variant="label" color={t.color.accent}>Log out</Text>
