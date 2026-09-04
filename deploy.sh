@@ -8,6 +8,11 @@
 #   git fetch upstream && git merge upstream/main --no-edit
 set -euo pipefail
 
+if [ ! -f apps/app/.env ]; then
+  echo "✗ apps/app/.env not found — copy .env.example and fill in values before deploying"
+  exit 1
+fi
+
 echo "→ pulling latest code"
 git pull origin main
 
