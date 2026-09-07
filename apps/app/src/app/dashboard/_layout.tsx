@@ -230,7 +230,8 @@ function Shell() {
   const daysLeft = trialDaysLeft(trialEndsAt);
   // Block access when trial has expired (daysLeft < 0). Billing page is exempt so admin can subscribe.
   const pathname = usePathname();
-  const trialExpired = daysLeft !== null && daysLeft <= 0 && pathname !== '/dashboard/billing';
+  // ponytail: env var bypass for dev/testing against prod without a live subscription
+  const trialExpired = !process.env.EXPO_PUBLIC_BYPASS_TRIAL && daysLeft !== null && daysLeft <= 0 && pathname !== '/dashboard/billing';
 
   const orgName = data?.org?.org_name ?? tenantSlug ?? 'dashboard';
   const router = useRouter();
