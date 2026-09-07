@@ -348,10 +348,10 @@ function Themed() {
 }
 
 function Gate() {
-  const { user, loading } = useAuth();
+  const { user, loading, trialEndsAt } = useAuth();
   if (loading) return <Spinner />;
   if (!user) return <Redirect href="/login" />;
-  return <ProfileProvider><Themed /></ProfileProvider>;
+  return <ProfileProvider trialEndsAt={trialEndsAt}><Themed /></ProfileProvider>;
 }
 
 export default function DashboardLayout() {

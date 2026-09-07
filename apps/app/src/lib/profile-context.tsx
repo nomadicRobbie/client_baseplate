@@ -14,7 +14,7 @@ interface ProfileState {
 
 const ProfileContext = createContext<ProfileState | null>(null);
 
-export function ProfileProvider({ children }: { children: ReactNode }) {
+export function ProfileProvider({ children, trialEndsAt }: { children: ReactNode; trialEndsAt: string | null }) {
   const [data, setData] = useState<ProfileResponse | null>(null);
   const [myModules, setMyModules] = useState<string[]>([]);
   const [tenantModules, setTenantModules] = useState<string[] | null>(null);
@@ -26,10 +26,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     if (!token) { setLoading(false); return; }
     setLoading(true); setError(null);
     try {
+      // During an active trial (or dev bypass), skip billing gating — null = fail-open (all modules visible).
+      // Only enforce per-module entitlements once they've actually subscribed post-trial.
+      const trialActive = process.env.EXPO_PUBLIC_BYPASS_TRIAL ||
+        (trialEndsAt !== null && new Date(trialEndsAt).getTime() > Date.now());
+      const billingReq = trialActive ? Promise.resolve(null) : getBlnkBilling(token).catch(() => null);
       const [profile, person, billing] = await Promise.all([
         getProfile(token),
         getMyPerson(token),
-        getBlnkBilling(token).catch(() => null), // fail open — nav shows all if billing unreachable
+        billingReq,
       ]);
       setData(profile);
       setMyModules(person.person?.modules.map((m) => m.module) ?? []);
