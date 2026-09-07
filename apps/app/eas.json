@@ -1,8 +1,7 @@
 {
   "cli": {
     "version": ">= 22.0.0",
-    "appVersionSource": "remote",
-    "packageManager": "pnpm"
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
