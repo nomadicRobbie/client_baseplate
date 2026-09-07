@@ -1,3 +1,7 @@
+// app.config.js runs in bare Node — Expo's dotenv loader hasn't fired yet.
+// Load .env manually so required() works whether invoked by expo export or eas build.
+require('dotenv').config()
+
 const required = (key) => {
   const v = process.env[key]
   if (!v) throw new Error(`app.config.js: missing required env var ${key}`)
