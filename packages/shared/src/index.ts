@@ -550,6 +550,12 @@ export interface BlnkBillingStatus {
   modules: string[]  // entitlement lookup keys (shared manifest keys, e.g. 'asset' not 'assets')
 }
 
+// Trial state returned by GET /me. blnk_api sets trial_ends_at at tenant creation
+// (now + 30 days) and clears it once a subscription becomes active.
+export interface TrialInfo {
+  trial_ends_at: string | null  // ISO datetime; null = subscribed, no trial
+}
+
 export interface ClientSubscription {
   id: string
   stripe_subscription_id: string

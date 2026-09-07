@@ -17,6 +17,63 @@ import { ThemeProvider, useTheme } from '@/theme';
 import { Text } from '@/ui/components';
 import { Onboarding } from '@/components/onboarding';
 
+function trialDaysLeft(trialEndsAt: string | null): number | null {
+  if (!trialEndsAt) return null;
+  const ms = new Date(trialEndsAt).getTime() - Date.now();
+  return Math.ceil(ms / (1000 * 60 * 60 * 24));
+}
+
+// Shown when trial is expired and no active subscription. Blocks all navigation.
+function TrialWall({ isAdmin }: { isAdmin: boolean }) {
+  const t = useTheme();
+  const router = useRouter();
+  return (
+    <View style={{ flex: 1, backgroundColor: t.color.bg, alignItems: 'center', justifyContent: 'center', padding: t.space.xl, gap: t.space.lg }}>
+      <Ionicons name="time-outline" size={48} color={t.color.textMuted} />
+      <View style={{ alignItems: 'center', gap: t.space.sm }}>
+        <Text variant="heading">Your free trial has ended</Text>
+        {isAdmin
+          ? <Text variant="body" muted style={{ textAlign: 'center' }}>Subscribe to keep using blnk. Choose the modules your team needs.</Text>
+          : <Text variant="body" muted style={{ textAlign: 'center' }}>Your organisation's free trial has ended. Contact your admin to subscribe.</Text>}
+      </View>
+      {isAdmin && (
+        <Pressable
+          onPress={() => router.replace('/dashboard/billing')}
+          accessibilityRole="button"
+          style={{ backgroundColor: t.color.primary, paddingVertical: t.space.md, paddingHorizontal: t.space.xl, borderRadius: t.radius.md, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text variant="label" color={t.color.primaryText}>Subscribe now</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+// Shown as a top banner when ≤ 7 days remain on the trial.
+function TrialBanner({ daysLeft, isAdmin }: { daysLeft: number; isAdmin: boolean }) {
+  const t = useTheme();
+  const router = useRouter();
+  const urgent = daysLeft <= 3;
+  const color = urgent ? t.color.danger : t.color.primary;
+  return (
+    <Pressable
+      onPress={isAdmin ? () => router.push('/dashboard/billing') : undefined}
+      accessibilityRole={isAdmin ? 'button' : 'text'}
+      style={{ backgroundColor: color + '18', borderBottomWidth: 1, borderBottomColor: color + '40', paddingVertical: t.space.sm, paddingHorizontal: t.space.md, flexDirection: 'row', alignItems: 'center', gap: t.space.sm }}
+    >
+      <Ionicons name={urgent ? 'warning-outline' : 'time-outline'} size={16} color={color} />
+      <Text variant="small" color={color} style={{ flex: 1 }}>
+        {daysLeft <= 0
+          ? 'Your free trial has ended.'
+          : daysLeft === 1
+          ? 'Your free trial ends tomorrow.'
+          : `${daysLeft} days left in your free trial.`}
+        {isAdmin ? ' Tap to subscribe.' : ''}
+      </Text>
+    </Pressable>
+  );
+}
+
 // Show alerts when the app is foregrounded.
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
@@ -166,9 +223,14 @@ function Shell() {
   const t = useTheme();
   const s = makeStyles(t);
   const { width } = useWindowDimensions();
-  const { tenantSlug, signOut, features, user } = useAuth();
+  const { tenantSlug, signOut, features, user, trialEndsAt } = useAuth();
   const { data, myModules, tenantModules } = useProfile();
   const wide = width >= 900;
+  const isAdmin = user?.role === 'admin' || user?.role === 'super';
+  const daysLeft = trialDaysLeft(trialEndsAt);
+  // Block access when trial has expired (daysLeft < 0). Billing page is exempt so admin can subscribe.
+  const pathname = usePathname();
+  const trialExpired = daysLeft !== null && daysLeft <= 0 && pathname !== '/dashboard/billing';
 
   const orgName = data?.org?.org_name ?? tenantSlug ?? 'dashboard';
   const router = useRouter();
@@ -202,7 +264,6 @@ function Shell() {
     return () => sub.remove();
   }, []);
   const firstName = data?.me.name?.split(' ')[0];
-  const isAdmin = user?.role === 'admin' || user?.role === 'super';
 
   const Brand = (
     <View style={s.brand}>
@@ -210,6 +271,17 @@ function Shell() {
       {!!firstName && <Text variant="small" muted>{greeting()}, {firstName}</Text>}
     </View>
   );
+
+  const showBanner = daysLeft !== null && daysLeft > 0 && daysLeft <= 7;
+  const Banner = showBanner ? <TrialBanner daysLeft={daysLeft!} isAdmin={isAdmin} /> : null;
+
+  if (trialExpired) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.color.bg }}>
+        <TrialWall isAdmin={isAdmin} />
+      </View>
+    );
+  }
 
   if (wide) {
     return (
@@ -223,14 +295,20 @@ function Shell() {
             <Text variant="label" color={t.color.accent}>Log out</Text>
           </Pressable>
         </View>
-        <View style={s.content}><Slot /></View>
+        <View style={s.content}>
+          {Banner}
+          <Slot />
+        </View>
       </View>
     );
   }
 
   return (
     <View style={[s.content, { backgroundColor: t.color.bg }]}>
-      <View style={s.content}><Slot /></View>
+      <View style={s.content}>
+        {Banner}
+        <Slot />
+      </View>
       <MobileTabBar />
     </View>
   );
