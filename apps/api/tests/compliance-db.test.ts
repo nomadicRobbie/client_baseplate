@@ -29,22 +29,49 @@ async function dbReachable(url: string): Promise<boolean> {
 
 after(async () => { await closePool() })
 
+// ── Fixture: compliance_records/schedules FK on (jurisdiction, record_type) ──
+// compliance_record_types is seed-data in production but empty in test DBs, so
+// we seed our own row before any test that needs it and delete it in cleanup.
+const TEST_JUR   = 'test'
+const TEST_CODE  = `trec_${randomUUID().slice(0, 8)}`
+const TEST_CODE2 = `trec_${randomUUID().slice(0, 8)}`
+
+async function seedRecordTypes(): Promise<void> {
+  await query(
+    `INSERT INTO compliance_record_types
+       (jurisdiction, code, label, tiers, mandatory, field_schema, sort_order)
+     VALUES
+       ($1, $2, 'Test type A', '{}', false, '{}', 9990),
+       ($1, $3, 'Test type B', '{}', false, '{}', 9991)
+     ON CONFLICT (jurisdiction, code) DO NOTHING`,
+    [TEST_JUR, TEST_CODE, TEST_CODE2],
+  )
+}
+
+async function cleanupRecordTypes(): Promise<void> {
+  await query(
+    `DELETE FROM compliance_record_types WHERE jurisdiction = $1 AND code = ANY($2)`,
+    [TEST_JUR, [TEST_CODE, TEST_CODE2]],
+  )
+}
+
 // ── Records ──────────────────────────────────────────────────────────────────
 
 test('createRecord + getRecord: round-trip preserves all fields', async (t) => {
   if (!await dbReachable(DB_URL)) { t.skip('database unreachable'); return }
+  await seedRecordTypes()
 
   const rec = await createRecord({
-    jurisdiction: 'nz',
-    record_type: 'fridge_temp',
+    jurisdiction: TEST_JUR,
+    record_type: TEST_CODE,
     entered_by: 'Test User',
     result: 'pass',
     data: { temp_c: 3.5 },
   })
 
   assert.ok(rec.id, 'record has an id')
-  assert.equal(rec.jurisdiction, 'nz')
-  assert.equal(rec.record_type, 'fridge_temp')
+  assert.equal(rec.jurisdiction, TEST_JUR)
+  assert.equal(rec.record_type, TEST_CODE)
   assert.equal(rec.result, 'pass')
   assert.equal(typeof rec.data, 'object')
 
@@ -53,15 +80,16 @@ test('createRecord + getRecord: round-trip preserves all fields', async (t) => {
   assert.equal(fetched!.id, rec.id)
   assert.equal(fetched!.result, 'pass')
 
-  // cleanup
   await query('DELETE FROM compliance_records WHERE id = $1', [rec.id])
+  await cleanupRecordTypes()
 })
 
 test('listRecords: result filter excludes non-matching rows', async (t) => {
   if (!await dbReachable(DB_URL)) { t.skip('database unreachable'); return }
+  await seedRecordTypes()
 
-  const pass_ = await createRecord({ jurisdiction: 'nz', record_type: 'fridge_temp', entered_by: 'T', result: 'pass', data: {} })
-  const fail_ = await createRecord({ jurisdiction: 'nz', record_type: 'fridge_temp', entered_by: 'T', result: 'fail', data: {} })
+  const pass_ = await createRecord({ jurisdiction: TEST_JUR, record_type: TEST_CODE, entered_by: 'T', result: 'pass', data: {} })
+  const fail_ = await createRecord({ jurisdiction: TEST_JUR, record_type: TEST_CODE, entered_by: 'T', result: 'fail', data: {} })
 
   const passes = await listRecords({ result: 'pass' })
   const fails  = await listRecords({ result: 'fail' })
@@ -71,25 +99,29 @@ test('listRecords: result filter excludes non-matching rows', async (t) => {
   assert.ok(fails.some(r => r.id === fail_.id),   'fail row is in fails list')
 
   await query('DELETE FROM compliance_records WHERE id = ANY($1)', [[pass_.id, fail_.id]])
+  await cleanupRecordTypes()
 })
 
-test('listRecords: type filter', async (t) => {
+test('listRecords: type filter excludes other record types', async (t) => {
   if (!await dbReachable(DB_URL)) { t.skip('database unreachable'); return }
+  await seedRecordTypes()
 
-  const a = await createRecord({ jurisdiction: 'nz', record_type: 'fridge_temp', entered_by: 'T', result: 'pass', data: {} })
-  const b = await createRecord({ jurisdiction: 'nz', record_type: 'hot_hold',    entered_by: 'T', result: 'pass', data: {} })
+  const a = await createRecord({ jurisdiction: TEST_JUR, record_type: TEST_CODE,  entered_by: 'T', result: 'pass', data: {} })
+  const b = await createRecord({ jurisdiction: TEST_JUR, record_type: TEST_CODE2, entered_by: 'T', result: 'pass', data: {} })
 
-  const fridges = await listRecords({ type: 'fridge_temp' })
-  assert.ok(fridges.some(r => r.id === a.id),  'fridge record appears')
-  assert.ok(!fridges.some(r => r.id === b.id), 'hot_hold record excluded')
+  const filtered = await listRecords({ type: TEST_CODE })
+  assert.ok(filtered.some(r => r.id === a.id),  'type A record appears')
+  assert.ok(!filtered.some(r => r.id === b.id), 'type B record excluded')
 
   await query('DELETE FROM compliance_records WHERE id = ANY($1)', [[a.id, b.id]])
+  await cleanupRecordTypes()
 })
 
 test('voidRecord: voided records are excluded from listRecords', async (t) => {
   if (!await dbReachable(DB_URL)) { t.skip('database unreachable'); return }
+  await seedRecordTypes()
 
-  const rec = await createRecord({ jurisdiction: 'nz', record_type: 'fridge_temp', entered_by: 'T', result: 'pass', data: {} })
+  const rec = await createRecord({ jurisdiction: TEST_JUR, record_type: TEST_CODE, entered_by: 'T', result: 'pass', data: {} })
 
   const beforeVoid = await listRecords({})
   assert.ok(beforeVoid.some(r => r.id === rec.id), 'record visible before void')
@@ -105,12 +137,14 @@ test('voidRecord: voided records are excluded from listRecords', async (t) => {
   assert.equal(again, false)
 
   await query('DELETE FROM compliance_records WHERE id = $1', [rec.id])
+  await cleanupRecordTypes()
 })
 
 test('updateRecord: partial patch — only supplied fields change', async (t) => {
   if (!await dbReachable(DB_URL)) { t.skip('database unreachable'); return }
+  await seedRecordTypes()
 
-  const rec = await createRecord({ jurisdiction: 'nz', record_type: 'fridge_temp', entered_by: 'T', result: 'pass', data: { temp_c: 4 } })
+  const rec = await createRecord({ jurisdiction: TEST_JUR, record_type: TEST_CODE, entered_by: 'T', result: 'pass', data: { temp_c: 4 } })
 
   const updated = await updateRecord(rec.id, { result: 'fail', data: { temp_c: 8 } })
   assert.ok(updated, 'update returns the row')
@@ -119,15 +153,17 @@ test('updateRecord: partial patch — only supplied fields change', async (t) =>
   assert.equal(updated!.entered_by, 'T', 'unpatched field unchanged')
 
   await query('DELETE FROM compliance_records WHERE id = $1', [rec.id])
+  await cleanupRecordTypes()
 })
 
 // ── Schedules ────────────────────────────────────────────────────────────────
 
 test('createSchedule + scheduleDoneCounts: completed records are counted per schedule', async (t) => {
   if (!await dbReachable(DB_URL)) { t.skip('database unreachable'); return }
+  await seedRecordTypes()
 
   const sched = await createSchedule({
-    jurisdiction: 'nz', record_type: 'fridge_temp', label: 'Test daily fridge check',
+    jurisdiction: TEST_JUR, record_type: TEST_CODE, label: 'Test daily check',
     cadence: 'daily', weekdays: [],
   })
   assert.ok(sched.id)
@@ -139,34 +175,31 @@ test('createSchedule + scheduleDoneCounts: completed records are counted per sch
   assert.equal(before[sched.id] ?? 0, 0)
 
   // Log two completions for this schedule today
-  const r1 = await createRecord({ jurisdiction: 'nz', record_type: 'fridge_temp', entered_by: 'T', result: 'pass', data: {}, schedule_id: sched.id })
-  const r2 = await createRecord({ jurisdiction: 'nz', record_type: 'fridge_temp', entered_by: 'T', result: 'pass', data: {}, schedule_id: sched.id })
+  const r1 = await createRecord({ jurisdiction: TEST_JUR, record_type: TEST_CODE, entered_by: 'T', result: 'pass', data: {}, schedule_id: sched.id })
+  const r2 = await createRecord({ jurisdiction: TEST_JUR, record_type: TEST_CODE, entered_by: 'T', result: 'pass', data: {}, schedule_id: sched.id })
 
   const after = await scheduleDoneCounts(today)
   assert.ok(after[sched.id] >= 2, 'both completions counted')
 
   await query('DELETE FROM compliance_records WHERE id = ANY($1)', [[r1.id, r2.id]])
   await query('DELETE FROM compliance_schedules WHERE id = $1', [sched.id])
+  await cleanupRecordTypes()
 })
 
 // ── Plans ────────────────────────────────────────────────────────────────────
 
 test('createPlan + duplicatePlan: copies metadata and active schedules', async (t) => {
   if (!await dbReachable(DB_URL)) { t.skip('database unreachable'); return }
+  await seedRecordTypes()
 
   const plan = await createPlan({ name: `Test Plan ${randomUUID().slice(0, 8)}` })
   assert.ok(plan.id)
 
-  // Add a schedule to the source plan
-  await createSchedule({
-    jurisdiction: 'nz', record_type: 'fridge_temp',
-    label: 'Fridge check', cadence: 'daily', weekdays: [],
-  })
-  // Create a schedule linked to the plan via plan_id (direct SQL — the typed function doesn't expose plan_id)
+  // Create a schedule linked to the plan (direct SQL — typed createSchedule doesn't expose plan_id)
   await query(
     `INSERT INTO compliance_schedules (jurisdiction, record_type, label, cadence, weekdays, plan_id)
-     VALUES ('nz','fridge_temp','Plan sched','daily','{}', $1)`,
-    [plan.id],
+     VALUES ($1, $2, 'Plan sched', 'daily', '{}', $3)`,
+    [TEST_JUR, TEST_CODE, plan.id],
   )
 
   const copy = await duplicatePlan(plan.id, `${plan.name} (copy)`, null)
@@ -180,6 +213,7 @@ test('createPlan + duplicatePlan: copies metadata and active schedules', async (
 
   await query('DELETE FROM compliance_schedules WHERE plan_id = ANY($1)', [[plan.id, copy!.id]])
   await query('DELETE FROM food_control_plans WHERE id = ANY($1)', [[plan.id, copy!.id]])
+  await cleanupRecordTypes()
 })
 
 // ── Cooling batches ──────────────────────────────────────────────────────────
@@ -187,6 +221,7 @@ test('createPlan + duplicatePlan: copies metadata and active schedules', async (
 test('createCoolingBatch + updateCoolingBatch: in-progress → completed lifecycle', async (t) => {
   if (!await dbReachable(DB_URL)) { t.skip('database unreachable'); return }
 
+  // cooling_batches only has a jurisdiction text column — no FK to record_types
   const batch = await createCoolingBatch({
     jurisdiction: 'nz', product: 'Test soup', started_by: 'Chef T',
   })
