@@ -1,7 +1,8 @@
 {
   "cli": {
     "version": ">= 22.0.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "remote",
+    "packageManager": "pnpm"
   },
   "build": {
     "development": {
@@ -13,7 +14,16 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://baseplate-api.blnk.nz",
-        "EXPO_PUBLIC_TENANT_SLUG": "ting-test"
+        "EXPO_PUBLIC_TENANT_SLUG": "ting-test",
+        "EXPO_PUBLIC_ENV": "preview",
+        "EXPO_PUBLIC_CURRENCY": "NZD",
+        "EXPO_PUBLIC_APP_NAME": "Ting Test",
+        "EXPO_PUBLIC_APP_SLUG": "ting-test",
+        "EXPO_PUBLIC_APP_SCHEME": "tingtest",
+        "EXPO_PUBLIC_BUNDLE_ID": "nz.tingtest.app",
+        "EXPO_PUBLIC_APP_DOMAIN": "baseplate-app.blnk.nz",
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "a33613b7-aa17-4bf7-8ebb-3331538e0cf5",
+        "EXPO_PUBLIC_SPLASH_COLOR": "#f5f0e8"
       },
       "channel": "preview"
     },
@@ -21,7 +31,16 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://baseplate-api.blnk.nz",
-        "EXPO_PUBLIC_TENANT_SLUG": "ting-test"
+        "EXPO_PUBLIC_TENANT_SLUG": "ting-test",
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_CURRENCY": "NZD",
+        "EXPO_PUBLIC_APP_NAME": "Ting Test",
+        "EXPO_PUBLIC_APP_SLUG": "ting-test",
+        "EXPO_PUBLIC_APP_SCHEME": "tingtest",
+        "EXPO_PUBLIC_BUNDLE_ID": "nz.tingtest.app",
+        "EXPO_PUBLIC_APP_DOMAIN": "baseplate-app.blnk.nz",
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "a33613b7-aa17-4bf7-8ebb-3331538e0cf5",
+        "EXPO_PUBLIC_SPLASH_COLOR": "#f5f0e8"
       },
       "channel": "production"
     }
