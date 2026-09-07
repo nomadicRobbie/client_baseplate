@@ -29,8 +29,7 @@ echo "→ running migrations"
 
 echo "→ building"
 pnpm build --filter=@blnk/shared
-set -a && source apps/app/.env && set +a
-(cd apps/app && npx expo export -p web)
+(cd apps/app && set -a && source .env && set +a && npx expo export -p web)
 pnpm build --filter=@blnk/client-api
 
 echo "→ starting / reloading API via PM2"
