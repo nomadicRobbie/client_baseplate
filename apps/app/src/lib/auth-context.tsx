@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { BlnkUser, FeatureFlags, TrialInfo } from '@blnk/shared';
 import { me } from './api';
-import { getAccessToken, clearSession } from './session';
+import { getAccessToken } from './session';
 
 interface MeResponse {
   user: BlnkUser;
@@ -43,7 +43,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setTrialEndsAt(data.trial_ends_at ?? null);
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
-      clearSession();
+      // req() already calls redirectToLogin() → clearSession() on true auth failure.
+      // Don't clear here — a network error or 5xx would wipe valid tokens.
       setUser(null);
     } finally {
       setLoading(false);
