@@ -269,7 +269,7 @@ function Shell() {
   const Brand = (
     <View style={s.brand}>
       <Text variant="heading">{orgName}</Text>
-      {!!firstName && <Text variant="small" muted>{greeting()}, {firstName}</Text>}
+      {!!firstName && <Text variant="small" muted suppressHydrationWarning>{greeting()}, {firstName}</Text>}
     </View>
   );
 
