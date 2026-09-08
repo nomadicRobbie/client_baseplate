@@ -262,21 +262,29 @@ function PostItem({
 
 // ── Compliance item — incomplete scheduled checks for today ───────────────────
 function ComplianceItem({ data, t, s }: { data: FeedComplianceData; t: ThemeT; s: ReturnType<typeof makeStyles> }) {
+  const router = useRouter()
   const countLabel = data.remaining === 1
     ? '1 check not yet completed'
     : `${data.remaining} checks not yet completed`
   const doneLabel = data.times_per_day > 1 ? ` (${data.done_count}/${data.times_per_day} done)` : ''
   return (
-    <View style={s.itemRow}>
-      <Ionicons name="checkmark-circle-outline" size={18} color={t.color.warning ?? t.color.accent} style={s.itemIcon} />
-      <View style={s.itemBody}>
-        <Text variant="label">{data.label}</Text>
-        <Text variant="body">{countLabel}{doneLabel}</Text>
-        <View style={s.itemMeta}>
-          <Badge label="Food Compliance" tone="neutral" />
+    <Pressable
+      onPress={() => router.push('/dashboard/compliance')}
+      accessibilityRole="button"
+      accessibilityLabel={`View compliance plan: ${data.label}`}
+    >
+      <View style={s.itemRow}>
+        <Ionicons name="checkmark-circle-outline" size={18} color={t.color.warning ?? t.color.accent} style={s.itemIcon} />
+        <View style={s.itemBody}>
+          <Text variant="label">{data.label}</Text>
+          <Text variant="body">{countLabel}{doneLabel}</Text>
+          <View style={s.itemMeta}>
+            <Badge label="Food Compliance" tone="neutral" />
+          </View>
         </View>
+        <Ionicons name="chevron-forward-outline" size={16} color={t.color.textMuted} />
       </View>
-    </View>
+    </Pressable>
   )
 }
 

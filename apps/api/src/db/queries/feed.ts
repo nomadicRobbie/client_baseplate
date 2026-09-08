@@ -164,27 +164,58 @@ export async function listFeedItems(opts: {
     }
   }
 
-  // ── Compliance: today's incomplete scheduled checks ───────────────────────
+  // ── Compliance: today's incomplete scheduled checks, grouped by plan ────────
   if (hasCompliance) {
     const today = new Date().toISOString().slice(0, 10)
     const todayDate = new Date(today + 'T00:00:00')
     const [schedules, done] = await Promise.all([listActiveSchedules(), scheduleDoneCounts(today)])
-    for (const sc of schedules.filter(s => isDueOn(s, todayDate))) {
-      const done_count = done[sc.id] ?? 0
-      const remaining = Math.max(0, sc.times_per_day - done_count)
+    const dueSchedules = schedules.filter(s => isDueOn(s, todayDate))
+
+    // Fetch plan names for any plan_id we see.
+    const planIds = [...new Set(dueSchedules.map(s => s.plan_id).filter(Boolean))] as string[]
+    const planNames: Record<string, string> = {}
+    if (planIds.length) {
+      const rows = await query<{ id: string; name: string }>(
+        `SELECT id, name FROM food_control_plans WHERE id = ANY($1)`, [planIds],
+      )
+      for (const r of rows) planNames[r.id] = r.name
+    }
+
+    // Group by plan_id; orphan schedules (null plan_id) each get their own card.
+    const planGroups: Record<string, typeof dueSchedules> = {}
+    for (const sc of dueSchedules) {
+      const key = sc.plan_id ?? `__orphan__${sc.id}`
+      ;(planGroups[key] ??= []).push(sc)
+    }
+
+    for (const [key, group] of Object.entries(planGroups)) {
+      const isOrphan = key.startsWith('__orphan__')
+      let totalDone = 0, totalRequired = 0
+      for (const sc of group) {
+        totalDone += done[sc.id] ?? 0
+        totalRequired += sc.times_per_day
+      }
+      const remaining = Math.max(0, totalRequired - totalDone)
       if (remaining === 0) continue
+
+      const planId = isOrphan ? null : group[0].plan_id!
+      const planName = planId ? (planNames[planId] ?? null) : null
+      const firstSc = group[0]
+
       items.push({
         kind: 'compliance',
         module: 'compliance',
         created_at: today,
         data: {
-          schedule_id: sc.id,
-          label: sc.label,
-          record_type: sc.record_type,
-          jurisdiction: sc.jurisdiction,
-          done_count,
+          plan_id: planId,
+          plan_name: planName,
+          schedule_id: group.length === 1 ? firstSc.id : null,
+          label: planName ?? firstSc.label,
+          record_type: firstSc.record_type,
+          jurisdiction: firstSc.jurisdiction,
+          done_count: totalDone,
           remaining,
-          times_per_day: sc.times_per_day,
+          times_per_day: totalRequired,
           due_date: today,
         },
       })

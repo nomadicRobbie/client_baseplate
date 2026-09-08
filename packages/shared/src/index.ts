@@ -716,7 +716,9 @@ export interface FeedMaintenanceData {
 }
 
 export interface FeedComplianceData {
-  schedule_id: string
+  plan_id: string | null       // null = orphan schedules with no owning plan
+  plan_name: string | null
+  schedule_id: string | null   // null when grouped (plan has multiple schedules)
   label: string
   record_type: string
   jurisdiction: string
