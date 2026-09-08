@@ -37,10 +37,7 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="apple-touch-icon" href="/icon-192.png" />
         {/* Pre-hydration background so the area behind the status bar matches the OS
             colour scheme before JS runs. ThemedStatusBar overrides after mount. */}
-        <style>{`
-          html, body { background-color: #f5f0e8; }
-          @media (prefers-color-scheme: dark) { html, body { background-color: #111111; } }
-        `}</style>
+        <style dangerouslySetInnerHTML={{ __html: `html,body{background-color:#f5f0e8}@media(prefers-color-scheme:dark){html,body{background-color:#111111}}` }} />
 
         {/* Disables body scrolling on web so RN ScrollViews behave like native. */}
         <ScrollViewStyleReset />
