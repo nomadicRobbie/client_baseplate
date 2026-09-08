@@ -300,6 +300,8 @@ const compliancePlugin: FastifyPluginAsync = async (fastify) => {
       interval_days: { type: ['integer', 'null'], minimum: 1 },
       anchor_date:   { type: ['string', 'null'] },
       times_per_day: { type: 'integer', minimum: 1 },
+      plan_id:       { type: ['string', 'null'] },
+      custom_fields: { type: 'array' },
     } } },
   }, async (req, reply) => {
     const schedule = await createSchedule({ jurisdiction: JURISDICTION, ...(req.body as object) } as never)

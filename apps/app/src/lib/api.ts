@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import type { TokenPair, ProfileResponse, TeamUser, Person, BlnkBillingStatus, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, FoodControlPlan, Product, ProductVariant, Asset, AssetType, AssetFieldDef, AssetFault, AssetFaultStep, AssetMaintenanceLog, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert, AssetComponent, AssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData, ServiceTemplate, ScheduledService, ServiceAssignment, ServiceManifest, AvailabilitySlot, PersonUnavailability, UnavailabilityKind, Roster, RosterDetail, RosterRules, RosterShift, EligibleCrew, OpenShift } from '@blnk/shared';
+import type { TokenPair, ProfileResponse, TeamUser, Person, BlnkBillingStatus, ClientSubscription, WebTrafficOverview, ComplianceRecordType, ComplianceRecord, ComplianceSchedule, ScheduleDue, CoolingBatch, FoodControlPlan, Product, ProductVariant, Asset, AssetType, AssetFieldDef, AssetFault, AssetFaultStep, AssetMaintenanceLog, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert, AssetComponent, AssetAssignment, FeedItem, FeedPost, FeedPostComment, FormSchema, FormResponseData, FormField, ServiceTemplate, ScheduledService, ServiceAssignment, ServiceManifest, AvailabilitySlot, PersonUnavailability, UnavailabilityKind, Roster, RosterDetail, RosterRules, RosterShift, EligibleCrew, OpenShift } from '@blnk/shared';
 import { getAccessToken, getRefreshToken, setTokens, clearSession } from './session';
 
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
@@ -436,6 +436,7 @@ export type NewSchedule = {
   record_type: string; label: string; site_id?: string | null; cadence: string;
   weekdays?: number[]; day_of_month?: number | null; interval_days?: number | null;
   anchor_date?: string | null; times_per_day?: number; plan_id?: string | null;
+  custom_fields?: FormField[];
 };
 
 export const getSchedulesDue = (token: string, on: string) => {

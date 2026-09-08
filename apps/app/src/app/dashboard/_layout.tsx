@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Slot, Redirect, usePathname, useRouter } from 'expo-router';
 import { View, Pressable, useWindowDimensions, ActivityIndicator, Platform, StyleSheet } from 'react-native';
 import * as Notifications from 'expo-notifications';
@@ -103,12 +103,6 @@ const makeStyles = (t: ThemeT) => ({
   navLabel: { fontSize: t.size.sm, fontWeight: '400' as const },
 });
 
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
-}
 
 function Spinner() {
   const t = useTheme();
@@ -265,11 +259,15 @@ function Shell() {
     return () => sub.remove();
   }, []);
   const firstName = data?.me.name?.split(' ')[0];
+  const [today, setToday] = useState<string | null>(null);
+  useEffect(() => {
+    setToday(new Date().toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' }));
+  }, []);
 
   const Brand = (
     <View style={s.brand}>
       <Text variant="heading">{orgName}</Text>
-      {!!firstName && <Text variant="small" muted suppressHydrationWarning>{greeting()}, {firstName}</Text>}
+      {!!firstName && <Text variant="small" muted>{today ? `${firstName} · ${today}` : firstName}</Text>}
     </View>
   );
 

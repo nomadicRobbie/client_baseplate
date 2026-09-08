@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { BlnkUser, FeatureFlags, TrialInfo } from '@blnk/shared';
 import { me } from './api';
-import { getAccessToken } from './session';
+import { getAccessToken, clearSession } from './session';
 
 interface MeResponse {
   user: BlnkUser;

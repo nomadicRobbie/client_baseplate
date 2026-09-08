@@ -3,7 +3,7 @@ import { View, TextInput, Pressable, StyleSheet, ScrollView } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import type {
-  ComplianceRecordType, ComplianceRecord, ComplianceFieldSpec, ComplianceSchedule, ScheduleDue, CoolingBatch,
+  ComplianceRecordType, ComplianceRecord, ComplianceFieldSpec, ComplianceSchedule, ScheduleDue, CoolingBatch, FormField, FormFieldType,
 } from '@blnk/shared';
 import { getAccessToken } from '@/lib/session';
 import { readThrough } from '@/lib/mirror';
@@ -28,7 +28,7 @@ import { localDate } from '@/lib/format';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' | 'info' } | null;
-type Editing = { type: ComplianceRecordType; record?: ComplianceRecord; schedule?: ComplianceSchedule; required?: boolean } | null;
+type Editing = { type: ComplianceRecordType; record?: ComplianceRecord; schedule?: ComplianceSchedule; required?: boolean; extraSchema?: ComplianceFieldSpec[] } | null;
 type FormData = Record<string, string | boolean | string[]>;
 type Tab = 'today' | 'records' | 'history';
 type HistoryRange = 'today' | 'week' | '30d' | 'all';
@@ -120,7 +120,8 @@ function humanDur(ms: number): string {
 // ── Styles ───────────────────────────────────────────────────────────────────
 function makeStyles(t: ThemeT) {
   const soft = { passBg: t.color.success + '22', passInk: t.color.success, failBg: t.color.danger + '22', failInk: t.color.danger, limitBg: t.color.success + '18', limitBorder: t.color.success + '44' };
-  return { soft, s: StyleSheet.create({
+  const placeholderColor = t.color.textMuted + '88';
+  return { soft, placeholderColor, s: StyleSheet.create({
     seg: { flexDirection: 'row', backgroundColor: t.color.surfaceAlt, borderRadius: t.radius.pill, padding: 4, marginVertical: t.space.md },
     segBtn: { flex: 1, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: t.radius.pill },
     segBtnOn: { backgroundColor: t.color.primary },
@@ -164,6 +165,20 @@ function makeStyles(t: ThemeT) {
     flexGrow1: { flexGrow: 1 },
     marginTopMd: { marginTop: t.space.md },
     marginTopSm: { marginTop: t.space.sm },
+    cfList: { gap: 4 },
+    cfRow: { flexDirection: 'row', alignItems: 'center', gap: t.space.sm, paddingVertical: 4 },
+    cfLabel: { flex: 1 },
+    cfInputRow: { flexDirection: 'row', gap: t.space.sm },
+    cfAddBtn: { backgroundColor: t.color.primary, borderRadius: t.radius.md, paddingHorizontal: 14, justifyContent: 'center' as const },
+    cfToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
+    catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space.xs },
+    catTile: { flexBasis: '30%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4, paddingHorizontal: t.space.sm, paddingVertical: t.space.sm, borderRadius: t.radius.md, borderWidth: 1, borderColor: t.color.border, backgroundColor: t.color.surface },
+    catTileActive: { borderColor: t.color.primary, backgroundColor: t.color.primary + '18' },
+    catTileSelected: { borderColor: t.color.primary },
+    catTileLabel: { flex: 1, textTransform: 'capitalize' as const, fontSize: t.size.sm },
+    catTileLabelOn: { color: t.color.primary, fontWeight: '600' as const },
+    catTypePanel: { borderLeftWidth: 3, borderLeftColor: t.color.primary, borderRadius: t.radius.sm, backgroundColor: t.color.surfaceAlt, padding: t.space.md, gap: t.space.sm },
+    catTypePanelLabel: { textTransform: 'capitalize' as const, fontWeight: '600' as const, color: t.color.primary },
   }) };
 }
 function chipSize(size: number) { return { width: size, height: size }; }
@@ -316,12 +331,70 @@ function InlineField({ spec, value, onChange, last }: {
   );
 }
 
+// ── Custom field form builder (inline, optional) ─────────────────────────────
+const CF_TYPES: { type: FormFieldType; label: string }[] = [
+  { type: 'boolean', label: 'Yes / No' },
+  { type: 'text',    label: 'Text' },
+  { type: 'number',  label: 'Number' },
+  { type: 'date',    label: 'Date' },
+];
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+function CustomFieldBuilder({ fields, onChange }: { fields: FormField[]; onChange: (f: FormField[]) => void }) {
+  const t = useTheme();
+  const { s, placeholderColor } = useStyles();
+  const [newType, setNewType] = useState<FormFieldType>('boolean');
+  const [newLabel, setNewLabel] = useState('');
+
+  const add = () => {
+    if (!newLabel.trim()) return;
+    onChange([...fields, { id: uid(), type: newType, label: newLabel.trim(), required: false }]);
+    setNewLabel('');
+  };
+
+  return (
+    <View style={s.fieldGroup}>
+      {fields.length > 0 && (
+        <View style={s.cfList}>
+          {fields.map((f) => (
+            <View key={f.id} style={s.cfRow}>
+              <Ionicons name="reorder-two-outline" size={16} color={t.color.textMuted} />
+              <Text variant="small" style={s.cfLabel}>{f.label}</Text>
+              <Badge label={CF_TYPES.find((x) => x.type === f.type)?.label ?? f.type} tone="neutral" />
+              <Pressable onPress={() => onChange(fields.filter((x) => x.id !== f.id))} hitSlop={8}>
+                <Ionicons name="close-circle-outline" size={18} color={t.color.danger} />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+      <View style={s.rowWrap}>
+        {CF_TYPES.map((ct) => (
+          <Pill key={ct.type} label={ct.label} active={newType === ct.type} onPress={() => setNewType(ct.type)} />
+        ))}
+      </View>
+      <View style={s.cfInputRow}>
+        <TextInput
+          value={newLabel} onChangeText={setNewLabel} placeholder="Field label"
+          placeholderTextColor={placeholderColor}
+          style={[s.input, s.flex1]}
+          onSubmitEditing={add} returnKeyType="done"
+        />
+        <Pressable onPress={add} style={s.cfAddBtn}>
+          <Text variant="label" color={t.color.primaryText}>Add</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 // ── Schedule editor ──────────────────────────────────────────────────────────
 function ScheduleEditor({ types, edit, defaultPlanId, onSaved, onCancel }: {
   types: ComplianceRecordType[]; edit: ComplianceSchedule | null;
   defaultPlanId?: string; onSaved: () => void; onCancel: () => void;
 }) {
-  const { s } = useStyles();
+  const t = useTheme();
+  const { s, placeholderColor } = useStyles();
   const [recordType, setRecordType] = useState(edit?.record_type ?? types[0]?.code ?? '');
   const [label, setLabel] = useState(edit?.label ?? '');
   const [cadence, setCadence] = useState<NewSchedule['cadence']>(edit?.cadence ?? 'daily');
@@ -329,8 +402,21 @@ function ScheduleEditor({ types, edit, defaultPlanId, onSaved, onCancel }: {
   const [dayOfMonth, setDayOfMonth] = useState(edit?.day_of_month ? String(edit.day_of_month) : '1');
   const [intervalDays, setIntervalDays] = useState(edit?.interval_days ? String(edit.interval_days) : '2');
   const [timesPerDay, setTimesPerDay] = useState(edit?.times_per_day ? String(edit.times_per_day) : '1');
+  const [customFields, setCustomFields] = useState<FormField[]>(edit?.custom_fields ?? []);
+  const [showCustomFields, setShowCustomFields] = useState((edit?.custom_fields?.length ?? 0) > 0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+
+  const categories = useMemo(() => {
+    const g: Record<string, ComplianceRecordType[]> = {};
+    for (const ty of types) (g[ty.category ?? 'Other'] ??= []).push(ty);
+    return g;
+  }, [types]);
+  const [activeCat, setActiveCat] = useState<string | null>(() => {
+    const selected = types.find((ty) => ty.code === recordType);
+    return selected?.category ?? null;
+  });
+  const toggleCat = (cat: string) => setActiveCat((prev) => (prev === cat ? null : cat));
 
   const save = async () => {
     if (!recordType) { setErr('Pick a check type.'); return; }
@@ -345,6 +431,7 @@ function ScheduleEditor({ types, edit, defaultPlanId, onSaved, onCancel }: {
       anchor_date: cadence === 'interval' ? todayLocal() : null,
       times_per_day: Math.max(1, Number(timesPerDay) || 1),
       plan_id: edit?.plan_id ?? defaultPlanId ?? null,
+      custom_fields: customFields,
     };
     try {
       const token = getAccessToken()!;
@@ -353,33 +440,53 @@ function ScheduleEditor({ types, edit, defaultPlanId, onSaved, onCancel }: {
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
 
+  const selectedType = types.find((ty) => ty.code === recordType);
+
   return (
     <Card>
       {err ? <Notice message={err} tone="error" /> : null}
 
       <View style={s.fieldGroup}>
         <Text variant="label" muted>Check type *</Text>
-        {Object.entries(
-          types.reduce<Record<string, ComplianceRecordType[]>>((g, ty) => {
-            (g[ty.category ?? 'Other'] ??= []).push(ty);
-            return g;
-          }, {})
-        ).map(([cat, list]) => (
-          <View key={cat} style={s.categoryGroup}>
+        <View style={s.catGrid}>
+          {Object.entries(categories).map(([cat, list]) => {
+            const hasSelected = list.some((ty) => ty.code === recordType);
+            const isActive = activeCat === cat;
+            return (
+              <Pressable
+                key={cat}
+                onPress={() => toggleCat(cat)}
+                accessibilityRole="button"
+                style={[s.catTile, isActive && s.catTileActive, hasSelected && !isActive && s.catTileSelected]}
+              >
+                <Text variant="small" style={[s.catTileLabel, (isActive || hasSelected) && s.catTileLabelOn]}>{cat}</Text>
+                {hasSelected && !isActive
+                  ? <Ionicons name="checkmark-circle" size={14} color={t.color.primary} />
+                  : <Text variant="small" muted>{list.length}</Text>
+                }
+              </Pressable>
+            );
+          })}
+        </View>
+        {activeCat && categories[activeCat] && (
+          <View style={s.catTypePanel}>
+            <Text variant="small" muted style={s.catTypePanelLabel}>{activeCat}</Text>
             <View style={s.rowWrap}>
-              <Text variant="small" muted style={s.categoryLabel}>{cat}</Text>
-              <Badge label={String(list.length)} tone="neutral" />
-            </View>
-            <View style={s.rowWrap}>
-              {list.map((ty) => <Pill key={ty.code} label={ty.label} active={recordType === ty.code} onPress={() => setRecordType(ty.code)} />)}
+              {categories[activeCat].map((ty) => (
+                <Pill key={ty.code} label={ty.label} active={recordType === ty.code}
+                  onPress={() => setRecordType(ty.code)} />
+              ))}
             </View>
           </View>
-        ))}
+        )}
+        {selectedType && (
+          <Text variant="small" color={t.color.primary}>{selectedType.category} · {selectedType.label}</Text>
+        )}
       </View>
 
       <View style={s.fieldGroup}>
         <Text variant="label" muted>Name it (so staff know which one) *</Text>
-        <TextInput value={label} onChangeText={setLabel} placeholder="Unit name" style={s.input} />
+        <TextInput value={label} onChangeText={setLabel} placeholder="e.g. Main chiller, Staff toilet" placeholderTextColor={placeholderColor} style={s.input} />
       </View>
 
       <View style={s.fieldGroup}>
@@ -420,9 +527,23 @@ function ScheduleEditor({ types, edit, defaultPlanId, onSaved, onCancel }: {
         <TextInput value={timesPerDay} onChangeText={setTimesPerDay} keyboardType="numeric" style={s.input} />
       </View>
 
+      <Pressable
+        onPress={() => setShowCustomFields((v) => !v)}
+        accessibilityRole="button"
+        style={s.cfToggle}
+      >
+        <Ionicons name={showCustomFields ? 'chevron-up' : 'add-circle-outline'} size={18} color={t.color.primary} />
+        <Text variant="label" color={t.color.primary}>
+          {showCustomFields ? 'Hide checklist' : `Custom checklist${customFields.length > 0 ? ` (${customFields.length})` : ''}`}
+        </Text>
+      </Pressable>
+      {showCustomFields && (
+        <CustomFieldBuilder fields={customFields} onChange={setCustomFields} />
+      )}
+
       <View style={s.rowWrap}>
-        <Button label={edit ? 'Save changes' : 'Add schedule'} onPress={save} loading={busy} style={s.flexGrow1} />
         <Button label="Cancel" variant="ghost" onPress={onCancel} style={s.flexGrow1} />
+        <Button label={edit ? 'Save changes' : 'Add schedule'} onPress={save} loading={busy} style={s.flexGrow1} />
       </View>
     </Card>
   );
@@ -586,9 +707,16 @@ export default function CompliancePlanView() {
   if (features && !features.compliance) return <Redirect href="/dashboard" />;
 
   const openForm = (type: ComplianceRecordType, record?: ComplianceRecord, schedule?: ComplianceSchedule, opts?: { required?: boolean }) => {
-    setEditing({ type, record, schedule, required: opts?.required });
+    const extraSchema: ComplianceFieldSpec[] = (schedule?.custom_fields ?? []).map((f) => ({
+      key: f.id,
+      label: f.label,
+      type: (f.type === 'boolean' || f.type === 'checkbox') ? 'bool' : f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text',
+      required: f.required ?? false,
+    }));
+    setEditing({ type, record, schedule, required: opts?.required, extraSchema: extraSchema.length ? extraSchema : undefined });
     setEnteredBy(record?.entered_by ?? userName);
-    const base = initData(type.field_schema, record);
+    const fullSchema = extraSchema.length ? [...type.field_schema, ...extraSchema] : type.field_schema;
+    const base = initData(fullSchema, record);
     if (schedule?.unit_id && 'unit_id' in base) base['unit_id'] = schedule.unit_id;
     setData(base);
     setMsg(null);
@@ -597,9 +725,10 @@ export default function CompliancePlanView() {
 
   const save = async () => {
     if (!editing) return;
-    const { type, record, schedule, required } = editing;
+    const { type, record, schedule, required, extraSchema } = editing;
+    const fullSchema = extraSchema?.length ? [...type.field_schema, ...extraSchema] : type.field_schema;
     if (!enteredBy.trim()) { setMsg({ text: 'Your name/initials are required.', tone: 'error' }); return; }
-    const missing = type.field_schema.find((f) => f.required && (data[f.key] === '' || data[f.key] === undefined));
+    const missing = fullSchema.find((f) => f.required && (data[f.key] === '' || data[f.key] === undefined));
     if (missing) { setMsg({ text: `${missing.label} is required.`, tone: 'error' }); return; }
     if (required && !(data.action_taken || data.cause || data.prevention)) {
       setMsg({ text: 'Record what was done about it (action taken) before you can continue.', tone: 'error' });
@@ -608,7 +737,7 @@ export default function CompliancePlanView() {
     setBusy(true);
     try {
       const token = getAccessToken()!;
-      const payload = toPayload(type.field_schema, data);
+      const payload = toPayload(fullSchema, data);
       if (record) {
         await updateComplianceRecord(token, record.id, { entered_by: enteredBy.trim(), data: payload });
         if (type.code === 'corrective_action') setPendingCA(null);
@@ -643,7 +772,7 @@ export default function CompliancePlanView() {
         const caType = typeByCode['corrective_action'];
         if (res.record.result === 'fail' && res.corrective_action && caType) {
           const unit = identifyUnit(data, schedule);
-          const summary = summarizeFailure(type.field_schema, data);
+          const summary = summarizeFailure(fullSchema, data);
           const enriched: ComplianceRecord = {
             ...res.corrective_action,
             data: {
@@ -750,11 +879,11 @@ export default function CompliancePlanView() {
   }, [types]);
 
   const renderForm = (ed: NonNullable<Editing>) => {
-    const { type, record, schedule, required } = ed;
-    const payload = toPayload(type.field_schema, data);
+    const { type, record, schedule, required, extraSchema } = ed;
+    const schema = extraSchema?.length ? [...type.field_schema, ...extraSchema] : type.field_schema;
+    const payload = toPayload(schema, data);
     const verdict = type.critical_limit ? evalLimit(type.critical_limit, payload) : 'na';
     const limitText = describeLimit(type.critical_limit, type.field_schema);
-    const schema = type.field_schema;
     return (
       <>
         <View style={s.formHeader}>
@@ -1042,7 +1171,7 @@ export default function CompliancePlanView() {
 
       {/* Back to plan picker */}
       {!editing && !manage && (
-        <Pressable onPress={() => router.back()} accessibilityRole="button" style={s.back}>
+        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/dashboard/compliance')} accessibilityRole="button" style={s.back}>
           <Text variant="label" color={t.color.primary}>‹ Control plans</Text>
         </Pressable>
       )}

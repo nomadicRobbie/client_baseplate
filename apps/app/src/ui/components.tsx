@@ -70,11 +70,10 @@ function makeStyles(t: ReturnType<typeof useTheme>) {
 type TextVariant = 'title' | 'heading' | 'body' | 'label' | 'mono' | 'small';
 
 export function Text({
-  variant = 'body', muted, color, style, numberOfLines, suppressHydrationWarning, children,
+  variant = 'body', muted, color, style, numberOfLines, children,
 }: {
   variant?: TextVariant; muted?: boolean; color?: string;
-  style?: StyleProp<TextStyle>; numberOfLines?: number;
-  suppressHydrationWarning?: boolean; children: ReactNode;
+  style?: StyleProp<TextStyle>; numberOfLines?: number; children: ReactNode;
 }) {
   const t = useTheme();
   const map: Record<TextVariant, TextStyle> = {
@@ -86,7 +85,7 @@ export function Text({
     small: { fontSize: t.size.xs, lineHeight: t.size.xs * 1.4 },
   };
   return (
-    <RNText numberOfLines={numberOfLines} suppressHydrationWarning={suppressHydrationWarning} style={[{ color: color ?? (muted ? t.color.textMuted : t.color.text) }, map[variant], style]}>
+    <RNText numberOfLines={numberOfLines} style={[{ color: color ?? (muted ? t.color.textMuted : t.color.text) }, map[variant], style]}>
       {children}
     </RNText>
   );

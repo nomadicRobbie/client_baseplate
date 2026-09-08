@@ -158,6 +158,7 @@ export interface ComplianceSchedule {
   interval_days: number | null  // interval: every N days from anchor_date
   anchor_date: string | null    // interval reference date (YYYY-MM-DD)
   times_per_day: number         // how many completions are required on a due day
+  custom_fields: FormField[]    // optional extra checklist items added by the operator
   active: boolean
   created_at: string
 }

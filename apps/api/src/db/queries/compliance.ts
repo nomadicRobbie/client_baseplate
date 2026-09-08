@@ -222,6 +222,8 @@ export interface NewSchedule {
   interval_days?: number | null
   anchor_date?: string | null
   times_per_day?: number
+  plan_id?: string | null
+  custom_fields?: unknown[]
 }
 
 export async function listSchedules(): Promise<ComplianceSchedule[]> {
@@ -235,11 +237,12 @@ export async function listActiveSchedules(): Promise<ComplianceSchedule[]> {
 export async function createSchedule(s: NewSchedule): Promise<ComplianceSchedule> {
   const rows = await query<ComplianceSchedule>(
     `INSERT INTO compliance_schedules
-       (jurisdiction, record_type, label, site_id, cadence, weekdays, day_of_month, interval_days, anchor_date, times_per_day)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,1))
+       (jurisdiction, record_type, label, site_id, cadence, weekdays, day_of_month, interval_days, anchor_date, times_per_day, plan_id, custom_fields)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,1),$11,$12)
      RETURNING *`,
     [s.jurisdiction, s.record_type, s.label, s.site_id ?? null, s.cadence, s.weekdays ?? [],
-     s.day_of_month ?? null, s.interval_days ?? null, s.anchor_date ?? null, s.times_per_day ?? null],
+     s.day_of_month ?? null, s.interval_days ?? null, s.anchor_date ?? null, s.times_per_day ?? null,
+     s.plan_id ?? null, JSON.stringify(s.custom_fields ?? [])],
   )
   return rows[0]
 }
@@ -259,11 +262,13 @@ export async function updateSchedule(
        interval_days = COALESCE($8, interval_days),
        anchor_date   = COALESCE($9, anchor_date),
        times_per_day = COALESCE($10, times_per_day),
-       active        = COALESCE($11, active)
+       active        = COALESCE($11, active),
+       custom_fields = COALESCE($12, custom_fields)
      WHERE id = $1 RETURNING *`,
     [id, p.record_type ?? null, p.label ?? null, p.site_id ?? null, p.cadence ?? null,
      p.weekdays ?? null, p.day_of_month ?? null, p.interval_days ?? null, p.anchor_date ?? null,
-     p.times_per_day ?? null, p.active ?? null],
+     p.times_per_day ?? null, p.active ?? null,
+     p.custom_fields != null ? JSON.stringify(p.custom_fields) : null],
   )
   return rows[0] ?? null
 }
