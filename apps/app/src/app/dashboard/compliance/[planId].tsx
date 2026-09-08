@@ -444,8 +444,7 @@ function SchedulesManager({ types, typeByCode, isAdmin, planId, onBack }: {
     setLoading(true);
     try {
       const all = (await listSchedules(getAccessToken()!)).schedules;
-      // Show schedules for this plan + unscoped (null) for backward compat
-      setSchedules(all.filter((sc) => sc.plan_id === planId || sc.plan_id === null));
+      setSchedules(all.filter((sc) => sc.plan_id === planId));
     } catch (e) { setMsg({ text: e instanceof Error ? e.message : String(e), tone: 'error' }); }
     finally { setLoading(false); }
   };
@@ -563,7 +562,7 @@ export default function CompliancePlanView() {
       ]);
       setTypes(tRes.value.record_types);
       setRecords(rRes.value.records);
-      setDue(dRes.value.due.filter((d) => d.schedule.plan_id === planId || d.schedule.plan_id === null));
+      setDue(dRes.value.due.filter((d) => d.schedule.plan_id === planId));
       setCooling(cRes.value.batches);
       const plan = pRes.value.plans.find((p) => p.id === planId);
       if (plan) { setPlanName(plan.name); setPlanTier(plan.tier); }
