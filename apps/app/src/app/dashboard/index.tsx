@@ -2,22 +2,15 @@ import { View, Pressable, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { usePins } from '@/lib/pins-context';
-import { visibleNav } from '@/lib/nav';
-import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/theme';
-import { Screen, Text, GroupedCard, GRow, SectionLabel } from '@/ui/components';
+import { Screen, Text, SectionLabel } from '@/ui/components';
 
 export default function Library() {
   const t = useTheme();
   const router = useRouter();
   const { modules, isPinned, toggle } = usePins();
   const { width } = useWindowDimensions();
-  const { features, user } = useAuth();
   const wide = width >= 900;
-  const isAdmin = user?.role === 'admin' || user?.role === 'super';
-  const mobileAdminLinks = wide ? [] : visibleNav(isAdmin, features)
-    .filter((i) => i.group === 'account' || i.group === 'admin')
-    .filter((i) => i.href !== '/dashboard/account');
 
   return (
     <Screen>
@@ -71,22 +64,6 @@ export default function Library() {
         </View>
       )}
 
-      {mobileAdminLinks.length > 0 && (
-        <View style={{ gap: 8 }}>
-          <SectionLabel>Manage</SectionLabel>
-          <GroupedCard>
-            {mobileAdminLinks.map((l, i) => (
-              <GRow key={l.href} onPress={() => router.push(l.href)} last={i === mobileAdminLinks.length - 1}>
-                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: t.color.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name={l.icon} size={18} color={t.color.text} />
-                </View>
-                <Text variant="label" style={{ flex: 1 }}>{l.label}</Text>
-                <Ionicons name="chevron-forward" size={18} color={t.color.textMuted} />
-              </GRow>
-            ))}
-          </GroupedCard>
-        </View>
-      )}
     </Screen>
   );
 }

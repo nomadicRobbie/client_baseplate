@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from '@/theme';
 
-function ThemedStatusBar() {
+function ThemedApp() {
   const t = useTheme();
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -17,26 +17,27 @@ function ThemedStatusBar() {
       }
       meta.content = t.color.bg;
     }
-  }, [t.color.bg]);
-  return <StatusBar style="auto" backgroundColor={t.color.bg} />;
-}
-
-// Root: theme + safe-area context wrap the whole app.
-// Auth-gating is handled per-screen via the session token.
-// A client clone re-skins by passing `theme={...}` to ThemeProvider.
-export default function RootLayout() {
-  useEffect(() => {
     if (Platform.OS === 'web' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
-  }, []);
+  }, [t.color.bg]);
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <ThemedStatusBar />
-        <Stack screenOptions={{ headerShown: false }} />
-      </ThemeProvider>
+    // ponytail: style on SafeAreaProvider fills the strip behind the iOS status bar with the theme bg
+    <SafeAreaProvider style={{ backgroundColor: t.color.bg }}>
+      <StatusBar style="auto" backgroundColor={t.color.bg} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: t.color.bg } }} />
     </SafeAreaProvider>
+  );
+}
+
+// Root: theme wraps everything so ThemedApp can colour the safe-area provider.
+// Auth-gating is handled per-screen via the session token.
+// A client clone re-skins by passing `theme={...}` to ThemeProvider.
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <ThemedApp />
+    </ThemeProvider>
   );
 }
