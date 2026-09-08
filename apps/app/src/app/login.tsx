@@ -49,8 +49,9 @@ export default function Login() {
   });
 
   const onCodeChange = (v: string) => {
-    setCode(v);
-    if (v.length === 6) verify(v);
+    const trimmed = v.trim();
+    setCode(trimmed);
+    if (trimmed.length === 6) verify(trimmed);
   };
 
   const loginPasskey = () => run(async () => {
