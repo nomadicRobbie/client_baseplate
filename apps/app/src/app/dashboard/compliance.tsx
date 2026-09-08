@@ -95,8 +95,8 @@ export default function CompliancePlans() {
     finally { setBusy(false); }
   };
 
-  const deactivate = async (id: string) => {
-    try { await updatePlan(tok(), id, { active: false }); await load(); }
+  const toggleActive = async (id: string, currentlyActive: boolean) => {
+    try { await updatePlan(tok(), id, { active: !currentlyActive }); await load(); }
     catch (e) { setMsg({ text: e instanceof Error ? e.message : String(e), tone: 'error' }); }
   };
 
@@ -115,7 +115,7 @@ export default function CompliancePlans() {
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
       <OfflineBanner offline={offline} />
       <View style={{ gap: 8 }}>
-        <SectionLabel right={plans.length > 0 ? <Text variant="small" muted>{plans.length}</Text> : undefined}>Control plans</SectionLabel>
+        <SectionLabel right={plans.length > 0 ? <Text variant="small" muted>{plans.filter(p => p.active).length} active</Text> : undefined}>Control plans</SectionLabel>
         {loading ? (
           <Text muted style={{ paddingHorizontal: 4 }}>Loading…</Text>
         ) : plans.length === 0 ? (
@@ -154,7 +154,10 @@ export default function CompliancePlans() {
                       return { flex: 1, paddingVertical: 10, paddingRight: 8, backgroundColor: pressed || hovered ? t.color.surfaceAlt : 'transparent' };
                     }}
                   >
-                    <Text variant="label">{p.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text variant="label" color={p.active ? undefined : t.color.textMuted}>{p.name}</Text>
+                      {!p.active && <Badge label="Inactive" tone="neutral" />}
+                    </View>
                     <Text variant="small" muted>Tier: {p.tier}</Text>
                   </Pressable>
                   {isAdmin && (
@@ -162,8 +165,17 @@ export default function CompliancePlans() {
                       <Pressable onPress={() => { setDupId(p.id); setDupName(`${p.name} (copy)`); }} accessibilityLabel="Duplicate plan" hitSlop={8} style={{ padding: 12 }}>
                         <Ionicons name="copy-outline" size={18} color={t.color.textMuted} />
                       </Pressable>
-                      <Pressable onPress={() => deactivate(p.id)} accessibilityLabel="Deactivate plan" hitSlop={8} style={{ padding: 12 }}>
-                        <Ionicons name="trash-outline" size={18} color={t.color.danger} />
+                      <Pressable
+                        onPress={() => toggleActive(p.id, p.active)}
+                        accessibilityLabel={p.active ? 'Deactivate plan' : 'Reactivate plan'}
+                        hitSlop={8}
+                        style={{ padding: 12 }}
+                      >
+                        <Ionicons
+                          name={p.active ? 'pause-circle-outline' : 'play-circle-outline'}
+                          size={18}
+                          color={p.active ? t.color.danger : t.color.success}
+                        />
                       </Pressable>
                     </>
                   )}

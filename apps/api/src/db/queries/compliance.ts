@@ -307,7 +307,8 @@ const assetImageSub = `(SELECT image_url FROM assets WHERE food_control_plan_id 
 
 export async function listPlans(opts: { isAdmin: boolean; userId?: string | null }): Promise<FoodControlPlan[]> {
   if (opts.isAdmin) {
-    return query<FoodControlPlan>(`SELECT fcp.*, ${assetImageSub} FROM food_control_plans fcp WHERE fcp.active = true ORDER BY fcp.name`, [])
+    // Admins see all plans (active and inactive) so they can reactivate them.
+    return query<FoodControlPlan>(`SELECT fcp.*, ${assetImageSub} FROM food_control_plans fcp ORDER BY fcp.active DESC, fcp.name`, [])
   }
   return query<FoodControlPlan>(
     `SELECT fcp.*, ${assetImageSub} FROM food_control_plans fcp
@@ -325,8 +326,8 @@ export async function getPlan(id: string): Promise<FoodControlPlan | null> {
 
 export async function createPlan(p: { name: string; tier?: string; created_by?: string | null }): Promise<FoodControlPlan> {
   const rows = await query<FoodControlPlan>(
-    `INSERT INTO food_control_plans (name, tier, created_by)
-     VALUES ($1, COALESCE($2,'FCP'), $3) RETURNING *`,
+    `INSERT INTO food_control_plans (name, tier, active, created_by)
+     VALUES ($1, COALESCE($2,'FCP'), true, $3) RETURNING *`,
     [p.name, p.tier ?? null, p.created_by ?? null],
   )
   return rows[0]
