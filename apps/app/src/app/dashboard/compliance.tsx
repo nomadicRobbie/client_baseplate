@@ -11,6 +11,7 @@ import { listPlans, createPlan, updatePlan, duplicatePlan, uploadPlanImage } fro
 import { readThrough } from '@/lib/mirror';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, GroupedCard, GRow, SectionLabel, Button, Notice, Badge, Pill } from '@/ui/components';
+import { OfflineBanner } from '@/ui/status';
 
 type ThemeT = ReturnType<typeof useTheme>;
 type Msg = { text: string; tone: 'success' | 'error' | 'info' } | null;
@@ -36,6 +37,7 @@ export default function CompliancePlans() {
 
   const [plans, setPlans] = useState<FoodControlPlan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [offline, setOffline] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
 
   // Create form
@@ -73,6 +75,7 @@ export default function CompliancePlans() {
     try {
       const r = await readThrough('compliance:plans', () => listPlans(tok()));
       setPlans(r.value.plans);
+      setOffline(r.stale);
     }
     catch (e) { setMsg({ text: e instanceof Error ? e.message : String(e), tone: 'error' }); }
     finally { setLoading(false); }
@@ -110,6 +113,7 @@ export default function CompliancePlans() {
 
   return (
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
+      <OfflineBanner offline={offline} />
       <View style={{ gap: 8 }}>
         <SectionLabel right={plans.length > 0 ? <Text variant="small" muted>{plans.length}</Text> : undefined}>Control plans</SectionLabel>
         {loading ? (

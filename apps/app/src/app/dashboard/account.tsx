@@ -256,6 +256,18 @@ export default function Account() {
         </GroupedCard>
       </View>
 
+      {/* ── Help ─────────────────────────────────────── */}
+      <View style={{ gap: 8 }}>
+        <SectionLabel>Help</SectionLabel>
+        <GroupedCard>
+          <GRow last onPress={() => Linking.openURL('https://blnk.nz/chat')}>
+            <Ionicons name="chatbubble-ellipses-outline" size={19} color={t.color.textMuted} />
+            <Text variant="label" style={{ flex: 1 }}>Chat with support</Text>
+            <Ionicons name="open-outline" size={16} color={t.color.textMuted} />
+          </GRow>
+        </GroupedCard>
+      </View>
+
       {/* ── Legal ────────────────────────────────────── */}
       <View style={{ gap: 8 }}>
         <SectionLabel>Legal</SectionLabel>

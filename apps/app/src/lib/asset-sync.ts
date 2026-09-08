@@ -32,5 +32,5 @@ async function sendCommand(c: OutboxCommand): Promise<void> {
   }
 }
 
-// Drain the offline outbox. Returns { sent, remaining }.
-export const syncAssetOutbox = () => flush(sendCommand);
+// Drain the asset offline outbox. Returns { sent, remaining }.
+export const syncAssetOutbox = () => flush('asset', sendCommand);

@@ -16,4 +16,4 @@ async function sendCommand(c: OutboxCommand): Promise<void> {
   }
 }
 
-export const syncComplianceOutbox = () => flush(sendCommand);
+export const syncComplianceOutbox = () => flush('compliance', sendCommand);

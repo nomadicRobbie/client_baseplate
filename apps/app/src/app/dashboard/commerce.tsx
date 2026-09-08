@@ -8,6 +8,7 @@ import { getAccessToken } from '@/lib/session';
 import { listAdminProducts, updateProduct } from '@/lib/api';
 import { readThrough } from '@/lib/mirror';
 import { Screen, Text, Button } from '@/ui/components';
+import { OfflineBanner } from '@/ui/status';
 import { useTheme } from '@/theme';
 
 function fmt(cents: number) { return (cents / 100).toFixed(2); }
@@ -76,6 +77,7 @@ export default function Commerce() {
   const { features } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading]   = useState(true);
+  const [offline, setOffline]   = useState(false);
   const [toast, setToast]       = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
 
   const load = useCallback(async () => {
@@ -83,6 +85,7 @@ export default function Commerce() {
     try {
       const r = await readThrough('commerce:products', () => listAdminProducts(getAccessToken()!));
       setProducts(r.value.products);
+      setOffline(r.stale);
     }
     catch (e) { setToast({ text: e instanceof Error ? e.message : 'Failed to load products', tone: 'error' }); }
     finally { setLoading(false); }
@@ -107,6 +110,7 @@ export default function Commerce() {
 
   return (
     <Screen toast={toast} onDismissToast={() => setToast(null)}>
+      <OfflineBanner offline={offline} />
       <View style={s.screenHeader}>
         <View style={s.titleSection}>
           <Text variant="title">Store</Text>

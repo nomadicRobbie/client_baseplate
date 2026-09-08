@@ -16,6 +16,7 @@ import {
 import { useImageSlots, type UploadFn, type ImageSlot } from '@/lib/image-slots';
 import { readThrough } from '@/lib/mirror';
 import { Screen, Text, Card, Button, Toggle, Pill, GroupedCard, FieldRow, SectionLabel, Badge, TextField } from '@/ui/components';
+import { OfflineBanner } from '@/ui/status';
 import { DateField } from '@/ui/date-field';
 import { useTheme } from '@/theme';
 import { useProfile } from '@/lib/profile-context';
@@ -202,6 +203,7 @@ export default function ProductDetail() {
   const [product, setProduct]     = useState<Product | null>(null);
   const [variants, setVariants]   = useState<ProductVariant[]>([]);
   const [loading, setLoading]     = useState(true);
+  const [offline, setOffline]     = useState(false);
   const [saving, setSaving]       = useState(false);
   const [draft, setDraft]         = useState<Partial<Product>>({});
   const [dirty, setDirty]         = useState(false);
@@ -221,6 +223,7 @@ export default function ProductDetail() {
       const { product: p } = pRes.value;
       const { variants: vs } = vRes.value;
       setProduct(p); setVariants(vs); setDraft({});
+      setOffline(pRes.stale || vRes.stale);
     } catch (e) { setToast({ text: e instanceof Error ? e.message : 'Failed to load', tone: 'error' }); }
     finally { setLoading(false); }
   }, [productId, isNew]);
@@ -304,6 +307,7 @@ export default function ProductDetail() {
 
   return (
     <Screen toast={toast} onDismissToast={() => setToast(null)}>
+      <OfflineBanner offline={offline} />
 
       {/* ── Header ── */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.md }}>

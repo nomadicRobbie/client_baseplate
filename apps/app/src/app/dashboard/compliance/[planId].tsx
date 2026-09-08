@@ -7,7 +7,7 @@ import type {
 } from '@blnk/shared';
 import { getAccessToken } from '@/lib/session';
 import { readThrough } from '@/lib/mirror';
-import { enqueue } from '@/lib/outbox';
+import { enqueue, pendingCount } from '@/lib/outbox';
 import { syncComplianceOutbox } from '@/lib/compliance-sync';
 import { useOnReconnect } from '@/lib/use-reconnect';
 import {
@@ -19,6 +19,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useProfile } from '@/lib/profile-context';
 import { evalLimit, describeLimit } from '@/lib/compliance';
 import { Screen, Text, Card, GroupedCard, GRow, SectionLabel, Button, Notice, Badge, Pill } from '@/ui/components';
+import { OfflineBanner, PendingSyncBanner } from '@/ui/status';
 import { DateField } from '@/ui/date-field';
 import { TempPicker } from '@/ui/temp-picker';
 import { recordIcon } from '@/ui/record-icon';
@@ -522,6 +523,9 @@ export default function CompliancePlanView() {
   const [cooling, setCooling] = useState<CoolingBatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [pendingSyncs, setPendingSyncs] = useState(() => pendingCount('compliance'));
   const [msg, setMsg] = useState<Msg>(null);
   const [tab, setTab] = useState<Tab>('today');
   const [manage, setManage] = useState(false);
@@ -563,6 +567,8 @@ export default function CompliancePlanView() {
       setCooling(cRes.value.batches);
       const plan = pRes.value.plans.find((p) => p.id === planId);
       if (plan) { setPlanName(plan.name); setPlanTier(plan.tier); }
+      setOffline(tRes.stale || rRes.stale || dRes.stale || cRes.stale || pRes.stale);
+      setPendingSyncs(pendingCount('compliance'));
     } catch (e) {
       setMsg({ text: e instanceof Error ? e.message : String(e), tone: 'error' });
     } finally {
@@ -612,7 +618,7 @@ export default function CompliancePlanView() {
         await load();
       } else {
         const verdict = type.critical_limit ? evalLimit(type.critical_limit, payload) : 'na';
-        const cmd = enqueue('LogComplianceRecord', {
+        const cmd = enqueue('compliance', 'LogComplianceRecord', {
           record_type: type.code, entered_by: enteredBy.trim(), data: payload,
           schedule_id: schedule?.id ?? null, datetime: new Date().toISOString(),
         });
@@ -626,6 +632,7 @@ export default function CompliancePlanView() {
           await syncComplianceOutbox();
         } catch {
           // Offline — cmd stays queued; flush on reconnect via useOnReconnect
+          setPendingSyncs(pendingCount('compliance'));
           const msg = verdict === 'fail'
             ? 'Failed check saved offline — complete the corrective action when back online.'
             : 'Saved offline — will sync when connected.';
@@ -1026,6 +1033,12 @@ export default function CompliancePlanView() {
 
   return (
     <Screen scrollRef={scrollRef} onScroll={(e) => { if (!overlay) scrollYRef.current = e.nativeEvent.contentOffset.y; }}>
+      <OfflineBanner offline={offline} />
+      <PendingSyncBanner count={pendingSyncs} busy={syncBusy} onSync={async () => {
+        setSyncBusy(true);
+        try { const { remaining } = await syncComplianceOutbox(); setPendingSyncs(remaining); if (remaining === 0) await load(); }
+        finally { setSyncBusy(false); }
+      }} />
       {msg && <Notice message={msg.text} tone={msg.tone} />}
 
       {/* Back to plan picker */}

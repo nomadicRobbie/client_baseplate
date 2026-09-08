@@ -50,7 +50,7 @@ export default function AssetFaults() {
   const [asset, setAsset] = useState<Asset | null>(null);
   const [faults, setFaults] = useState<AssetFault[]>([]);
   const [offline, setOffline] = useState(false);
-  const [pending, setPending] = useState(pendingCount());
+  const [pending, setPending] = useState(pendingCount('asset'));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<Msg | null>(null);
   // log-fault form
@@ -89,37 +89,37 @@ export default function AssetFaults() {
   const logFault = async () => {
     if (!fName.trim()) { setMsg({ text: 'Fault name is required.', tone: 'error' }); return; }
     setBusy(true); setMsg(null);
-    enqueue('LogFault', { asset_id: assetId, name: fName.trim(), description: fDesc.trim() || undefined, urgency: fUrgency });
-    setFName(''); setFDesc(''); setFUrgency('Medium'); setPending(pendingCount());
+    enqueue('asset', 'LogFault', { asset_id: assetId, name: fName.trim(), description: fDesc.trim() || undefined, urgency: fUrgency });
+    setFName(''); setFDesc(''); setFUrgency('Medium'); setPending(pendingCount('asset'));
     try { queued(await doSync(), 'Fault logged.'); } finally { setBusy(false); }
   };
   // Progress step — records what's been done, fault stays open.
   const addStep = async (f: AssetFault) => {
     if (!note.trim()) { setMsg({ text: 'Add a note for the step.', tone: 'error' }); return; }
     setBusy(true); setMsg(null);
-    enqueue('AddFaultStep', { fault_id: f.id, note: note.trim() });
-    setNote(''); setPending(pendingCount());
+    enqueue('asset', 'AddFaultStep', { fault_id: f.id, note: note.trim() });
+    setNote(''); setPending(pendingCount('asset'));
     try { queued(await doSync(), 'Step recorded.'); } finally { setBusy(false); }
   };
   // Close with just a note — no maintenance record required.
   const closeWithNote = async (f: AssetFault) => {
     if (!note.trim()) { setMsg({ text: 'Add a closing note.', tone: 'error' }); return; }
     setBusy(true); setMsg(null);
-    enqueue('CloseFault', { fault_id: f.id, resolution_notes: note.trim() });
-    setNote(''); setActiveId(null); setPending(pendingCount());
+    enqueue('asset', 'CloseFault', { fault_id: f.id, resolution_notes: note.trim() });
+    setNote(''); setActiveId(null); setPending(pendingCount('asset'));
     try { queued(await doSync(), 'Fault closed.'); } finally { setBusy(false); }
   };
   const open = faults.filter((f) => f.status !== 'closed');
   const closed = faults.filter((f) => f.status === 'closed');
-  const pendingLogged = pendingCommands()
+  const pendingLogged = pendingCommands('asset')
     .filter((c) => c.kind === 'LogFault' && (c.payload as { asset_id: string }).asset_id === assetId)
     .map((c) => ({ key: c.key, ...(c.payload as { name: string; description?: string; urgency?: string }) }));
   const pendingCloseIds = new Set(
-    pendingCommands().filter((c) => c.kind === 'CloseFault')
+    pendingCommands('asset').filter((c) => c.kind === 'CloseFault')
       .map((c) => (c.payload as { fault_id?: string }).fault_id).filter((id): id is string => !!id),
   );
   const pendingStepsByFault: Record<string, string[]> = {};
-  for (const c of pendingCommands()) if (c.kind === 'AddFaultStep') {
+  for (const c of pendingCommands('asset')) if (c.kind === 'AddFaultStep') {
     const p = c.payload as { fault_id: string; note: string };
     (pendingStepsByFault[p.fault_id] ??= []).push(p.note);
   }

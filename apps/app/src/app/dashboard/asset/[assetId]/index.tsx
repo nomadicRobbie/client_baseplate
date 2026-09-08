@@ -53,7 +53,7 @@ export default function AssetHome() {
   const [upcoming, setUpcoming] = useState<AssetUpcomingItem[]>([]);
   const [offline, setOffline] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [pending, setPending] = useState(pendingCount());
+  const [pending, setPending] = useState(pendingCount('asset'));
   const [assetType, setAssetType] = useState<AssetType | null>(null);
   const [editingDetails, setEditingDetails] = useState(false);
   const [draftName, setDraftName] = useState('');

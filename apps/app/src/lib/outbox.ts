@@ -15,12 +15,14 @@ import { getItem, setItem } from './storage';
 // React Native via ./storage, so it can't run under node).
 
 export type OutboxCommand = { key: string; kind: string; payload: unknown; created_at: number };
-const STORE_KEY = 'blnk_outbox_v1';
 
-function read(): OutboxCommand[] {
-  try { const raw = getItem(STORE_KEY); return raw ? JSON.parse(raw) : []; } catch { return []; }
+// Each domain gets its own store key so asset and compliance flushes never cross-contaminate.
+const storeKey = (ns: string) => `blnk_outbox_${ns}_v1`;
+
+function read(ns: string): OutboxCommand[] {
+  try { const raw = getItem(storeKey(ns)); return raw ? JSON.parse(raw) : []; } catch { return []; }
 }
-function write(cmds: OutboxCommand[]): void { setItem(STORE_KEY, JSON.stringify(cmds)); }
+function write(ns: string, cmds: OutboxCommand[]): void { setItem(storeKey(ns), JSON.stringify(cmds)); }
 
 export function uuid(): string {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
@@ -31,27 +33,27 @@ export function uuid(): string {
   });
 }
 
-// Queue a command. Its key is generated once here and stays fixed across replays.
-export function enqueue(kind: string, payload: unknown): OutboxCommand {
+// Queue a command into `ns` namespace. Its key is generated once and stays fixed across replays.
+export function enqueue(ns: string, kind: string, payload: unknown): OutboxCommand {
   const cmd: OutboxCommand = { key: uuid(), kind, payload, created_at: Date.now() };
-  write([...read(), cmd]);
+  write(ns, [...read(ns), cmd]);
   return cmd;
 }
 
-export function pendingCount(): number { return read().length; }
-export function pending(): OutboxCommand[] { return read(); }
+export function pendingCount(ns: string): number { return read(ns).length; }
+export function pending(ns: string): OutboxCommand[] { return read(ns); }
 
 // Replay pending commands FIFO via `send`. Stops at the first failure (preserving
 // order for the append-only domain) and keeps the rest for the next flush. A
 // successful send removes the command. Safe to call repeatedly.
-export async function flush(send: (c: OutboxCommand) => Promise<void>): Promise<{ sent: number; remaining: number }> {
-  let cmds = read();
+export async function flush(ns: string, send: (c: OutboxCommand) => Promise<void>): Promise<{ sent: number; remaining: number }> {
+  let cmds = read(ns);
   let sent = 0;
   while (cmds.length) {
     try { await send(cmds[0]); }
     catch { break; }
     cmds = cmds.slice(1);
-    write(cmds);
+    write(ns, cmds);
     sent++;
   }
   return { sent, remaining: cmds.length };

@@ -95,7 +95,7 @@ export default function AssetManager() {
   const [upcoming, setUpcoming] = useState<AssetUpcomingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
-  const [pending, setPending] = useState(pendingCount());
+  const [pending, setPending] = useState(pendingCount('asset'));
   const [expandedCard, setExpandedCard] = useState<'faults' | 'maintenance' | null>(null);
 
   // Add tab sub-view
