@@ -39,6 +39,14 @@ module.exports = {
     web: {
       output: 'static',
       favicon: './assets/images/favicon.png',
+      name: required('EXPO_PUBLIC_APP_NAME'),
+      shortName: required('EXPO_PUBLIC_APP_SLUG'),
+      description: 'blnk operations platform',
+      themeColor: process.env.EXPO_PUBLIC_SPLASH_COLOR ?? '#f5f0e8',
+      backgroundColor: process.env.EXPO_PUBLIC_SPLASH_COLOR ?? '#f5f0e8',
+      display: 'standalone',
+      orientation: 'portrait',
+      startUrl: '/',
     },
 
     plugins: [
