@@ -267,9 +267,12 @@ function ComplianceItem({ data, t, s }: { data: FeedComplianceData; t: ThemeT; s
     ? '1 check not yet completed'
     : `${data.remaining} checks not yet completed`
   const doneLabel = data.times_per_day > 1 ? ` (${data.done_count}/${data.times_per_day} done)` : ''
+  const dest = data.plan_id
+    ? { pathname: '/dashboard/compliance/[planId]' as const, params: { planId: data.plan_id } }
+    : '/dashboard/compliance' as const
   return (
     <Pressable
-      onPress={() => router.push('/dashboard/compliance')}
+      onPress={() => router.push(dest)}
       accessibilityRole="button"
       accessibilityLabel={`View compliance plan: ${data.label}`}
     >
@@ -447,7 +450,7 @@ export default function FeedScreen() {
   return (
     <Screen toast={msg} onDismissToast={() => setMsg(null)}>
       <View style={s.header}>
-        <Text variant="title">News Feed</Text>
+        <Text variant="title">Company Feed</Text>
       </View>
 
       {/* Compose */}

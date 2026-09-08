@@ -181,15 +181,15 @@ export async function listFeedItems(opts: {
       for (const r of rows) planNames[r.id] = r.name
     }
 
-    // Group by plan_id; orphan schedules (null plan_id) each get their own card.
+    // Orphan schedules (null plan_id) → one combined card; plan-specific → one card per plan.
     const planGroups: Record<string, typeof dueSchedules> = {}
     for (const sc of dueSchedules) {
-      const key = sc.plan_id ?? `__orphan__${sc.id}`
+      const key = sc.plan_id ?? '__orphan__'
       ;(planGroups[key] ??= []).push(sc)
     }
 
     for (const [key, group] of Object.entries(planGroups)) {
-      const isOrphan = key.startsWith('__orphan__')
+      const isOrphan = key === '__orphan__'
       let totalDone = 0, totalRequired = 0
       for (const sc of group) {
         totalDone += done[sc.id] ?? 0
@@ -198,7 +198,7 @@ export async function listFeedItems(opts: {
       const remaining = Math.max(0, totalRequired - totalDone)
       if (remaining === 0) continue
 
-      const planId = isOrphan ? null : group[0].plan_id!
+      const planId = isOrphan ? null : key
       const planName = planId ? (planNames[planId] ?? null) : null
       const firstSc = group[0]
 
@@ -210,7 +210,7 @@ export async function listFeedItems(opts: {
           plan_id: planId,
           plan_name: planName,
           schedule_id: group.length === 1 ? firstSc.id : null,
-          label: planName ?? firstSc.label,
+          label: planName ?? 'Food Compliance',
           record_type: firstSc.record_type,
           jurisdiction: firstSc.jurisdiction,
           done_count: totalDone,
