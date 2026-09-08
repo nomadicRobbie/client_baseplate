@@ -86,16 +86,19 @@ export interface NewRecord {
   corrective_action_id?: string | null
   attachment_url?: string | null
   schedule_id?: string | null
+  idempotency_key?: string | null
 }
 
 export async function createRecord(r: NewRecord): Promise<ComplianceRecord> {
   const rows = await query<ComplianceRecord>(
     `INSERT INTO compliance_records
-       (jurisdiction, record_type, site_id, entered_by, created_by, datetime, result, data, corrective_action_id, attachment_url, schedule_id)
-     VALUES ($1,$2,$3,$4,$5,COALESCE($6, now()),$7,$8,$9,$10,$11)
+       (jurisdiction, record_type, site_id, entered_by, created_by, datetime, result, data, corrective_action_id, attachment_url, schedule_id, idempotency_key)
+     VALUES ($1,$2,$3,$4,$5,COALESCE($6, now()),$7,$8,$9,$10,$11,$12)
+     ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL
+     DO UPDATE SET updated_at = compliance_records.updated_at
      RETURNING *`,
     [r.jurisdiction, r.record_type, r.site_id ?? null, r.entered_by, r.created_by ?? null,
-     r.datetime ?? null, r.result, JSON.stringify(r.data), r.corrective_action_id ?? null, r.attachment_url ?? null, r.schedule_id ?? null],
+     r.datetime ?? null, r.result, JSON.stringify(r.data), r.corrective_action_id ?? null, r.attachment_url ?? null, r.schedule_id ?? null, r.idempotency_key ?? null],
   )
   return rows[0]
 }

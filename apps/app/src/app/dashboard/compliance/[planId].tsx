@@ -6,6 +6,10 @@ import type {
   ComplianceRecordType, ComplianceRecord, ComplianceFieldSpec, ComplianceSchedule, ScheduleDue, CoolingBatch,
 } from '@blnk/shared';
 import { getAccessToken } from '@/lib/session';
+import { readThrough } from '@/lib/mirror';
+import { enqueue } from '@/lib/outbox';
+import { syncComplianceOutbox } from '@/lib/compliance-sync';
+import { useOnReconnect } from '@/lib/use-reconnect';
 import {
   getRecordTypes, getComplianceRecords, createComplianceRecord, updateComplianceRecord,
   getSchedulesDue, listSchedules, createSchedule, updateSchedule, deleteSchedule, type NewSchedule,
@@ -543,17 +547,21 @@ export default function CompliancePlanView() {
   const load = async () => {
     setLoading(true);
     try {
+      await syncComplianceOutbox();
       const token = getAccessToken()!;
+      const today = todayLocal();
       const [tRes, rRes, dRes, cRes, pRes] = await Promise.all([
-        getRecordTypes(token), getComplianceRecords(token), getSchedulesDue(token, todayLocal()),
-        getActiveCooling(token), listPlans(token),
+        readThrough('compliance:record-types', () => getRecordTypes(token)),
+        readThrough('compliance:records', () => getComplianceRecords(token)),
+        readThrough(`compliance:due:${today}`, () => getSchedulesDue(token, today)),
+        readThrough('compliance:cooling', () => getActiveCooling(token)),
+        readThrough('compliance:plans', () => listPlans(token)),
       ]);
-      setTypes(tRes.record_types);
-      setRecords(rRes.records);
-      // Show due items for this plan + unscoped schedules (backward compat)
-      setDue(dRes.due.filter((d) => d.schedule.plan_id === planId || d.schedule.plan_id === null));
-      setCooling(cRes.batches);
-      const plan = pRes.plans.find((p) => p.id === planId);
+      setTypes(tRes.value.record_types);
+      setRecords(rRes.value.records);
+      setDue(dRes.value.due.filter((d) => d.schedule.plan_id === planId || d.schedule.plan_id === null));
+      setCooling(cRes.value.batches);
+      const plan = pRes.value.plans.find((p) => p.id === planId);
       if (plan) { setPlanName(plan.name); setPlanTier(plan.tier); }
     } catch (e) {
       setMsg({ text: e instanceof Error ? e.message : String(e), tone: 'error' });
@@ -567,6 +575,8 @@ export default function CompliancePlanView() {
     const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
   }, [cooling.length]);
+
+  useOnReconnect(() => { void load(); });
 
   if (features && !features.compliance) return <Redirect href="/dashboard" />;
 
@@ -601,9 +611,29 @@ export default function CompliancePlanView() {
         setEditing(null);
         await load();
       } else {
-        const res = await createComplianceRecord(token, {
-          record_type: type.code, entered_by: enteredBy.trim(), data: payload, schedule_id: schedule?.id ?? null,
+        const verdict = type.critical_limit ? evalLimit(type.critical_limit, payload) : 'na';
+        const cmd = enqueue('LogComplianceRecord', {
+          record_type: type.code, entered_by: enteredBy.trim(), data: payload,
+          schedule_id: schedule?.id ?? null, datetime: new Date().toISOString(),
         });
+        let res: Awaited<ReturnType<typeof createComplianceRecord>>;
+        try {
+          res = await createComplianceRecord(token, {
+            record_type: type.code, entered_by: enteredBy.trim(), data: payload,
+            schedule_id: schedule?.id ?? null, idempotency_key: cmd.key,
+          });
+          // Drain queue — replay of cmd.key hits ON CONFLICT, pops it cleanly
+          await syncComplianceOutbox();
+        } catch {
+          // Offline — cmd stays queued; flush on reconnect via useOnReconnect
+          const msg = verdict === 'fail'
+            ? 'Failed check saved offline — complete the corrective action when back online.'
+            : 'Saved offline — will sync when connected.';
+          setMsg({ text: msg, tone: 'info' });
+          setEditing(null);
+          await load();
+          return;
+        }
         const caType = typeByCode['corrective_action'];
         if (res.record.result === 'fail' && res.corrective_action && caType) {
           const unit = identifyUnit(data, schedule);

@@ -14,6 +14,7 @@ import {
   listProductVariants, createVariant, updateVariant, deleteVariant,
 } from '@/lib/api';
 import { useImageSlots, type UploadFn, type ImageSlot } from '@/lib/image-slots';
+import { readThrough } from '@/lib/mirror';
 import { Screen, Text, Card, Button, Toggle, Pill, GroupedCard, FieldRow, SectionLabel, Badge, TextField } from '@/ui/components';
 import { DateField } from '@/ui/date-field';
 import { useTheme } from '@/theme';
@@ -213,10 +214,12 @@ export default function ProductDetail() {
     if (isNew) { setLoading(false); return; }
     setLoading(true);
     try {
-      const [{ product: p }, { variants: vs }] = await Promise.all([
-        getAdminProduct(tok(), productId),
-        listProductVariants(tok(), productId),
+      const [pRes, vRes] = await Promise.all([
+        readThrough(`commerce:product:${productId}`, () => getAdminProduct(tok(), productId)),
+        readThrough(`commerce:variants:${productId}`, () => listProductVariants(tok(), productId)),
       ]);
+      const { product: p } = pRes.value;
+      const { variants: vs } = vRes.value;
       setProduct(p); setVariants(vs); setDraft({});
     } catch (e) { setToast({ text: e instanceof Error ? e.message : 'Failed to load', tone: 'error' }); }
     finally { setLoading(false); }

@@ -8,6 +8,7 @@ import type { FoodControlPlan } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
 import { listPlans, createPlan, updatePlan, duplicatePlan, uploadPlanImage } from '@/lib/api';
+import { readThrough } from '@/lib/mirror';
 import { useTheme } from '@/theme';
 import { Screen, Text, Card, GroupedCard, GRow, SectionLabel, Button, Notice, Badge, Pill } from '@/ui/components';
 
@@ -69,7 +70,10 @@ export default function CompliancePlans() {
 
   const load = async () => {
     setLoading(true);
-    try { setPlans((await listPlans(tok())).plans); }
+    try {
+      const r = await readThrough('compliance:plans', () => listPlans(tok()));
+      setPlans(r.value.plans);
+    }
     catch (e) { setMsg({ text: e instanceof Error ? e.message : String(e), tone: 'error' }); }
     finally { setLoading(false); }
   };

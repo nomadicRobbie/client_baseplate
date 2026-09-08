@@ -423,7 +423,7 @@ export const getComplianceRecords = (token: string, filters?: { type?: string; r
 };
 
 export const createComplianceRecord = (token: string, body: {
-  record_type: string; entered_by: string; data: Record<string, unknown>; site_id?: string | null; schedule_id?: string | null;
+  record_type: string; entered_by: string; data: Record<string, unknown>; site_id?: string | null; schedule_id?: string | null; idempotency_key?: string;
 }) => req<{ record: ComplianceRecord; corrective_action: ComplianceRecord | null }>(
   '/compliance/records', { method: 'POST', body, token });
 

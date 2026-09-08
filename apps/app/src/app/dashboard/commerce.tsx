@@ -6,6 +6,7 @@ import type { Product } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/session';
 import { listAdminProducts, updateProduct } from '@/lib/api';
+import { readThrough } from '@/lib/mirror';
 import { Screen, Text, Button } from '@/ui/components';
 import { useTheme } from '@/theme';
 
@@ -79,7 +80,10 @@ export default function Commerce() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setProducts((await listAdminProducts(getAccessToken()!)).products); }
+    try {
+      const r = await readThrough('commerce:products', () => listAdminProducts(getAccessToken()!));
+      setProducts(r.value.products);
+    }
     catch (e) { setToast({ text: e instanceof Error ? e.message : 'Failed to load products', tone: 'error' }); }
     finally { setLoading(false); }
   }, []);

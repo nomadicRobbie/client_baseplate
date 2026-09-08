@@ -28,6 +28,7 @@ type LogInput = {
   record_type: string; site_id?: string | null; entered_by: string; created_by?: string | null;
   datetime?: string | null; data?: Record<string, unknown>;
   attachment_url?: string | null; corrective_action_id?: string | null; schedule_id?: string | null;
+  idempotency_key?: string | null;
 }
 async function logRecord(input: LogInput): Promise<{ record: ComplianceRecord; corrective_action: ComplianceRecord | null }> {
   const type = await getRecordType(JURISDICTION, input.record_type)
@@ -46,6 +47,7 @@ async function logRecord(input: LogInput): Promise<{ record: ComplianceRecord; c
     corrective_action_id: input.corrective_action_id ?? null,
     attachment_url: input.attachment_url ?? null,
     schedule_id: input.schedule_id ?? null,
+    idempotency_key: input.idempotency_key ?? null,
   })
   let corrective_action: ComplianceRecord | null = null
   if (result === 'fail' && input.record_type !== 'corrective_action' && !record.corrective_action_id) {
@@ -172,6 +174,7 @@ const compliancePlugin: FastifyPluginAsync = async (fastify) => {
           attachment_url:       { type: ['string', 'null'] },
           corrective_action_id: { type: ['string', 'null'] },
           schedule_id:          { type: ['string', 'null'] },
+          idempotency_key:      { type: ['string', 'null'] },
         },
       },
     },
