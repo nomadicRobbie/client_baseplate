@@ -25,12 +25,22 @@ export default function Root({ children }: PropsWithChildren) {
 
         {/* PWA — a client clone edits public/manifest.json + these values to rebrand. */}
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#2a7f62" />
+        {/* theme-color updated dynamically by ThemedStatusBar after hydration */}
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#111111" />
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f0e8" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        {/* black-translucent = transparent status bar; SafeAreaView handles the inset.
+            "default" renders a native grey overlay that ignores the app's background colour. */}
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="blnk" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
+        {/* Pre-hydration background so the area behind the status bar matches the OS
+            colour scheme before JS runs. ThemedStatusBar overrides after mount. */}
+        <style>{`
+          html, body { background-color: #f5f0e8; }
+          @media (prefers-color-scheme: dark) { html, body { background-color: #111111; } }
+        `}</style>
 
         {/* Disables body scrolling on web so RN ScrollViews behave like native. */}
         <ScrollViewStyleReset />
