@@ -13,19 +13,21 @@ Single source of truth for provisioning, deploying, and maintaining blnk client 
 ```
 [Client browser / native app]
          │
-         ▼
-  apps/app  (Expo web — static files served by nginx on the client VM)
+         ├──► apps/app  (Expo web — static files served by nginx on the client VM)
          │
-         ▼
-  apps/api  (Fastify — PM2 process, port 4000 default)
+         ├──► apps/api  (Fastify — PM2 process, port 4000 default)
+         │         │
+         │         ├──► blnk_auth  (auth proxy + JWKS — shared blnk platform service)
+         │         ├──► blnk_api   (email / portal / billing — shared blnk platform service)
+         │         │         └──► blnk_postgres  (shared DB host — one DB per client)
+         │         └──► blnk_minio (shared object storage — one bucket per client)
          │
-         ├──► blnk_auth  (auth proxy + JWKS — shared blnk platform service)
-         └──► blnk_api   (email / portal / billing — shared blnk platform service)
-                  │
-                  └──► blnk_postgres  (shared DB host — one DB per client)
+         └──► blnk_minio  (presigned PUT — client uploads direct, bypasses API)
 ```
 
-**Per-VM model:** each client runs on its own VM. blnk_auth and blnk_api are shared services that each client VM calls out to — everything else is self-contained on the client VM.
+**Per-VM model:** each client runs on its own VM. blnk_auth, blnk_api, blnk_postgres, and blnk_minio are shared services on the blnk platform server — everything else is self-contained on the client VM.
+
+**Object storage:** MinIO runs on the blnk platform server alongside blnk_postgres. Each client gets their own bucket (named after their slug) and their own MinIO access key pair. The API generates presigned PUT URLs — clients upload files directly to MinIO, the API never buffers file bodies. A single `storage.blnk.nz` subdomain points at the platform server via nginx reverse proxy.
 
 **Repos:** each client is a separate GitHub repo, cloned from `client-baseplate`. The `upstream` remote points back at `client-baseplate` so platform updates flow in automatically via the daily deploy cron.
 
@@ -50,6 +52,7 @@ Before provisioning a new client VM, complete every item in this list. The provi
 | 9 | Copy the **private** deploy key onto the VM at `/root/.ssh/id_ed25519` (or `/home/blnk/.ssh/id_ed25519` after user creation) | VM |
 | 10 | Run `provision:client` in blnk_api to register the tenant and emit `.env` files (see step 1 below) | Local machine |
 | 11 | Create the client database in blnk_postgres (see step 2 below) | blnk platform server |
+| 12 | Create the client bucket + credentials in blnk_minio (see step 2b below) | blnk platform server |
 
 ---
 
@@ -111,6 +114,43 @@ Update `DATABASE_URL` in `api.env` to use the password you set here:
 ```
 DATABASE_URL=postgres://acme-co:strong-random-password-here@<blnk-platform-ip>:5432/acme-co
 ```
+
+---
+
+## Step 2b — Create the client bucket in blnk_minio (run on blnk platform server)
+
+MinIO runs on the blnk platform server as `blnk_minio`. Each client needs their own bucket and a dedicated access key pair (not the root key).
+
+```bash
+ssh robbie@blnk
+
+# Enter the MinIO container
+docker exec -it blnk_minio sh
+
+# Create a bucket for this client
+mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+mc mb local/acme-co
+
+# Create a dedicated access key for this client (note the output — shown once)
+mc admin user add local acme-co-user $(openssl rand -hex 32)
+mc admin policy attach local readwrite --user acme-co-user
+
+exit
+```
+
+> The access key is `acme-co-user` and the secret is the hex string from the command above.
+> Record both and add them to the client `.env` before copying it to the VM.
+
+Add these to `api.env`:
+```
+STORAGE_ENDPOINT=https://storage.blnk.nz
+STORAGE_ACCESS_KEY=acme-co-user
+STORAGE_SECRET_KEY=<the secret from mc admin user add output>
+STORAGE_BUCKET=acme-co
+STORAGE_PUBLIC_URL=https://storage.blnk.nz/acme-co
+```
+
+> **First client only:** if `blnk_minio` isn't running yet, see [Platform server setup — MinIO](#platform-server-setup--minio) in the appendix.
 
 ---
 
@@ -338,7 +378,7 @@ These must always be done by hand. The provision script will not attempt them.
 | DNS A records | Must be done at the registrar/Cloudflare before certbot can get SSL | Cloudflare dashboard |
 | Root → app user handoff | You SSH as root initially; the script creates `blnk` user but you log into it separately | SSH |
 | `STRIPE_API_KEY` / `STRIPE_WEBHOOK_SECRET` | Client's own Stripe keys — can't be emitted by blnk tooling | Client provides, paste into `apps/api/.env` |
-| `CLOUDINARY_*` | Client's Cloudinary account credentials | Client provides or blnk creates, paste into `apps/api/.env` |
+| `STORAGE_*` | Generated in step 2b above (bucket + access key created in blnk_minio) | blnk platform server → paste into `apps/api/.env` |
 | `EXPO_PUBLIC_EAS_PROJECT_ID` | Created via `eas init` per-client, requires Expo account | Expo dashboard |
 | Registering the tenant in blnk_auth | Done by `provision:client` script in blnk_api — not the VM's concern | blnk_api on local machine |
 
@@ -470,6 +510,58 @@ Track which port each client API uses. Update this table when adding a client.
 | Client | Slug | VM IP | Domain | Port | Added |
 |---|---|---|---|---|---|
 | Ting Test | `ting-test` | — | ting-test.blnk.nz | `4000` | 2025 |
+
+---
+
+## Platform server setup — MinIO
+
+Run once on the blnk platform server to stand up `blnk_minio`. Skip if already running.
+
+```bash
+ssh robbie@blnk
+
+# Add to the platform server's docker-compose (alongside blnk_postgres)
+# or run standalone:
+docker run -d \
+  --name blnk_minio \
+  --restart unless-stopped \
+  -p 9000:9000 \
+  -p 9001:9001 \
+  -e MINIO_ROOT_USER=<strong-root-user> \
+  -e MINIO_ROOT_PASSWORD=<strong-root-password> \
+  -v minio_data:/data \
+  quay.io/minio/minio:latest \
+  server /data --console-address ":9001"
+```
+
+Add an nginx vhost for the storage subdomain (SSL via certbot):
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name storage.blnk.nz;
+
+    location / {
+        proxy_pass http://localhost:9000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        client_max_body_size 100m;
+    }
+}
+```
+
+```bash
+certbot --nginx -d storage.blnk.nz
+```
+
+Add a DNS A record: `storage.blnk.nz` → platform server IP (Cloudflare).
+
+Install the `mc` CLI inside the container for per-client provisioning:
+```bash
+docker exec blnk_minio sh -c \
+  "curl -fsSL https://dl.min.io/client/mc/release/linux-arm64/mc -o /usr/local/bin/mc && chmod +x /usr/local/bin/mc"
+# use linux-amd64 if your platform server is x86
+```
 
 ---
 

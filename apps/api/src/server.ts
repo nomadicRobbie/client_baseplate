@@ -228,8 +228,10 @@ async function start(): Promise<void> {
     void config.env
     await getPool().query('SELECT 1')
     server.log.info('database connected')
-    await initStorage()
-    server.log.info('storage initialised')
+    if (config.features.commerce || config.features.asset || config.features.compliance) {
+      await initStorage()
+      server.log.info('storage initialised')
+    }
     const app = await build()
     await app.listen({ port: config.port, host: '0.0.0.0' })
     server.log.info(`client_api up for tenant '${config.tenantSlug}' — features: ${JSON.stringify(config.features)}`)
