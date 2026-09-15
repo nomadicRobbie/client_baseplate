@@ -63,6 +63,16 @@ function makeStyles(t: ReturnType<typeof useTheme>) {
       flexGrow: scroll ? 1 : undefined,
       flex: scroll ? undefined : 1,
     }),
+    pill: (active: boolean, disabled: boolean, sm: boolean) => ({
+      minHeight: sm ? 32 : 40,
+      paddingHorizontal: sm ? t.space.md : t.space.lg,
+      justifyContent: 'center' as const,
+      borderRadius: t.radius.pill, borderWidth: 1,
+      borderColor: active ? t.color.primary : t.color.border,
+      backgroundColor: active ? t.color.primary : t.color.surface,
+      opacity: disabled ? 0.5 : 1,
+    }),
+    pillText: { fontWeight: '600' as const },
   };
 }
 
@@ -194,11 +204,11 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'warning';
 
 export function Button({
-  label, onPress, variant = 'primary', icon, disabled, loading, style,
+  label, onPress, variant = 'primary', icon, disabled, loading, style, size,
 }: {
   label: string; onPress: () => void; variant?: ButtonVariant;
   icon?: React.ComponentProps<typeof Ionicons>['name'];
-  disabled?: boolean; loading?: boolean; style?: StyleProp<ViewStyle>;
+  disabled?: boolean; loading?: boolean; style?: StyleProp<ViewStyle>; size?: 'sm';
 }) {
   const t = useTheme();
   const bg: Record<ButtonVariant, string> = {
@@ -219,8 +229,9 @@ export function Button({
         return [{
           backgroundColor: bg[variant],
           opacity: disabled ? 0.5 : pressed ? 0.82 : hovered ? 0.92 : 1,
-          minHeight: 44,
-          paddingVertical: t.space.md, paddingHorizontal: t.space.lg,
+          minHeight: size === 'sm' ? 36 : 44,
+          paddingVertical: size === 'sm' ? t.space.sm : t.space.md,
+          paddingHorizontal: size === 'sm' ? t.space.md : t.space.lg,
           borderRadius: t.radius.md, alignItems: 'center', justifyContent: 'center',
           flexDirection: 'row', gap: 6,
           borderWidth: variant === 'ghost' || variant === 'secondary' || variant === 'warning' ? 1 : 0,
@@ -410,25 +421,20 @@ export function ColorPicker({ value, onChange, nullable = false }: {
 }
 
 // ── Pill / Chip selector ──────────────────────────────────────────────────────
-export function Pill({ label, active, onPress, disabled }: {
-  label: string; active: boolean; onPress: () => void; disabled?: boolean;
+export function Pill({ label, active, onPress, disabled, size }: {
+  label: string; active: boolean; onPress: () => void; disabled?: boolean; size?: 'sm';
 }) {
   const t = useTheme();
+  const s = makeStyles(t);
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
-      style={{
-        minHeight: 40, paddingHorizontal: t.space.lg, justifyContent: 'center',
-        borderRadius: t.radius.pill, borderWidth: 1,
-        borderColor: active ? t.color.primary : t.color.border,
-        backgroundColor: active ? t.color.primary : t.color.surface,
-        opacity: disabled ? 0.5 : 1,
-      }}
+      style={s.pill(active, !!disabled, size === 'sm')}
     >
-      <Text variant="small" style={{ fontWeight: '600' }} color={active ? t.color.primaryText : t.color.text}>{label}</Text>
+      <Text variant="small" style={s.pillText} color={active ? t.color.primaryText : t.color.text}>{label}</Text>
     </Pressable>
   );
 }

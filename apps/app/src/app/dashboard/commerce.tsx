@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { View, Pressable, Image } from 'react-native';
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { Product } from '@blnk/shared';
 import { useAuth } from '@/lib/auth-context';
@@ -91,7 +91,7 @@ export default function Commerce() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   if (features && !features.commerce) return <Redirect href="/dashboard" />;
 
