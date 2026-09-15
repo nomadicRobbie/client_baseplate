@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Pressable, Platform, TextInput } from 'react-native';
+import { View, Pressable, Platform, TextInput, Linking } from 'react-native';
 import { Redirect, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { Asset, AssetFault, AssetMaintenanceSchedule, AssetUpcomingItem, AssetScheduleAlert } from '@blnk/shared';
@@ -76,7 +76,7 @@ export default function AssetMaintenance() {
   const [aVal, setAVal] = useState('1');
   const [notifyManager, setNotifyManager] = useState(false);
   const [weekdayRec, setWeekdayRec] = useState<RecurrenceValue>({ days: [], time: '09:00', startDate: today(), endDate: null });
-  const [docUrls, setDocUrls] = useState<string[]>([]);
+  const [docUrls, setDocUrls] = useState<{ url: string; name: string }[]>([]);
   const [uploading, setUploading] = useState(false);
 
   const err = (e: unknown) => setMsg({ text: String(e instanceof Error ? e.message : e), tone: 'error' });
@@ -127,7 +127,7 @@ export default function AssetMaintenance() {
     input.onchange = async () => {
       const file = input.files?.[0]; if (!file) return;
       setUploading(true);
-      try { const { url } = await uploadAssetDocument(tok(), file); setDocUrls((prev) => [...prev, url]); }
+      try { const { url } = await uploadAssetDocument(tok(), file); setDocUrls((prev) => [...prev, { url, name: file.name }]); }
       catch (e) { err(e); } finally { setUploading(false); }
     };
     input.click();
@@ -217,10 +217,10 @@ export default function AssetMaintenance() {
                           {!!sc.task_notes && <Text variant="small" muted>{sc.task_notes}</Text>}
                           {sc.document_urls?.length > 0 && (
                             <View style={s.docRow}>
-                              {sc.document_urls.map((url, j) => (
-                                <Pressable key={j} onPress={() => { if (Platform.OS === 'web') window.open(url, '_blank'); }} accessibilityRole="link" style={s.docChip}>
+                              {sc.document_urls.map((d, j) => (
+                                <Pressable key={j} onPress={() => Platform.OS === 'web' ? window.open(d.url, '_blank') : Linking.openURL(d.url)} accessibilityRole="link" style={s.docChip}>
                                   <Ionicons name="document-outline" size={12} color={t.color.primary} />
-                                  <Text variant="small" color={t.color.primary} numberOfLines={1} style={s.docName}>{url.split('/').pop()}</Text>
+                                  <Text variant="small" color={t.color.primary} numberOfLines={1} style={s.docName}>{d.name}</Text>
                                 </Pressable>
                               ))}
                             </View>
@@ -322,10 +322,10 @@ export default function AssetMaintenance() {
             <SectionLabel>Documents</SectionLabel>
             <GroupedCard>
               <View style={s.groupPad}>
-                {docUrls.map((url, i) => (
+                {docUrls.map((d, i) => (
                   <View key={i} style={s.docEntry}>
                     <Ionicons name="document-outline" size={18} color={t.color.primary} />
-                    <Text variant="small" numberOfLines={1} style={s.flex1}>{url.split('/').pop()}</Text>
+                    <Text variant="small" numberOfLines={1} style={s.flex1}>{d.name}</Text>
                     <Pressable onPress={() => setDocUrls((prev) => prev.filter((_, x) => x !== i))}
                       accessibilityRole="button" accessibilityLabel="Remove document">
                       <Ionicons name="close" size={18} color={t.color.textMuted} />

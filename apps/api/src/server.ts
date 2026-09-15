@@ -8,6 +8,7 @@ import { getPool, closePool } from './db/pool'
 import authDecorators, { verifyBlnkAuth, requireAppAccess } from './blnk/auth'
 import authProxyPlugin from './routes/auth-proxy'
 import wellKnownPlugin from './routes/well-known'
+import uploadPlugin from './routes/upload'
 import profilePlugin from './routes/profile'
 import teamPlugin from './routes/team'
 import exportPlugin from './routes/export'
@@ -26,6 +27,7 @@ import { buildUpcoming } from './modules/asset/upcoming'
 import { getPushTokensForModules } from './db/queries/people'
 import { sendPush } from './utils/push'
 import { query } from './db/pool'
+import { initStorage } from './utils/storage'
 
 const server = Fastify({
   logger: {
@@ -103,6 +105,9 @@ export async function build(): Promise<typeof server> {
 
   // ── App association files (passkeys on native) ──────────────────────────
   await server.register(wellKnownPlugin)
+
+  // ── File/image upload — presign endpoint (any authed user) ───────────────
+  await server.register(uploadPlugin)
 
   // ── Profile + onboarding (org + per-user) ───────────────────────────────
   await server.register(profilePlugin)
@@ -223,6 +228,8 @@ async function start(): Promise<void> {
     void config.env
     await getPool().query('SELECT 1')
     server.log.info('database connected')
+    await initStorage()
+    server.log.info('storage initialised')
     const app = await build()
     await app.listen({ port: config.port, host: '0.0.0.0' })
     server.log.info(`client_api up for tenant '${config.tenantSlug}' — features: ${JSON.stringify(config.features)}`)

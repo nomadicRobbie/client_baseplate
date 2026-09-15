@@ -1,17 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify'
 import type { FastifyRequest } from 'fastify'
-import multipart from '@fastify/multipart'
-import { v2 as cloudinary } from 'cloudinary'
 import { verifyBlnkAuth, requireRole, requireModule } from '../../blnk/auth'
 import { Errors } from '../../utils/errors'
-import { config } from '../../config'
 import { getPersonByUserId, getPushTokensForModules } from '../../db/queries/people'
 import { sendPush } from '../../utils/push'
 import { buildUpcoming } from './upcoming'
 import * as q from '../../db/queries/asset'
-
-const UPLOAD_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'])
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024 // 20 MB
 
 // Asset management module. Guard policy mirrors compliance:
 //   member = anyone assigned to the asset module (admins bypass) — view + log
@@ -20,25 +14,6 @@ const assetPlugin: FastifyPluginAsync = async (fastify) => {
   const member = [verifyBlnkAuth, requireModule('asset')]
   const admin = [verifyBlnkAuth, requireRole('admin', 'super')]
 
-  // ── Document upload ────────────────────────────────────────────────────────
-  // PDF or image (WOF sheets, inspection reports, etc.) stored in Cloudinary.
-  await fastify.register(async (sub) => {
-    await sub.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } })
-    cloudinary.config({ cloud_name: config.cloudinary.cloudName, api_key: config.cloudinary.apiKey, api_secret: config.cloudinary.apiSecret })
-    sub.post('/asset/documents/upload', { preHandler: admin }, async (req, reply) => {
-      const data = await req.file()
-      if (!data) throw Errors.badRequest('no file received')
-      if (!UPLOAD_MIME.has(data.mimetype)) throw Errors.badRequest('only PDF and images are accepted')
-      const buffer = await data.toBuffer()
-      const result = await new Promise<{ secure_url: string }>((resolve, reject) =>
-        cloudinary.uploader.upload_stream(
-          { folder: `${config.tenantSlug}/asset-docs`, resource_type: 'auto' },
-          (err, res) => err || !res ? reject(err ?? new Error('upload failed')) : resolve(res as { secure_url: string }),
-        ).end(buffer),
-      )
-      return reply.status(201).send({ url: result.secure_url })
-    })
-  })
   const uid = (req: { user?: { userId: string } | null }) => req.user?.userId ?? null
   // The caller's people.id (person FKs like reported_by/completed_by point at
   // people, NOT the blnk user id). Null when the signed-in user isn't on the roster.
@@ -223,7 +198,7 @@ const assetPlugin: FastifyPluginAsync = async (fastify) => {
       interval_type: {}, interval_value: {}, initial_due_date: {}, alert_days: {}, alert_hours: {},
       alerts: { type: 'array', items: { type: 'object', properties: { value: { type: 'number' }, unit: { type: 'string' } } } },
       task_notes: { type: ['string', 'null'] },
-      document_urls: { type: 'array', items: { type: 'string' } },
+      document_urls: { type: 'array', items: { type: 'object', required: ['url', 'name'], properties: { url: { type: 'string' }, name: { type: 'string' } } } },
       form_schema: { type: ['object', 'null'] },
     } } },
   }, async (req, reply) => reply.status(201).send({ schedule: await q.createSchedule(req.body as never, uid(req)) }))
@@ -247,7 +222,7 @@ const assetPlugin: FastifyPluginAsync = async (fastify) => {
       task_name: {}, maintenance_type: {}, completed_date: {}, usage_at_service: {}, supplier: {},
       image_urls: { type: 'array', items: { type: 'string' } }, resolves_fault: { type: 'boolean' }, resolution_notes: {}, notes: {}, completed_by: {},
       form_data: { type: ['object', 'null'] },
-      attachments: { type: 'array', items: { type: 'string' } },
+      attachments: { type: 'array', items: { type: 'object', required: ['url', 'name'], properties: { url: { type: 'string' }, name: { type: 'string' } } } },
       idempotency_key: { type: 'string' },   // offline outbox replay key (optional)
     } } },
   }, async (req, reply) => {

@@ -50,7 +50,7 @@ export default function CompleteTask() {
   const [formData, setFormData] = useState<FormResponseData>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [certified, setCertified] = useState(false);
-  const [attachments, setAttachments] = useState<string[]>([]);
+  const [attachments, setAttachments] = useState<{ url: string; name: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<Msg | null>(null);
@@ -83,7 +83,7 @@ export default function CompleteTask() {
     input.onchange = async () => {
       const file = input.files?.[0]; if (!file) return;
       setUploading(true);
-      try { const { url } = await uploadAssetDocument(getAccessToken()!, file); setAttachments((prev) => [...prev, url]); }
+      try { const { url } = await uploadAssetDocument(getAccessToken()!, file); setAttachments((prev) => [...prev, { url, name: file.name }]); }
       catch (e) { setMsg({ text: e instanceof Error ? e.message : 'Upload failed', tone: 'error' }); }
       finally { setUploading(false); }
     };
@@ -204,9 +204,9 @@ export default function CompleteTask() {
         <Text variant="heading">Attachments</Text>
         {attachments.length > 0 && (
           <View style={s.docRow}>
-            {attachments.map((url, i) => (
+            {attachments.map((a, i) => (
               <View key={i} style={s.docChip}>
-                <Text variant="small" numberOfLines={1} style={s.docName}>{url.split('/').pop()}</Text>
+                <Text variant="small" numberOfLines={1} style={s.docName}>{a.name}</Text>
                 <Pressable onPress={() => setAttachments((prev) => prev.filter((_, x) => x !== i))} accessibilityRole="button" accessibilityLabel="Remove attachment">
                   <Text variant="small" muted>✕</Text>
                 </Pressable>

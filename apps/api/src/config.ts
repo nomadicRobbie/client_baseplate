@@ -34,9 +34,9 @@ let _blnkApi: { url: string; apiKey: string } | null = null
 // builds/runs with payments off and no keys.
 let _stripe: { apiKey: string; webhookSecret: string; currency: string } | null = null
 
-// Cloudinary — image uploads for commerce products. Validated lazily; only
-// required when FEATURE_COMMERCE is on in production.
-let _cloudinary: { cloudName: string; apiKey: string; apiSecret: string } | null = null
+// Object storage (MinIO in dev, S3 in prod). Validated lazily; only required
+// when any upload feature is on in production.
+let _storage: { endpoint: string; accessKey: string; secretKey: string; bucket: string; publicUrl: string } | null = null
 
 export const config = {
   env: required('NODE_ENV') as 'production' | 'development' | 'test',
@@ -87,16 +87,19 @@ export const config = {
     return _stripe;
   },
 
-  get cloudinary() {
-    if (!_cloudinary) {
-      const need = process.env.FEATURE_COMMERCE === 'true' && process.env.NODE_ENV === 'production';
-      _cloudinary = {
-        cloudName: need ? required('CLOUDINARY_CLOUD_NAME') : optional('CLOUDINARY_CLOUD_NAME', ''),
-        apiKey:    need ? required('CLOUDINARY_API_KEY')    : optional('CLOUDINARY_API_KEY', ''),
-        apiSecret: need ? required('CLOUDINARY_API_SECRET') : optional('CLOUDINARY_API_SECRET', ''),
-      };
+  get storage() {
+    if (!_storage) {
+      const hasUploads = ['FEATURE_COMMERCE', 'FEATURE_ASSET', 'FEATURE_COMPLIANCE'].some(f => process.env[f] === 'true')
+      const need = hasUploads && process.env.NODE_ENV === 'production'
+      _storage = {
+        endpoint:  need ? required('STORAGE_ENDPOINT')   : optional('STORAGE_ENDPOINT',   'http://localhost:9000'),
+        accessKey: need ? required('STORAGE_ACCESS_KEY') : optional('STORAGE_ACCESS_KEY', 'minioadmin'),
+        secretKey: need ? required('STORAGE_SECRET_KEY') : optional('STORAGE_SECRET_KEY', 'minioadmin'),
+        bucket:    optional('STORAGE_BUCKET', 'blnk'),
+        publicUrl: optional('STORAGE_PUBLIC_URL', 'http://localhost:9000/blnk'),
+      }
     }
-    return _cloudinary;
+    return _storage
   },
 
   shopUrl: optional('SHOP_URL', ''),

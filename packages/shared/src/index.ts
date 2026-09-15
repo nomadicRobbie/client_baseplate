@@ -644,7 +644,7 @@ export type FormResponseData = Record<string, string | number | boolean | null>;
 export interface AssetMaintenanceLog {
   id: string; schedule_id: string | null; fault_id: string | null; asset_id: string
   task_name: string | null; completed_date: string | null; resolves_fault: boolean; status: string
-  form_data: FormResponseData | null; attachments: string[]
+  form_data: FormResponseData | null; attachments: { url: string; name: string }[]
 }
 
 export type AssetScheduleAlert = { value: number; unit: 'hours' | 'days' | 'weeks' };
@@ -653,7 +653,7 @@ export interface AssetMaintenanceSchedule {
   interval_type: string | null; interval_value: string | null; initial_due_date: string | null
   weekdays: number[] | null; recurrence_end_date: string | null
   alert_days: number | null; alert_hours: string | null; alerts: AssetScheduleAlert[]; active: boolean
-  task_notes: string | null; document_urls: string[]; form_schema: FormSchema | null
+  task_notes: string | null; document_urls: { url: string; name: string }[]; form_schema: FormSchema | null
 }
 
 export interface AssetComponent {

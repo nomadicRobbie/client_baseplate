@@ -5,19 +5,6 @@ import { getAccessToken, getRefreshToken, setTokens, clearSession } from './sess
 // The frontend talks ONLY to client_api. client_api proxies auth to blnk_auth
 // and verifies tokens — the app never sees blnk_auth directly.
 
-// ponytail: Hermes's built-in fetch doesn't understand RN's {uri,name,type} FormData
-// trick. XHR still goes through the old RN networking stack that handles it natively.
-function nativeMultipartUpload(url: string, token: string, form: FormData): Promise<Response> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', url);
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    xhr.onload = () => resolve(new Response(xhr.responseText, { status: xhr.status }));
-    xhr.onerror = () => reject(new TypeError('Network request failed'));
-    xhr.send(form);
-  });
-}
-
 function compressWebImage(blob: Blob): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob);
@@ -37,35 +24,44 @@ function compressWebImage(blob: Blob): Promise<Blob> {
   });
 }
 
-async function uploadImageMultipart(
-  endpoint: string,
+// Upload a file via presigned PUT. The API generates a short-lived S3/MinIO PUT
+// URL; the client writes directly to storage — the API server never buffers the body.
+// On native, fileOrUri is a local file:// URI; on web, a Blob (images are
+// compressed before this call). mimetype must match what was used at presign time.
+async function uploadPresigned(
   token: string,
   fileOrUri: Blob | string,
-  filename: string,
-): Promise<Response> {
-  const doUpload = async (tok: string) => {
-    const form = new FormData();
-    if (typeof document === 'undefined') {
-      form.append('file', { uri: fileOrUri as string, name: filename, type: 'image/jpeg' } as unknown as Blob);
-      return nativeMultipartUpload(endpoint, tok, form);
-    }
-    // fileOrUri may be a File/Blob (first pick) or a blob: URL string (retry path)
+  mimetype: string,
+): Promise<{ url: string }> {
+  // 1. Get presigned URL from our API (with silent token refresh on 401)
+  const { presigned_url, public_url } = await req<{ presigned_url: string; public_url: string }>(
+    '/upload/presign',
+    { method: 'POST', body: { mimetype }, token },
+  );
+
+  // 2. Resolve the blob — on web compress images; on native fetch the local URI
+  let body: Blob | string;
+  if (typeof document !== 'undefined') {
     const blob = typeof fileOrUri === 'string'
       ? await fetch(fileOrUri).then(r => r.blob())
       : fileOrUri as Blob;
-    const compressed = await compressWebImage(blob);
-    form.append('file', compressed, filename);
-    return fetch(endpoint, { method: 'POST', headers: { authorization: `Bearer ${tok}` }, body: form });
-  };
-  let res = await doUpload(token);
-  if (res.status === 401) {
-    if (await trySilentRefresh()) {
-      res = await doUpload(getAccessToken() ?? token);
-    } else {
-      throw new Error('Your session expired — please sign in again.');
-    }
+    body = mimetype.startsWith('image/') ? await compressWebImage(blob) : blob;
+  } else {
+    // React Native: fetch of a local URI returns a blob the PUT can stream
+    body = typeof fileOrUri === 'string'
+      ? await fetch(fileOrUri).then(r => r.blob())
+      : fileOrUri as Blob;
   }
-  return res;
+
+  // 3. PUT directly to storage (presigned URL carries auth — no Authorization header)
+  const up = await fetch(presigned_url, {
+    method: 'PUT',
+    headers: { 'content-type': mimetype },
+    body,
+  });
+  if (!up.ok) throw new Error(`Storage upload failed: ${up.status}`);
+
+  return { url: public_url };
 }
 
 export const API = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000';
@@ -193,14 +189,14 @@ export const uploadUserAvatar = async (
   uri: string,
   asset?: { mimeType?: string; file?: File; fileName?: string | null },
 ): Promise<string> => {
-  const filename = asset?.fileName ?? uri.split('/').pop() ?? 'avatar.jpg';
   const fileOrUri: Blob | string = typeof document === 'undefined'
     ? uri
     : (asset?.file ?? await fetch(uri).then(r => r.blob()));
-  const res = await uploadImageMultipart(`${API}/profile/me/avatar`, token, fileOrUri, filename);
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
-  return (json as { avatar_url: string }).avatar_url;
+  const { url } = await uploadPresigned(token, fileOrUri, 'image/jpeg');
+  const { avatar_url } = await req<{ avatar_url: string }>('/profile/me/avatar', {
+    method: 'POST', body: { avatar_url: url }, token,
+  });
+  return avatar_url;
 };
 
 // ── Team management ──────────────────────────────────────────────────────────
@@ -253,34 +249,8 @@ export const createAsset = (token: string, body: { asset_type_id: string; name: 
 export const updateAsset = (token: string, id: string, patch: { name?: string; particulars?: Record<string, string>; location?: string; condition?: string; notes?: string; image_url?: string | null; food_control_plan_id?: string | null }) =>
   req<{ asset: Asset }>(`/asset/assets/${id}`, { method: 'PATCH', body: patch, token });
 export const uploadAssetImage = async (token: string, uri: string): Promise<string> => {
-  const filename = uri.split('/').pop() ?? 'image.jpg';
-  const buildForm = async () => {
-    const form = new FormData();
-    if (typeof document === 'undefined') {
-      form.append('file', { uri, name: filename, type: 'image/jpeg' } as unknown as Blob);
-    } else {
-      const blob = await fetch(uri).then((r) => r.blob());
-      form.append('file', blob, filename);
-    }
-    return form;
-  };
-  const doUpload = async (tok: string) => {
-    const form = await buildForm();
-    if (typeof document === 'undefined') return nativeMultipartUpload(`${API}/asset/documents/upload`, tok, form);
-    return fetch(`${API}/asset/documents/upload`, { method: 'POST', headers: { authorization: `Bearer ${tok}` }, body: form });
-  };
-  let res = await doUpload(token);
-  if (res.status === 401) {
-    if (await trySilentRefresh()) {
-      res = await doUpload(getAccessToken() ?? token);
-    } else {
-      redirectToLogin();
-      throw new Error('Your session expired — please sign in again.');
-    }
-  }
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
-  return (json as { url: string }).url;
+  const { url } = await uploadPresigned(token, uri, 'image/jpeg');
+  return url;
 };
 export const deleteAsset = (token: string, id: string) =>
   req<void>(`/asset/assets/${id}`, { method: 'DELETE', token });
@@ -305,7 +275,7 @@ export const closeAssetFault = (token: string, id: string, body: { resolution_no
   req<{ fault: AssetFault }>(`/asset/faults/${id}/close`, { method: 'POST', body, token });
 
 // Complete maintenance — resolving a fault closes it (server sets fault status).
-export const createAssetMaintenanceLog = (token: string, body: { asset_id: string; schedule_id?: string; fault_id?: string; task_name?: string; notes?: string; resolves_fault?: boolean; completed_date?: string; form_data?: FormResponseData; attachments?: string[]; idempotency_key?: string }) =>
+export const createAssetMaintenanceLog = (token: string, body: { asset_id: string; schedule_id?: string; fault_id?: string; task_name?: string; notes?: string; resolves_fault?: boolean; completed_date?: string; form_data?: FormResponseData; attachments?: { url: string; name: string }[]; idempotency_key?: string }) =>
   req<{ log: AssetMaintenanceLog; fault_closed: boolean }>('/asset/maintenance-logs', { method: 'POST', body, token });
 
 // Coming-up feed — due/overdue services derived from maintenance schedules.
@@ -321,23 +291,13 @@ export const getAssetUpcoming = (token: string, assetId?: string) => {
 
 export const listAssetSchedules = (token: string, assetId?: string) =>
   req<{ schedules: AssetMaintenanceSchedule[] }>(`/asset/maintenance-schedules${assetId ? `?asset_id=${assetId}` : ''}`, { method: 'GET', token });
-export const createAssetSchedule = (token: string, body: { asset_id: string; task_name: string; interval_type?: string; interval_value?: number; initial_due_date?: string; weekdays?: number[]; recurrence_end_date?: string | null; alert_days?: number; alerts?: AssetScheduleAlert[]; task_notes?: string; document_urls?: string[]; form_schema?: FormSchema }) =>
+export const createAssetSchedule = (token: string, body: { asset_id: string; task_name: string; interval_type?: string; interval_value?: number; initial_due_date?: string; weekdays?: number[]; recurrence_end_date?: string | null; alert_days?: number; alerts?: AssetScheduleAlert[]; task_notes?: string; document_urls?: { url: string; name: string }[]; form_schema?: FormSchema }) =>
   req<{ schedule: AssetMaintenanceSchedule }>('/asset/maintenance-schedules', { method: 'POST', body, token });
-export const updateAssetSchedule = (token: string, id: string, body: { task_notes?: string | null; document_urls?: string[]; form_schema?: FormSchema | null; active?: boolean }) =>
+export const updateAssetSchedule = (token: string, id: string, body: { task_notes?: string | null; document_urls?: { url: string; name: string }[]; form_schema?: FormSchema | null; active?: boolean }) =>
   req<{ schedule: AssetMaintenanceSchedule }>(`/asset/maintenance-schedules/${id}`, { method: 'PATCH', body, token });
 
-export const uploadAssetDocument = async (token: string, file: File): Promise<{ url: string }> => {
-  const form = new FormData();
-  form.append('file', file);
-  const res = await fetch(`${API}/asset/documents/upload`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${token}` },
-    body: form,
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
-  return json as { url: string };
-};
+export const uploadAssetDocument = async (token: string, file: File): Promise<{ url: string }> =>
+  uploadPresigned(token, file, file.type || 'application/pdf');
 
 export const listAssetComponents = (token: string, assetId: string) =>
   req<{ components: AssetComponent[] }>(`/asset/components?asset_id=${assetId}`, { method: 'GET', token });
@@ -484,34 +444,9 @@ export const updatePlan = (token: string, id: string, body: { name?: string; tie
   req<{ plan: FoodControlPlan }>(`/compliance/plans/${id}`, { method: 'PATCH', body, token });
 
 export const uploadPlanImage = async (token: string, planId: string, uri: string): Promise<string> => {
-  const filename = uri.split('/').pop() ?? 'image.jpg';
-  const buildForm = async () => {
-    const form = new FormData();
-    if (typeof document === 'undefined') {
-      form.append('file', { uri, name: filename, type: 'image/jpeg' } as unknown as Blob);
-    } else {
-      const blob = await fetch(uri).then((r) => r.blob());
-      form.append('file', blob, filename);
-    }
-    return form;
-  };
-  const doUpload = async (tok: string) => {
-    const form = await buildForm();
-    if (typeof document === 'undefined') return nativeMultipartUpload(`${API}/compliance/plans/${planId}/image`, tok, form);
-    return fetch(`${API}/compliance/plans/${planId}/image`, { method: 'POST', headers: { authorization: `Bearer ${tok}` }, body: form });
-  };
-  let res = await doUpload(token);
-  if (res.status === 401) {
-    if (await trySilentRefresh()) {
-      res = await doUpload(getAccessToken() ?? token);
-    } else {
-      redirectToLogin();
-      throw new Error('Your session expired — please sign in again.');
-    }
-  }
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
-  return (json as { url: string }).url;
+  const { url } = await uploadPresigned(token, uri, 'image/jpeg');
+  await req(`/compliance/plans/${planId}`, { method: 'PATCH', body: { image_url: url }, token });
+  return url;
 };
 
 export const duplicatePlan = (token: string, id: string, name: string) =>
@@ -548,13 +483,8 @@ export const updateVariant = (token: string, productId: string, variantId: strin
 export const deleteVariant = (token: string, productId: string, variantId: string) =>
   req<void>(`/commerce/admin/products/${productId}/variants/${variantId}`, { method: 'DELETE', token });
 
-export const uploadProductImage = async (token: string, fileOrUri: Blob | string): Promise<{ url: string }> => {
-  const filename = typeof fileOrUri === 'string' ? (fileOrUri.split('/').pop() ?? 'product.jpg') : 'product.jpg';
-  const res = await uploadImageMultipart(`${API}/commerce/admin/upload`, token, fileOrUri, filename);
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((json as { error?: { message?: string } })?.error?.message ?? `HTTP ${res.status}`);
-  return json as { url: string };
-};
+export const uploadProductImage = (token: string, fileOrUri: Blob | string): Promise<{ url: string }> =>
+  uploadPresigned(token, fileOrUri, 'image/jpeg');
 
 // ── News Feed ─────────────────────────────────────────────────────────────────
 export const getFeed = (token: string) =>
