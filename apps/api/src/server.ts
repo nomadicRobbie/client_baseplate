@@ -18,6 +18,7 @@ import paymentsPlugin from './modules/payments'
 import commercePlugin from './modules/commerce'
 import analyticsPlugin from './modules/analytics'
 import locationsPlugin from './modules/locations/plugin'
+import websitePlugin from './modules/website/plugin'
 import compliancePlugin from './modules/compliance'
 import assetPlugin from './modules/asset'
 import schedulePlugin from './modules/schedule'
@@ -131,8 +132,10 @@ export async function build(): Promise<typeof server> {
   if (config.features.commerce) await server.register(commercePlugin)
   // Analytics — event ingest (public) + dashboard query routes (admin).
   if (config.features.analytics) await server.register(analyticsPlugin)
-  // Locations — public-site location banner.
+  // Locations — public-site location banner (backward compat).
   if (config.features.locations) await server.register(locationsPlugin)
+  // Website CMS — banners, announcements, info blocks.
+  if (config.features.locations) await server.register(websitePlugin)
   // Compliance — food safety records (registry + validation engine).
   if (config.features.compliance) await server.register(compliancePlugin)
   // Asset management (fleet, faults, maintenance).

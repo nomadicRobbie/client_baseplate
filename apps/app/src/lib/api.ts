@@ -367,6 +367,39 @@ export const createLocation = (token: string, data: { location: string; starts_a
 export const deleteLocation = (token: string, id: string) =>
   req<void>(`/locations/${id}`, { method: 'DELETE', token });
 
+// ── Website CMS (requires FEATURE_LOCATIONS) ─────────────────────────────────
+export type WebsiteContentType = 'banner' | 'announcement' | 'info';
+
+export interface WebsiteContent {
+  id: string;
+  type: WebsiteContentType;
+  title: string;
+  body: string | null;
+  image_url: string | null;
+  cta_label: string | null;
+  cta_url: string | null;
+  sort_order: number;
+  published: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  created_at: string;
+}
+
+export const getWebsiteContent = (token: string, type: WebsiteContentType) =>
+  req<{ content: WebsiteContent[] }>(`/website/content?type=${type}`, { method: 'GET', token });
+
+export const createWebsiteContent = (token: string, data: {
+  type: WebsiteContentType; title: string; body?: string; image_url?: string;
+  cta_label?: string; cta_url?: string; sort_order?: number; published?: boolean;
+  starts_at?: string; ends_at?: string;
+}) => req<{ content: WebsiteContent }>('/website/content', { method: 'POST', body: data, token });
+
+export const updateWebsiteContent = (token: string, id: string, patch: Partial<Omit<WebsiteContent, 'id' | 'type' | 'created_at'>>) =>
+  req<{ content: WebsiteContent }>(`/website/content/${id}`, { method: 'PATCH', body: patch, token });
+
+export const deleteWebsiteContent = (token: string, id: string) =>
+  req<void>(`/website/content/${id}`, { method: 'DELETE', token });
+
 // ── Compliance (food safety records — requires FEATURE_COMPLIANCE) ───────────
 export const getRecordTypes = (token: string, tier?: string) =>
   req<{ record_types: ComplianceRecordType[] }>(
