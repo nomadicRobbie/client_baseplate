@@ -370,6 +370,20 @@ export const deleteLocation = (token: string, id: string) =>
 // ── Website CMS (requires FEATURE_LOCATIONS) ─────────────────────────────────
 export type WebsiteContentType = 'banner' | 'announcement' | 'info';
 
+// Style sub-schemas — stored as JSONB, typed here for the app UI.
+export interface BannerStyle {
+  bg_token: string;    // 'primary' | 'accent' | 'surface' | 'surfaceAlt'
+  text_token: string;  // 'primaryText' | 'text' | 'textMuted'
+  font_token: string;  // 'heading' | 'body'
+}
+
+export interface AnnouncementStyle {
+  layout: 'centered' | 'split-left' | 'split-right';
+  modal_size: 'sm' | 'md' | 'lg';
+  bg_token: string;          // 'surface' | 'primary' | 'accent'
+  overlay_opacity: number;   // 0 | 0.2 | 0.5 | 0.7
+}
+
 export interface WebsiteContent {
   id: string;
   type: WebsiteContentType;
@@ -382,6 +396,8 @@ export interface WebsiteContent {
   published: boolean;
   starts_at: string | null;
   ends_at: string | null;
+  style: BannerStyle | AnnouncementStyle | null;
+  page_targets: string[] | null;
   created_at: string;
 }
 
@@ -392,6 +408,8 @@ export const createWebsiteContent = (token: string, data: {
   type: WebsiteContentType; title: string; body?: string; image_url?: string;
   cta_label?: string; cta_url?: string; sort_order?: number; published?: boolean;
   starts_at?: string; ends_at?: string;
+  style?: BannerStyle | AnnouncementStyle;
+  page_targets?: string[];
 }) => req<{ content: WebsiteContent }>('/website/content', { method: 'POST', body: data, token });
 
 export const updateWebsiteContent = (token: string, id: string, patch: Partial<Omit<WebsiteContent, 'id' | 'type' | 'created_at'>>) =>

@@ -11,6 +11,7 @@ export interface ClientProfile {
   timezone: string | null;
   locale: string | null;
   currency: string | null;
+  website_pages: string[];
   updated_by: string | null;
   updated_at: Date;
 }
@@ -61,6 +62,15 @@ export async function upsertClientProfile(
     ]
   );
   return rows[0];
+}
+
+export async function setWebsitePages(pages: string[]): Promise<void> {
+  await query(
+    `INSERT INTO client_profile (id, website_pages, updated_at)
+     VALUES (1, $1, NOW())
+     ON CONFLICT (id) DO UPDATE SET website_pages = EXCLUDED.website_pages, updated_at = NOW()`,
+    [pages],
+  )
 }
 
 // ── Per-user profile ────────────────────────────────────────────────────────

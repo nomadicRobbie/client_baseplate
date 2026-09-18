@@ -18,35 +18,38 @@ const contentBody = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    type:        { type: 'string', enum: VALID_TYPES },
-    title:       { type: 'string', minLength: 1, maxLength: 300 },
-    body:        { type: 'string', maxLength: 5000 },
-    image_url:   { type: 'string', maxLength: 1000 },
-    cta_label:   { type: 'string', maxLength: 100 },
-    cta_url:     { type: 'string', maxLength: 1000 },
-    sort_order:  { type: 'integer', minimum: 0 },
-    published:   { type: 'boolean' },
-    starts_at:   { type: 'string' },
-    ends_at:     { type: 'string' },
+    type:         { type: 'string', enum: VALID_TYPES },
+    title:        { type: 'string', minLength: 1, maxLength: 300 },
+    body:         { type: 'string', maxLength: 5000 },
+    image_url:    { type: 'string', maxLength: 1000 },
+    cta_label:    { type: 'string', maxLength: 100 },
+    cta_url:      { type: 'string', maxLength: 1000 },
+    sort_order:   { type: 'integer', minimum: 0 },
+    published:    { type: 'boolean' },
+    starts_at:    { type: 'string' },
+    ends_at:      { type: 'string' },
+    style:        { type: 'object' },
+    page_targets: { type: 'array', items: { type: 'string' } },
   },
 }
 
 const auth = [verifyBlnkAuth, requireRole('admin', 'super')]
 
 const websitePlugin: FastifyPluginAsync = async (fastify) => {
-  // ── GET /public/website/content?type= ────────────────────────────────────
+  // ── GET /public/website/content?type=&page= ──────────────────────────────
   // No auth — called by the client's public website.
   // Returns all active published content of the requested type.
+  // For banners, pass ?page=/current-path to filter by page target.
   fastify.get('/public/website/content', {
     config: { rateLimit: { max: 120, timeWindow: 60_000 } },
   }, async (req, reply) => {
-    const { type } = req.query as { type?: string }
+    const { type, page } = req.query as { type?: string; page?: string }
     if (!isValidType(type)) {
       return reply.status(400).send({
         error: { code: 'BAD_REQUEST', message: `type must be one of: ${VALID_TYPES.join(', ')}`, status: 400 },
       })
     }
-    const content = await getActiveContent(type)
+    const content = await getActiveContent(type, page)
     return reply.send({ content })
   })
 
@@ -79,18 +82,21 @@ const websitePlugin: FastifyPluginAsync = async (fastify) => {
       type: WebsiteContentType; title: string; body?: string; image_url?: string;
       cta_label?: string; cta_url?: string; sort_order?: number; published?: boolean;
       starts_at?: string; ends_at?: string;
+      style?: Record<string, unknown>; page_targets?: string[];
     }
     const item = await createContent({
-      type:       body.type,
-      title:      body.title,
-      body:       body.body ?? null,
-      image_url:  body.image_url ?? null,
-      cta_label:  body.cta_label ?? null,
-      cta_url:    body.cta_url ?? null,
-      sort_order: body.sort_order ?? 0,
-      published:  body.published ?? true,
-      starts_at:  body.starts_at ?? null,
-      ends_at:    body.ends_at ?? null,
+      type:         body.type,
+      title:        body.title,
+      body:         body.body ?? null,
+      image_url:    body.image_url ?? null,
+      cta_label:    body.cta_label ?? null,
+      cta_url:      body.cta_url ?? null,
+      sort_order:   body.sort_order ?? 0,
+      published:    body.published ?? true,
+      starts_at:    body.starts_at ?? null,
+      ends_at:      body.ends_at ?? null,
+      style:        body.style ?? null,
+      page_targets: body.page_targets ?? null,
     })
     return reply.status(201).send({ content: item })
   })

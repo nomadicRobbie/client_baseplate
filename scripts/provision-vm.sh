@@ -143,7 +143,7 @@ if [[ ! -f "$API_ENV" || ! -f "$APP_ENV" ]]; then
   echo "  │    PORT=${PORT}   (in apps/api/.env)                              │"
   echo "  │    DATABASE_URL   (update password to match the one you set)       │"
   echo "  │    STRIPE_API_KEY / STRIPE_WEBHOOK_SECRET  (if FEATURE_STRIPE=true)│"
-  echo "  │    CLOUDINARY_*   (if FEATURE_COMMERCE=true)                       │"
+  echo "  │    STORAGE_* vars (provision:client emits these — see runbook 2b)  │"
   echo "  │    EXPO_PUBLIC_EAS_PROJECT_ID  (if native app needed)              │"
   echo "  └─────────────────────────────────────────────────────────────────────┘"
   echo ""

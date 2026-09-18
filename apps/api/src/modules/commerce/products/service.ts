@@ -31,6 +31,7 @@ function deriveOnCreate(p: Omit<Product, 'id' | 'created_at' | 'updated_at'>): t
     shipping_info: p.is_digital
       ? { ...p.shipping_info, requires_shipping: false }
       : p.shipping_info,
+    active: p.status === 'active',
     // published_at set on first active status
     published_at: p.status === 'active' ? (p.published_at ?? new Date().toISOString()) : p.published_at,
     seo: {
@@ -59,6 +60,11 @@ function deriveOnUpdate(
   if ('title' in out && out.title && !out.slug) {
     out.slug   = slugify(out.title)
     out.handle = out.handle ?? out.slug
+  }
+
+  // sync active boolean with status
+  if ('status' in out) {
+    out.active = out.status === 'active'
   }
 
   // published_at: set only on first transition to active

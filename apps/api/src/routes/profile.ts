@@ -2,7 +2,8 @@ import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { verifyBlnkAuth, requireRole } from '../blnk/auth';
 import { getAuthMe, setAuthName, getEmailConfig, setEmailConfig } from '../blnk/client';
 import {
-  getClientProfile, upsertClientProfile, getUserProfile, upsertUserProfile, updateUserAvatar,
+  getClientProfile, upsertClientProfile, setWebsitePages,
+  getUserProfile, upsertUserProfile, updateUserAvatar,
 } from '../db/queries/profile';
 import { getPersonByUserId, setPushToken } from '../db/queries/people';
 
@@ -11,6 +12,42 @@ function bearer(req: FastifyRequest): string {
 }
 
 const profilePlugin: FastifyPluginAsync = async (fastify) => {
+  // ── GET /public/profile ───────────────────────────────────────────────────
+  // Public org info for the storefront — brand colours, name, logo. No auth.
+  fastify.get('/public/profile', async () => {
+    const org = await getClientProfile()
+    return {
+      org: org ? {
+        name:          org.org_name,
+        logo_url:      org.logo_url,
+        brand_color:   org.brand_color,
+        accent_color:  org.accent_color,
+        website_pages: org.website_pages,
+      } : null,
+    }
+  })
+
+  // ── POST /public/website/pages ────────────────────────────────────────────
+  // Called by the Nuxt website on startup to register its route list.
+  // No auth — website has no credentials. Rate limited to prevent abuse.
+  fastify.post('/public/website/pages', {
+    config: { rateLimit: { max: 10, timeWindow: 60_000 } },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['pages'],
+        additionalProperties: false,
+        properties: {
+          pages: { type: 'array', items: { type: 'string' }, maxItems: 100 },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const { pages } = req.body as { pages: string[] }
+    await setWebsitePages(pages)
+    return reply.status(204).send()
+  })
+
   // ── GET /profile ──────────────────────────────────────────────────────────
   // Assembles org + this user's profile (identity from blnk_auth, contact data
   // from here) + a derived onboarding state the app uses to route the wizard.

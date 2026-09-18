@@ -15,7 +15,7 @@ export type NavGroup = 'home' | 'operations' | 'module' | 'account' | 'admin';
 
 export type NavHref =
   | '/dashboard' | '/dashboard/feed' | '/dashboard/account' | '/dashboard/billing' | '/dashboard/people'
-  | '/dashboard/theme' | '/dashboard/analytics' | '/dashboard/locations' | '/dashboard/compliance'
+  | '/dashboard/theme' | '/dashboard/analytics' | '/dashboard/locations' | '/dashboard/website' | '/dashboard/compliance'
   | '/dashboard/commerce' | '/dashboard/asset' | '/dashboard/schedule' | '/dashboard/roster';
 
 export type NavItem = {
@@ -39,7 +39,7 @@ export const NAV: NavItem[] = [
   { label: 'Company Feed', href: '/dashboard/feed', icon: 'newspaper-outline', group: 'home' },
   { label: 'Store', href: '/dashboard/commerce', icon: 'storefront-outline', group: 'module', adminOnly: true, feature: 'commerce', moduleGated: true, description: 'Products, orders & payments' },
   { label: 'Analytics', href: '/dashboard/analytics', icon: 'bar-chart-outline', group: 'module', adminOnly: true, feature: 'analytics', moduleGated: true, entitlement: 'commerce', description: 'Traffic & performance insights' },
-  { label: 'Website', href: '/dashboard/locations', icon: 'globe-outline', group: 'module', adminOnly: true, feature: 'locations', moduleGated: true, entitlement: 'commerce', description: 'Banners & messages' },
+  { label: 'Website', href: '/dashboard/website', icon: 'globe-outline', group: 'module', adminOnly: true, feature: 'locations', moduleGated: true, entitlement: 'commerce', description: 'Banners & messages' },
   { label: 'Food compliance', href: '/dashboard/compliance', icon: 'clipboard-outline', group: 'module', feature: 'compliance', moduleGated: true, description: 'Temp logs & checklists' },
   { label: 'Asset Manager', href: '/dashboard/asset', icon: 'cube-outline', group: 'module', feature: 'asset', moduleGated: true, description: 'Track equipment & gear' },
   { label: 'Schedule', href: '/dashboard/schedule', icon: 'calendar-outline', group: 'operations', feature: 'schedule', moduleGated: true, description: 'Shifts & rosters' },

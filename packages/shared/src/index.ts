@@ -515,6 +515,7 @@ export interface ClientOrg {
   timezone: string | null
   locale: string | null
   currency: string | null
+  website_pages: string[]
 }
 
 export interface MyUserProfile {

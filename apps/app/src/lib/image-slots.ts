@@ -80,5 +80,8 @@ export function useImageSlots(initialUrls: string[] = [], onUploadError?: (msg: 
 
   const isUploading = slots.some(s => s.status === 'uploading');
 
-  return { slots, pick, retrySlot, doneUrls, isUploading };
+  const reset = (urls: string[] = []) =>
+    setSlots(urls.map(url => ({ id: nextId(), status: 'done' as const, localUri: url, url })));
+
+  return { slots, pick, retrySlot, doneUrls, isUploading, reset };
 }
